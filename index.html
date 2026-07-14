@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Главная | iMagnate Assistant</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-page="dashboard">
+  <div class="app">
+    <aside class="sidebar" aria-label="Навигация">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">IA</div>
+        <div>
+          <div class="brand-name">iMagnate Assistant</div>
+          <div class="brand-note">Демо помощника магазина</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <a class="nav-button" href="index.html" data-page-link="dashboard">
+          <span class="nav-icon">01</span>
+          <span>Главная</span>
+        </a>
+        <a class="nav-button" href="content.html" data-page-link="content">
+          <span class="nav-icon">02</span>
+          <span>Контент</span>
+        </a>
+        <a class="nav-button" href="shift.html" data-page-link="shift">
+          <span class="nav-icon">03</span>
+          <span>Смена</span>
+        </a>
+        <a class="nav-button" href="inventory.html" data-page-link="inventory">
+          <span class="nav-icon">04</span>
+          <span>Товары</span>
+        </a>
+        <a class="nav-button" href="questions.html" data-page-link="questions">
+          <span class="nav-icon">05</span>
+          <span>Вопросы</span>
+        </a>
+        <a class="nav-button" href="site-import.html" data-page-link="site-import" data-permission="site-import">
+          <span class="nav-icon">06</span>
+          <span>Сайт</span>
+        </a>
+        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees">
+          <span class="nav-icon">07</span>
+          <span>Сотрудники</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <span>Статус: демонстрационный прототип</span>
+        <span>Данные: тестовые, без подключения к CRM</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1>Ассистент небольшого магазина</h1>
+          <p class="subtitle">Главная панель владельца: сводка, проблемные места, последние события и короткий отчет.</p>
+        </div>
+        <div class="badge-row">
+          <span class="badge"><span class="dot"></span><span id="todayLabel">Сегодня</span></span>
+          <span class="badge">Леонид: владелец</span>
+          <span class="badge">Версия 0.2</span>
+        </div>
+      </header>
+
+      <section class="view active" aria-labelledby="dashboardTitle">
+        <h2 id="dashboardTitle">Главная</h2>
+        <div class="metrics" id="metrics"></div>
+
+        <div class="layout-2">
+          <section class="panel" aria-labelledby="attentionTitle">
+            <div class="panel-header">
+              <h3 id="attentionTitle">Что требует внимания</h3>
+              <span class="status-pill warning" id="attentionCount">0 пунктов</span>
+            </div>
+            <div class="attention-list" id="attentionList"></div>
+          </section>
+
+          <section class="panel" aria-labelledby="digestTitle">
+            <div class="panel-header">
+              <h3 id="digestTitle">Сводка для владельца</h3>
+              <button class="ghost-btn" type="button" id="copyDigest">Скопировать</button>
+            </div>
+            <div class="generator-result">
+              <div class="result-text" id="ownerDigest"></div>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel" aria-labelledby="activityTitle">
+          <div class="panel-header">
+            <h3 id="activityTitle">Последние события</h3>
+            <span class="status-pill blue">Тестовая лента</span>
+          </div>
+          <div class="stack" id="activityList"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="assets/js/demo-data.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Вопросы | iMagnate Assistant</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-page="questions">
+  <div class="app">
+    <aside class="sidebar" aria-label="Навигация">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">IA</div>
+        <div>
+          <div class="brand-name">iMagnate Assistant</div>
+          <div class="brand-note">Демо помощника магазина</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="nav-button" href="index.html" data-page-link="dashboard"><span class="nav-icon">01</span><span>Главная</span></a>
+        <a class="nav-button" href="content.html" data-page-link="content"><span class="nav-icon">02</span><span>Контент</span></a>
+        <a class="nav-button" href="shift.html" data-page-link="shift"><span class="nav-icon">03</span><span>Смена</span></a>
+        <a class="nav-button" href="inventory.html" data-page-link="inventory"><span class="nav-icon">04</span><span>Товары</span></a>
+        <a class="nav-button" href="questions.html" data-page-link="questions"><span class="nav-icon">05</span><span>Вопросы</span></a>
+        <a class="nav-button" href="site-import.html" data-page-link="site-import" data-permission="site-import"><span class="nav-icon">06</span><span>Сайт</span></a>
+        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees"><span class="nav-icon">07</span><span>Сотрудники</span></a>
+      </nav>
+      <div class="sidebar-footer">
+        <span>Вопросы собираются в одном месте</span>
+        <span>Так меньше дергаем Лёню устно</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1>Вопросы и наблюдения</h1>
+          <p class="subtitle">Сотрудники оставляют вопросы, идеи и проблемы здесь, чтобы Лёня видел их списком и не отвечал на одно и то же по кругу.</p>
+        </div>
+        <div class="badge-row">
+          <span class="badge"><span class="dot"></span><span id="todayLabel">Сегодня</span></span>
+          <span class="badge"><span data-current-user>Пользователь</span>: <span data-current-role>роль</span></span>
+        </div>
+      </header>
+
+      <section class="view active" aria-labelledby="questionsTitle">
+        <h2 id="questionsTitle">Список вопросов</h2>
+
+        <div class="metrics" id="questionMetrics"></div>
+
+        <div class="layout-2" id="sellerQuestionLayout">
+          <section class="panel" id="questionFormPanel" aria-labelledby="addQuestionTitle">
+            <div class="panel-header">
+              <h3 id="addQuestionTitle">Добавить вопрос</h3>
+              <span class="status-pill">Для Лёни</span>
+            </div>
+            <form id="questionForm" class="field-grid">
+              <div class="field">
+                <label for="questionType">Тип</label>
+                <select id="questionType">
+                  <option>Вопрос</option>
+                  <option>Проблема</option>
+                  <option>Идея</option>
+                  <option>Нужен доступ</option>
+                  <option>Ошибка</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="questionPriority">Приоритет</label>
+                <select id="questionPriority">
+                  <option>Обычный</option>
+                  <option>Важно</option>
+                  <option>Срочно</option>
+                </select>
+              </div>
+              <div class="field full">
+                <label for="questionTitle">Коротко</label>
+                <input id="questionTitle" placeholder="Например: не понятно, как оформлять trade-in" required>
+              </div>
+              <div class="field full">
+                <label for="questionText">Подробности</label>
+                <textarea id="questionText" placeholder="Опиши ситуацию, что уже пробовал, какой ответ нужен"></textarea>
+              </div>
+              <div class="field full">
+                <button class="primary-btn" type="submit">Отправить вопрос</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="panel" id="whyQuestionsPanel" aria-labelledby="whyQuestionsTitle">
+            <h3 id="whyQuestionsTitle">Зачем этот раздел</h3>
+            <div class="attention-list">
+              <article class="attention-item">
+                <span class="status-pill">Меньше хаоса</span>
+                <div class="attention-title">Вопросы не теряются в переписках</div>
+                <div class="attention-meta">Лёня видит список, приоритет и автора вопроса.</div>
+              </article>
+              <article class="attention-item">
+                <span class="status-pill blue">База знаний</span>
+                <div class="attention-title">Повторяющиеся вопросы можно превращать в правила</div>
+                <div class="attention-meta">Позже AI сможет отвечать продавцам по этим правилам автоматически.</div>
+              </article>
+              <article class="attention-item">
+                <span class="status-pill warning">Без лишних звонков</span>
+                <div class="attention-title">Срочное видно сразу, обычное можно разобрать позже</div>
+                <div class="attention-meta">Так снижается количество однотипных вопросов владельцу.</div>
+              </article>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel owner-question-panel" id="ownerQuestionPanel" aria-labelledby="ownerQuestionTitle" hidden>
+          <div class="panel-header">
+            <div>
+              <h3 id="ownerQuestionTitle">Входящие вопросы сотрудников</h3>
+              <p class="panel-note">Лёня видит очередь вопросов, открывает ответ в карточке и может закрыть вопрос после ответа.</p>
+            </div>
+            <span class="status-pill blue">Режим владельца</span>
+          </div>
+          <div class="quick-grid">
+            <article class="mini-card">
+              <span class="metric-label">Как отвечать</span>
+              <strong>Кнопка “Ответить”</strong>
+              <span class="metric-context">Открывает поле сразу с обращением по имени.</span>
+            </article>
+            <article class="mini-card">
+              <span class="metric-label">Зачем</span>
+              <strong>Меньше повторов</strong>
+              <span class="metric-context">Ответы остаются в карточках и потом станут базой знаний.</span>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel" aria-label="Журнал вопросов">
+          <div class="panel-header">
+            <h3>Журнал</h3>
+            <select id="questionFilter" aria-label="Фильтр вопросов">
+              <option value="all">Все</option>
+              <option value="open">Открытые</option>
+              <option value="done">Закрытые</option>
+              <option value="mine">Мои</option>
+            </select>
+          </div>
+          <div class="task-list" id="questionsList"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="assets/js/demo-data.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

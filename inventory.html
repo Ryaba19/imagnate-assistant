@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Товары | iMagnate Assistant</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-page="inventory">
+  <div class="app">
+    <aside class="sidebar" aria-label="Навигация">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">IA</div>
+        <div>
+          <div class="brand-name">iMagnate Assistant</div>
+          <div class="brand-note">Демо помощника магазина</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="nav-button" href="index.html" data-page-link="dashboard"><span class="nav-icon">01</span><span>Главная</span></a>
+        <a class="nav-button" href="content.html" data-page-link="content"><span class="nav-icon">02</span><span>Контент</span></a>
+        <a class="nav-button" href="shift.html" data-page-link="shift"><span class="nav-icon">03</span><span>Смена</span></a>
+        <a class="nav-button" href="inventory.html" data-page-link="inventory"><span class="nav-icon">04</span><span>Товары</span></a>
+        <a class="nav-button" href="questions.html" data-page-link="questions"><span class="nav-icon">05</span><span>Вопросы</span></a>
+        <a class="nav-button" href="site-import.html" data-page-link="site-import" data-permission="site-import"><span class="nav-icon">06</span><span>Сайт</span></a>
+        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees"><span class="nav-icon">07</span><span>Сотрудники</span></a>
+      </nav>
+      <div class="sidebar-footer">
+        <span>Остатки сохраняются в браузере</span>
+        <span>Позже это перенесем в настоящую базу</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1>Товары и остатки</h1>
+          <p class="subtitle">Все единицы товаров, стоимость остатков, низкие остатки и быстрое добавление новых позиций.</p>
+        </div>
+        <div class="badge-row">
+          <span class="badge"><span class="dot"></span><span id="todayLabel">Сегодня</span></span>
+          <span class="badge">Демо-товары</span>
+        </div>
+      </header>
+
+      <section class="view active" aria-labelledby="inventoryTitle">
+        <h2 id="inventoryTitle">Остатки</h2>
+
+        <div class="metrics inventory-metrics" id="inventoryMetrics"></div>
+
+        <section class="panel" aria-labelledby="addProductTitle">
+          <div class="panel-header">
+            <h3 id="addProductTitle">Добавить товар</h3>
+            <button class="ghost-btn" type="button" id="resetInventoryProducts">Сбросить демо-товары</button>
+          </div>
+
+          <form id="addProductForm" class="field-grid">
+            <div class="field">
+              <label for="newProductName">Название</label>
+              <input id="newProductName" placeholder="Например: iPhone 16 Pro 256 GB" required>
+            </div>
+            <div class="field">
+              <label for="newProductSku">Артикул / IMEI / серийный</label>
+              <input id="newProductSku" placeholder="SKU или серийный номер">
+            </div>
+            <div class="field">
+              <label for="newProductCategory">Категория</label>
+              <select id="newProductCategory">
+                <option>Смартфоны</option>
+                <option>Аксессуары</option>
+                <option>Игровые приставки</option>
+                <option>Аудио</option>
+                <option>Планшеты</option>
+                <option>Ноутбуки</option>
+                <option>Ремонт</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="newProductStatus">Статус</label>
+              <select id="newProductStatus">
+                <option selected>Остаток</option>
+                <option>Принят</option>
+                <option>На диагностике</option>
+                <option>Готов к продаже</option>
+                <option>Опубликован</option>
+                <option>Зарезервирован</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="newProductStock">Количество</label>
+              <input id="newProductStock" type="number" min="0" value="1">
+            </div>
+            <div class="field">
+              <label for="newProductCost">Закупочная цена</label>
+              <input id="newProductCost" type="number" min="0" value="0">
+            </div>
+            <div class="field">
+              <label for="newProductPrice">Цена продажи</label>
+              <input id="newProductPrice" type="number" min="0" value="0">
+            </div>
+            <div class="field">
+              <label for="newProductDays">Дней в продаже</label>
+              <input id="newProductDays" type="number" min="0" value="0">
+            </div>
+            <div class="field full">
+              <label for="newProductComment">Комментарий</label>
+              <textarea id="newProductComment" placeholder="Например: коробка, гарантия, состояние, что нужно проверить"></textarea>
+            </div>
+            <div class="field full">
+              <button class="primary-btn" type="submit">Добавить товар</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel" aria-label="Таблица остатков">
+          <div class="panel-header">
+            <h3>Все товары</h3>
+            <div class="inventory-toolbar">
+              <input id="inventorySearch" type="search" placeholder="Поиск по товару, SKU, категории">
+              <select id="inventoryFilter" aria-label="Фильтр товаров">
+                <option value="all">Все товары</option>
+                <option value="attention">Требуют внимания</option>
+                <option value="published">Опубликованы</option>
+                <option value="stock">Аксессуары</option>
+                <option value="empty">Нулевой остаток</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Товар</th>
+                  <th>Категория</th>
+                  <th>Статус</th>
+                  <th>Остаток</th>
+                  <th>Дней в продаже</th>
+                  <th>Остаток в закупке</th>
+                  <th>Маржа за единицу</th>
+                  <th>Авито</th>
+                  <th>Комментарий</th>
+                </tr>
+              </thead>
+              <tbody id="productsTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="tasksTitle">
+          <div class="panel-header">
+            <h3 id="tasksTitle">Задачи</h3>
+            <span class="status-pill" id="openTasksCount">0 открытых</span>
+          </div>
+          <div class="task-list" id="tasksList"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <section class="modal-backdrop" id="avitoModal" aria-label="Загрузка товара на Авито" hidden>
+    <div class="modal">
+      <div class="panel-header">
+        <div>
+          <h3 id="avitoModalTitle">Загрузка на Авито</h3>
+          <p class="panel-note">Пока это демо-черновик. Позже сюда подключим Авито API или XML-автозагрузку.</p>
+        </div>
+        <button class="icon-btn" type="button" id="closeAvitoModal" aria-label="Закрыть">X</button>
+      </div>
+
+      <div class="avito-selected" id="avitoSelectedProduct"></div>
+
+      <div class="avito-modal-grid">
+        <section class="stack">
+          <div class="field">
+            <label for="avitoPhotos">Фото товара</label>
+            <input id="avitoPhotos" type="file" accept="image/*" multiple>
+          </div>
+          <div class="photo-preview-grid compact" id="avitoPhotoPreview"></div>
+        </section>
+
+        <section class="field-grid">
+          <div class="field">
+            <label for="avitoPrice">Цена</label>
+            <input id="avitoPrice" type="number" min="0">
+          </div>
+          <div class="field">
+            <label for="avitoCategory">Категория Авито</label>
+            <select id="avitoCategory">
+              <option>Бытовая электроника / Телефоны</option>
+              <option>Бытовая электроника / Игровые приставки</option>
+              <option>Бытовая электроника / Аудио</option>
+              <option>Бытовая электроника / Аксессуары</option>
+              <option>Бытовая электроника / Планшеты</option>
+              <option>Бытовая электроника / Ноутбуки</option>
+              <option>Услуги / Ремонт техники</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="avitoCondition">Состояние</label>
+            <select id="avitoCondition">
+              <option>Новое</option>
+              <option selected>Отличное</option>
+              <option>Как новый</option>
+              <option>Хорошее</option>
+              <option>Требует проверки</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="avitoCity">Город</label>
+            <input id="avitoCity">
+          </div>
+          <div class="field full">
+            <label for="avitoContact">Контакт</label>
+            <input id="avitoContact">
+          </div>
+          <div class="field full">
+            <label for="avitoKit">Комплектация</label>
+            <input id="avitoKit" placeholder="Коробка, кабель, чек магазина">
+          </div>
+          <div class="field full">
+            <label for="avitoDescription">Описание</label>
+            <textarea id="avitoDescription" placeholder="Состояние, гарантия, нюансы, что можно проверить при встрече"></textarea>
+          </div>
+        </section>
+      </div>
+
+      <div class="generator-result">
+        <div class="panel-header">
+          <h3>Что уйдет в Авито</h3>
+          <button class="ghost-btn compact-btn" type="button" id="copyAvitoPayload">Скопировать</button>
+        </div>
+        <div class="result-text" id="avitoPayloadPreview"></div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="ghost-btn" type="button" id="cancelAvitoModal">Отмена</button>
+        <button class="primary-btn" type="button" id="submitAvitoListing">Загрузить на Авито</button>
+      </div>
+    </div>
+  </section>
+
+  <script src="assets/js/demo-data.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Контент | iMagnate Assistant</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-page="content">
+  <div class="app">
+    <aside class="sidebar" aria-label="Навигация">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">IA</div>
+        <div>
+          <div class="brand-name">iMagnate Assistant</div>
+          <div class="brand-note">Демо помощника магазина</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="nav-button" href="index.html" data-page-link="dashboard"><span class="nav-icon">01</span><span>Главная</span></a>
+        <a class="nav-button" href="content.html" data-page-link="content"><span class="nav-icon">02</span><span>Контент</span></a>
+        <a class="nav-button" href="shift.html" data-page-link="shift"><span class="nav-icon">03</span><span>Смена</span></a>
+        <a class="nav-button" href="inventory.html" data-page-link="inventory"><span class="nav-icon">04</span><span>Товары</span></a>
+        <a class="nav-button" href="questions.html" data-page-link="questions"><span class="nav-icon">05</span><span>Вопросы</span></a>
+        <a class="nav-button" href="site-import.html" data-page-link="site-import" data-permission="site-import"><span class="nav-icon">06</span><span>Сайт</span></a>
+        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees"><span class="nav-icon">07</span><span>Сотрудники</span></a>
+      </nav>
+      <div class="sidebar-footer">
+        <span>Контент: сайт, Telegram, объявление</span>
+        <span>Данные: тестовые</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1>Контент для товара</h1>
+          <p class="subtitle">Форма товара, фото, готовые тексты и демо-публикация карточки на сайт.</p>
+        </div>
+        <div class="badge-row">
+          <span class="badge"><span class="dot"></span><span id="todayLabel">Сегодня</span></span>
+          <span class="badge">Готово к копированию</span>
+        </div>
+      </header>
+
+      <section class="view active" aria-labelledby="contentTitle">
+        <h2 id="contentTitle">Генератор</h2>
+        <div class="layout-2">
+          <section class="panel" aria-label="Форма товара">
+            <div class="field-grid">
+              <div class="field">
+                <label for="productName">Название</label>
+                <input id="productName" value="iPhone 15 Pro">
+              </div>
+              <div class="field">
+                <label for="productMemory">Память</label>
+                <select id="productMemory">
+                  <option>128 GB</option>
+                  <option selected>256 GB</option>
+                  <option>512 GB</option>
+                  <option>1 TB</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="productColor">Цвет</label>
+                <input id="productColor" value="Natural Titanium">
+              </div>
+              <div class="field">
+                <label for="productPrice">Цена продажи</label>
+                <input id="productPrice" type="number" value="123900">
+              </div>
+              <div class="field">
+                <label for="productCondition">Состояние</label>
+                <select id="productCondition">
+                  <option>как новый</option>
+                  <option selected>отличное</option>
+                  <option>хорошее</option>
+                  <option>есть следы использования</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="productWarranty">Гарантия</label>
+                <select id="productWarranty">
+                  <option selected>14 дней</option>
+                  <option>30 дней</option>
+                  <option>90 дней</option>
+                  <option>12 месяцев</option>
+                </select>
+              </div>
+              <div class="field full">
+                <label for="productKit">Комплектация и заметки</label>
+                <textarea id="productKit">Коробка, кабель, чек магазина. Аккумулятор 91%, Face ID работает.</textarea>
+              </div>
+              <div class="field full">
+                <label for="productPhotos">Фото товара</label>
+                <input id="productPhotos" type="file" accept="image/*" multiple>
+                <div class="activity-meta">Можно выбрать несколько фотографий. В демо они показываются локально и не уходят на сервер.</div>
+                <div class="photo-preview-grid" id="photoPreviewGrid"></div>
+              </div>
+            </div>
+            <div class="content-actions">
+              <button class="primary-btn" type="button" id="generateContent">Сформировать тексты</button>
+              <button class="ghost-btn" type="button" id="prepareSiteCard">Подготовить карточку сайта</button>
+              <button class="ghost-btn" type="button" id="publishToSite">Загрузить на сайт</button>
+            </div>
+          </section>
+
+          <section class="panel" aria-label="Готовые тексты">
+            <div class="panel-header">
+              <h3>Результат</h3>
+              <button class="ghost-btn" type="button" id="copyContent">Скопировать все</button>
+            </div>
+            <div class="stack" id="contentResult"></div>
+          </section>
+        </div>
+
+        <section class="panel" aria-labelledby="sitePublishTitle">
+          <div class="panel-header">
+            <h3 id="sitePublishTitle">Публикация на сайт</h3>
+            <span class="status-pill warning">Демо-интеграция</span>
+          </div>
+          <div class="generator-result">
+            <div class="result-text" id="sitePublishPayload">Заполни карточку и нажми “Подготовить карточку сайта”.</div>
+          </div>
+          <div class="publish-photo-grid" id="sitePublishPhotos"></div>
+          <div class="stack" id="sitePublishHistory"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="assets/js/demo-data.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

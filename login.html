@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Вход | iMagnate Assistant</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-page="login">
+  <main class="auth-page">
+    <section class="auth-card" aria-labelledby="loginTitle">
+      <div class="brand auth-brand">
+        <div class="brand-mark" aria-hidden="true">IA</div>
+        <div>
+          <div class="brand-name">iMagnate Assistant</div>
+          <div class="brand-note">Демо-вход сотрудников</div>
+        </div>
+      </div>
+
+      <div>
+        <h1 id="loginTitle">Вход в систему</h1>
+        <p class="subtitle">Выбери сотрудника и проверь, как меняется интерфейс по роли.</p>
+      </div>
+
+      <form id="loginForm" class="stack">
+        <div class="field">
+          <label for="loginName">Логин</label>
+          <input id="loginName" autocomplete="username" placeholder="Например: leonid" required>
+        </div>
+        <div class="field">
+          <label for="loginPassword">Пароль</label>
+          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Пароль" required>
+        </div>
+        <div class="text-destructive" id="loginError" aria-live="polite"></div>
+        <button class="primary-btn" type="submit">Войти</button>
+      </form>
+    </section>
+
+    <section class="panel auth-demo" aria-labelledby="demoAccessTitle">
+      <div class="panel-header">
+        <h2 id="demoAccessTitle">Демо-доступы</h2>
+        <span class="status-pill warning">Только прототип</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Имя</th>
+              <th>Логин</th>
+              <th>Пароль</th>
+              <th>Роль</th>
+            </tr>
+          </thead>
+          <tbody id="demoUsersTable"></tbody>
+        </table>
+      </div>
+      <p class="text-small text-muted">В настоящей версии пароли не должны показываться и храниться открытым текстом.</p>
+    </section>
+  </main>
+
+  <script src="assets/js/demo-data.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

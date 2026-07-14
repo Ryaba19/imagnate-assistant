@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Импорт сайта | iMagnate Assistant</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-page="site-import">
+  <div class="app">
+    <aside class="sidebar" aria-label="Навигация">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">IA</div>
+        <div>
+          <div class="brand-name">iMagnate Assistant</div>
+          <div class="brand-note">Демо помощника магазина</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="nav-button" href="index.html" data-page-link="dashboard"><span class="nav-icon">01</span><span>Главная</span></a>
+        <a class="nav-button" href="content.html" data-page-link="content"><span class="nav-icon">02</span><span>Контент</span></a>
+        <a class="nav-button" href="shift.html" data-page-link="shift"><span class="nav-icon">03</span><span>Смена</span></a>
+        <a class="nav-button" href="inventory.html" data-page-link="inventory"><span class="nav-icon">04</span><span>Товары</span></a>
+        <a class="nav-button" href="questions.html" data-page-link="questions"><span class="nav-icon">05</span><span>Вопросы</span></a>
+        <a class="nav-button" href="site-import.html" data-page-link="site-import" data-permission="site-import"><span class="nav-icon">06</span><span>Сайт</span></a>
+        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees"><span class="nav-icon">07</span><span>Сотрудники</span></a>
+      </nav>
+      <div class="sidebar-footer">
+        <span>Цель: понять, как подтянуть сайт</span>
+        <span>Лучший путь: CRM/API или CSV</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1>Подключение сайта iMagnate</h1>
+          <p class="subtitle">Черновой модуль импорта: публичные разделы, категории каталога и варианты подключения реальных данных.</p>
+        </div>
+        <div class="badge-row">
+          <span class="badge"><span class="dot"></span><span id="todayLabel">Сегодня</span></span>
+          <span class="badge">Источник: публичная главная</span>
+        </div>
+      </header>
+
+      <section class="view active" aria-labelledby="siteImportTitle">
+        <h2 id="siteImportTitle">Возможность подтяжки</h2>
+
+        <div class="metrics">
+          <article class="metric-card">
+            <div class="metric-label">Что можно брать с сайта</div>
+            <div class="metric-value">Структуру</div>
+            <div class="metric-context">Разделы, категории, акции, статьи</div>
+          </article>
+          <article class="metric-card attention">
+            <div class="metric-label">Что лучше брать не парсингом</div>
+            <div class="metric-value">Цены</div>
+            <div class="metric-context">Остатки, заказы, реальные карточки</div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-label">Лучший старт</div>
+            <div class="metric-value">CSV/API</div>
+            <div class="metric-context">Выгрузка из CRM или доступ к API</div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-label">Статус</div>
+            <div class="metric-value">Демо</div>
+            <div class="metric-context">Без нагрузки на сайт</div>
+          </article>
+        </div>
+
+        <div class="layout-2">
+          <section class="panel" aria-labelledby="routesTitle">
+            <div class="panel-header">
+              <h3 id="routesTitle">Публичные разделы</h3>
+              <a class="ghost-btn" href="https://imagnate.ru/" target="_blank" rel="noreferrer">Открыть сайт</a>
+            </div>
+            <div class="stack" id="siteRoutesList"></div>
+          </section>
+
+          <section class="panel" aria-labelledby="categoriesTitle">
+            <h3 id="categoriesTitle">Категории каталога</h3>
+            <div class="stack" id="siteCategoriesList"></div>
+          </section>
+        </div>
+
+        <section class="panel" aria-labelledby="siteMetaTitle">
+          <div class="panel-header">
+            <h3 id="siteMetaTitle">Мета-данные страниц</h3>
+            <span class="status-pill blue">Для понимания структуры</span>
+          </div>
+          <div class="stack" id="sitePageMetaList"></div>
+        </section>
+
+        <section class="panel" aria-labelledby="siteProductsTitle">
+          <div class="panel-header">
+            <h3 id="siteProductsTitle">Пример карточек с сайта</h3>
+            <span class="status-pill warning">Не полный каталог</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Товар</th>
+                  <th>Категория</th>
+                  <th>Зачем импортировать</th>
+                </tr>
+              </thead>
+              <tbody id="siteProductsTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <div class="layout-2">
+          <section class="panel" aria-labelledby="promotionsTitle">
+            <h3 id="promotionsTitle">Акции</h3>
+            <div class="stack" id="sitePromotionsList"></div>
+          </section>
+
+          <section class="panel" aria-labelledby="articlesTitle">
+            <h3 id="articlesTitle">Статьи</h3>
+            <div class="stack" id="siteArticlesList"></div>
+          </section>
+        </div>
+
+        <section class="panel" aria-labelledby="optionsTitle">
+          <div class="panel-header">
+            <h3 id="optionsTitle">Варианты подключения</h3>
+            <button class="primary-btn" type="button" id="simulateImport">Смоделировать импорт</button>
+          </div>
+          <div class="attention-list" id="importOptionsList"></div>
+          <div class="generator-result">
+            <div class="result-text" id="siteImportResult">Нажми “Смоделировать импорт”, чтобы увидеть, что ассистент сможет получить в первой версии.</div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="assets/js/demo-data.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
