@@ -1025,6 +1025,7 @@
     saveSitePublications();
     renderSitePublishHistory();
     renderSitePayload();
+    renderPublicationDashboard();
     showToast("Карточка добавлена в демо-очередь сайта");
   }
 
@@ -1053,6 +1054,134 @@
         </div>
       </article>
     `).join("");
+  }
+
+  function getPublicationQueueItems() {
+    const siteItems = sitePublications.slice(0, 4).map((item) => ({
+      channel: "Сайт",
+      title: item.title,
+      meta: `${money(item.price)} · фото: ${item.photosCount} · ${item.createdAt}`,
+      status: item.status || "Черновик сайта",
+      statusClass: "blue",
+      href: "content.html"
+    }));
+
+    const avitoItems = avitoDrafts.slice(0, 4).map((item) => ({
+      channel: "Авито",
+      title: item.title,
+      meta: `${money(item.price)} · фото: ${item.photosCount} · проверка: ${item.moderationStatus || "не проверено"}`,
+      status: item.status || "Черновик Авито",
+      statusClass: item.moderationStatus === "Высокий риск" ? "danger" : item.moderationStatus === "Нужно проверить" ? "warning" : "blue",
+      href: "avito.html"
+    }));
+
+    const productItems = products
+      .filter((product) => product.stock > 0 && product.status !== "Опубликован")
+      .slice(0, 5)
+      .map((product) => {
+        const photoCount = getProductPhotoCount(product);
+        return {
+          channel: "Товар",
+          title: product.name,
+          meta: `${product.category} · остаток: ${product.stock} шт. · ${money(product.price)} · фото: ${photoCount}`,
+          status: photoCount > 0 ? "Можно готовить публикацию" : "Нужны фото",
+          statusClass: photoCount > 0 ? "warning" : "danger",
+          href: "inventory.html"
+        };
+      });
+
+    return [...siteItems, ...avitoItems, ...productItems].slice(0, 8);
+  }
+
+  function renderPublicationMetrics() {
+    const target = byId("publicationMetrics");
+    if (!target) return;
+
+    const readyProducts = products.filter((product) => product.stock > 0 && product.status !== "Опубликован");
+    const needsPhotos = readyProducts.filter((product) => getProductPhotoCount(product) === 0);
+    const metrics = [
+      { label: "В очереди", value: String(getPublicationQueueItems().length), context: "Сайт, Авито и товары" },
+      { label: "Сайт", value: String(sitePublications.length), context: "Черновики карточек" },
+      { label: "Авито", value: String(avitoDrafts.length), context: "Подготовленные объявления" },
+      { label: "Нужны фото", value: String(needsPhotos.length), context: "Товары без фото", attention: needsPhotos.length > 0 }
+    ];
+
+    target.innerHTML = metrics.map((item) => `
+      <article class="metric-card ${item.attention ? "attention" : ""}">
+        <div class="metric-label">${escapeHtml(item.label)}</div>
+        <div class="metric-value">${escapeHtml(item.value)}</div>
+        <div class="metric-context">${escapeHtml(item.context)}</div>
+      </article>
+    `).join("");
+  }
+
+  function renderPublicationQueue() {
+    const target = byId("publicationQueue");
+    if (!target) return;
+
+    const items = getPublicationQueueItems();
+    if (!items.length) {
+      target.innerHTML = `
+        <article class="activity-item">
+          <div class="attention-title">Очередь публикаций пустая</div>
+          <div class="activity-meta">Добавь товар в разделе “Товары” или подготовь карточку сайта/Авито.</div>
+        </article>
+      `;
+      return;
+    }
+
+    target.innerHTML = items.map((item) => `
+      <article class="activity-item">
+        <div class="panel-header">
+          <div>
+            <div class="attention-title">${escapeHtml(item.title)}</div>
+            <div class="activity-meta">${escapeHtml(item.channel)} · ${escapeHtml(item.meta)}</div>
+          </div>
+          <span class="status-pill ${item.statusClass}">${escapeHtml(item.status)}</span>
+        </div>
+        <div class="content-actions">
+          <a class="ghost-btn compact-btn" href="${escapeHtml(item.href)}">Открыть</a>
+        </div>
+      </article>
+    `).join("");
+  }
+
+  function renderPublicationChannels() {
+    const target = byId("publicationChannels");
+    if (!target) return;
+
+    const channels = [
+      {
+        pill: "Сайт",
+        title: "Карточки товара",
+        meta: "Название, цена, описание, характеристики и фото. Реальная отправка потребует доступ к CMS/API сайта."
+      },
+      {
+        pill: "Telegram",
+        title: "Быстрые посты",
+        meta: "Ассистент готовит короткий продающий текст для канала или личной отправки клиенту."
+      },
+      {
+        pill: "Авито",
+        title: "Объявления",
+        meta: "Карточка готовится в разделе “Товары”, а здесь видна очередь и статус публикации.",
+        warning: true
+      }
+    ];
+
+    target.innerHTML = channels.map((item) => `
+      <article class="attention-item">
+        <span class="status-pill ${item.warning ? "warning" : "blue"}">${escapeHtml(item.pill)}</span>
+        <div class="attention-title">${escapeHtml(item.title)}</div>
+        <div class="attention-meta">${escapeHtml(item.meta)}</div>
+      </article>
+    `).join("");
+  }
+
+  function renderPublicationDashboard() {
+    renderPublicationMetrics();
+    renderPublicationQueue();
+    renderPublicationChannels();
   }
 
   function renderContent() {
@@ -1085,6 +1214,7 @@
     renderSitePayload();
     renderSitePublishPhotos();
     renderSitePublishHistory();
+    renderPublicationDashboard();
   }
 
   function renderShift() {
