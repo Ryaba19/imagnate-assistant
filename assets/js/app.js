@@ -398,6 +398,7 @@
   function ensureSelectOption(id, value) {
     const field = byId(id);
     if (!field || !value) return;
+    if (!field.options) return;
     const exists = Array.from(field.options).some((option) => option.value === value || option.textContent === value);
     if (!exists) field.append(new Option(value, value));
   }
@@ -431,7 +432,7 @@
     const target = byId("newProductAssistantPreview");
     if (!target) return;
     if (!item) {
-      target.innerHTML = "Выбери товар из списка — ассистент заполнит категорию, цену, комментарий и описание.";
+      target.innerHTML = "Выбери товар из списка — ассистент сам соберет карточку и подтянет все доступные данные.";
       return;
     }
 
@@ -472,6 +473,17 @@
     byId("newProductDays").value = "0";
     byId("newProductComment").value = buildCatalogComment(item);
     byId("newProductDescription").value = buildCatalogDescription(item);
+
+    const preview = byId("newProductAssistantPreview");
+    if (preview) {
+      preview.innerHTML = `
+        <strong>${escapeHtml(item.name)}</strong><br>
+        SKU: ${escapeHtml(item.sku)} · Категория: ${escapeHtml(item.category)} · Статус: Готов к продаже<br>
+        Цена продажи: ${money(item.price)} · Количество: 1 шт. · Закупка: нужно проверить<br>
+        Источник: <a href="${escapeHtml(item.sourceUrl || store.siteUrl || "#")}" target="_blank" rel="noreferrer">${escapeHtml(item.sourceSection || "iMagnate")}</a><br>
+        Ассистент уже подготовил внутренний комментарий и описание для карточки.
+      `;
+    }
   }
 
   function getShiftValues() {
@@ -1823,6 +1835,12 @@
     event.preventDefault();
 
     const preset = getSelectedImagnateProduct();
+    if (!preset) {
+      showToast("Выберите товар из списка");
+      byId("newProductPreset")?.focus();
+      return;
+    }
+
     const name = getFieldText("newProductName", "");
     if (!name) {
       showToast("Введите название товара");

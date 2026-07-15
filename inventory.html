@@ -57,74 +57,26 @@
 
           <form id="addProductForm" class="field-grid">
             <div class="field full">
-              <label for="newProductPreset">Название из iMagnate</label>
+              <label for="newProductPreset">Выбрать товар</label>
               <select id="newProductPreset">
-                <option value="">Выбрать товар из справочника iMagnate</option>
+                <option value="">Выбери товар — ассистент заполнит карточку</option>
               </select>
               <div class="catalog-assist" id="newProductAssistantPreview">
-                Выбери товар из списка — ассистент заполнит категорию, цену, комментарий и описание.
+                Сотрудник выбирает товар из списка, а ассистент сам подтягивает категорию, цену, статус, комментарий и описание.
               </div>
             </div>
-            <div class="field">
-              <label for="newProductName">Название</label>
-              <input id="newProductName" placeholder="Например: iPhone 16 Pro 256 GB" required>
-            </div>
-            <div class="field">
-              <label for="newProductSku">Артикул / IMEI / серийный</label>
-              <input id="newProductSku" placeholder="SKU или серийный номер">
-            </div>
-            <div class="field">
-              <label for="newProductCategory">Категория</label>
-              <select id="newProductCategory">
-                <option>Смартфоны</option>
-                <option>Аксессуары</option>
-                <option>Игровые приставки</option>
-                <option>Аудио</option>
-                <option>Планшеты</option>
-                <option>Ноутбуки</option>
-                <option>Умные часы</option>
-                <option>Dyson</option>
-                <option>Экшн-камеры</option>
-                <option>Ремонт</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="newProductStatus">Статус</label>
-              <select id="newProductStatus">
-                <option selected>Остаток</option>
-                <option>Принят</option>
-                <option>На диагностике</option>
-                <option>Готов к продаже</option>
-                <option>Опубликован</option>
-                <option>Зарезервирован</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="newProductStock">Количество</label>
-              <input id="newProductStock" type="number" min="0" value="1">
-            </div>
-            <div class="field">
-              <label for="newProductCost">Закупочная цена</label>
-              <input id="newProductCost" type="number" min="0" value="0">
-            </div>
-            <div class="field">
-              <label for="newProductPrice">Цена продажи</label>
-              <input id="newProductPrice" type="number" min="0" value="0">
-            </div>
-            <div class="field">
-              <label for="newProductDays">Дней в продаже</label>
-              <input id="newProductDays" type="number" min="0" value="0">
-            </div>
+            <input id="newProductName" type="hidden">
+            <input id="newProductSku" type="hidden">
+            <input id="newProductCategory" type="hidden">
+            <input id="newProductStatus" type="hidden" value="Готов к продаже">
+            <input id="newProductStock" type="hidden" value="1">
+            <input id="newProductCost" type="hidden" value="0">
+            <input id="newProductPrice" type="hidden" value="0">
+            <input id="newProductDays" type="hidden" value="0">
+            <input id="newProductComment" type="hidden">
+            <input id="newProductDescription" type="hidden">
             <div class="field full">
-              <label for="newProductComment">Комментарий</label>
-              <textarea id="newProductComment" placeholder="Например: коробка, гарантия, состояние, что нужно проверить"></textarea>
-            </div>
-            <div class="field full">
-              <label for="newProductDescription">Описание для карточки</label>
-              <textarea id="newProductDescription" placeholder="Ассистент подготовит описание после выбора товара из iMagnate"></textarea>
-            </div>
-            <div class="field full">
-              <button class="primary-btn" type="submit">Добавить товар</button>
+              <button class="primary-btn" type="submit">Добавить выбранный товар</button>
             </div>
           </form>
         </section>
