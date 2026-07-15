@@ -1,2 +1,2 @@
-sku,name,category,status,stock,cost,price,condition,kit,description,comment,photoUrls
-"IPH15P-256-NT","iPhone 15 Pro 256 GB","Смартфоны","Готов к продаже",1,111000,123900,"Отличное","Коробка, кабель USB-C, чек магазина","Описание состояния, гарантии и нюансов товара.","Внутренний комментарий","https://site.ru/photos/iphone-15-pro-1.jpg;https://site.ru/photos/iphone-15-pro-2.jpg"
+sku,name,category,status,stock,cost,price,condition,kit,description,comment,photoSource,photoUrls
+"IPH15P-256-NT","iPhone 15 Pro 256 GB","Смартфоны","Готов к продаже",1,111000,123900,"Отличное","Коробка, кабель USB-C, чек магазина","Описание состояния, гарантии и нюансов товара.","Внутренний комментарий","site","https://site.ru/photos/iphone-15-pro-1.jpg;https://site.ru/photos/iphone-15-pro-2.jpg"

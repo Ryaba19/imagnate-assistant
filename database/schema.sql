@@ -60,7 +60,10 @@ CREATE TABLE products (
   description TEXT,
   photos_count INTEGER NOT NULL DEFAULT 0,
   photo_urls TEXT,
+  photo_source TEXT,
   avito_status TEXT,
+  avito_moderation TEXT,
+  avito_moderation_score INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (store_id, sku),
   FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE

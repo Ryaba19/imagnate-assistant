@@ -731,6 +731,79 @@
       min-width: 0;
     }
 
+    .moderation-box {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(13, 21, 38, 0.74);
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .moderation-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .moderation-title {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .moderation-title strong {
+      color: var(--ink);
+      font-size: 14px;
+    }
+
+    .moderation-title span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .moderation-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .moderation-item {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 8px 9px;
+      display: grid;
+      gap: 3px;
+      background: rgba(255, 255, 255, 0.03);
+      font-size: 12px;
+    }
+
+    .moderation-item.pass {
+      border-color: rgba(44, 196, 130, 0.26);
+      background: rgba(44, 196, 130, 0.08);
+    }
+
+    .moderation-item.warn {
+      border-color: rgba(243, 181, 76, 0.32);
+      background: rgba(243, 181, 76, 0.08);
+    }
+
+    .moderation-item.danger {
+      border-color: rgba(255, 93, 108, 0.3);
+      background: rgba(255, 93, 108, 0.08);
+    }
+
+    .moderation-item strong {
+      color: var(--ink);
+      font-size: 12px;
+    }
+
+    .moderation-item span {
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
     .modal-actions {
       display: flex;
       justify-content: flex-end;

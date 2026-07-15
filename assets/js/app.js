@@ -173,7 +173,10 @@
       photoUrls: Array.isArray(product.photoUrls)
         ? product.photoUrls
         : String(product.photoUrls || "").split(/[;,\n]/).map((url) => url.trim()).filter(Boolean),
-      avitoStatus: product.avitoStatus || ""
+      photoSource: product.photoSource || product.photo_source || "",
+      avitoStatus: product.avitoStatus || "",
+      avitoModeration: product.avitoModeration || "",
+      avitoModerationScore: Number(product.avitoModerationScore ?? 0)
     };
   }
 
@@ -1035,13 +1038,140 @@
       contact: getFieldText("avitoContact", store.phone || ""),
       kit: getFieldText("avitoKit", product.kit || ""),
       description: getFieldText("avitoDescription", product.description || product.comment || ""),
+      photoSource: getFieldText("avitoPhotoSource", product.photoSource || (product.photoUrls?.length ? "site" : "own")),
       photos,
-      photoUrls
+      photoUrls,
+      existingPhotosCount: Number(product.photosCount || 0)
+    };
+  }
+
+  function getAvitoPhotoSourceLabel(source) {
+    const labels = {
+      own: "Живые фото конкретного товара",
+      site: "Фото с сайта магазина",
+      supplier: "Каталожные фото поставщика",
+      mixed: "Смешанный набор"
+    };
+    return labels[source] || labels.own;
+  }
+
+  function hasCatalogLikePhotoName(value) {
+    const text = String(value || "").toLowerCase();
+    return ["logo", "watermark", "banner", "catalog", "template", "background", "cover", "screenshot", "screen", "landscape", "supplier"].some((part) => text.includes(part));
+  }
+
+  function hasExternalContactInDescription(description) {
+    const text = String(description || "");
+    return /(https?:\/\/|www\.|telegram|whatsapp|wa\.me|t\.me|@[a-z0-9_]{3,}|\+?\d[\d\s()\-]{8,}\d)/i.test(text);
+  }
+
+  function getAvitoModerationReport(payload) {
+    const items = [];
+    let score = 100;
+
+    const add = (level, title, text, points = 0) => {
+      items.push({ level, title, text });
+      score -= points;
+    };
+
+    if (!payload) {
+      return {
+        status: "Не готово",
+        score: 0,
+        statusClass: "danger",
+        items: [{ level: "danger", title: "Товар не выбран", text: "Открой карточку товара и заполни данные для Авито." }]
+      };
+    }
+
+    const photoCount = Math.max(payload.photos.length, payload.photoUrls.length, payload.existingPhotosCount || 0);
+    const siteUrls = payload.photoUrls.filter((url) => /imagnate\.ru|site\.ru|cdn|static|catalog/i.test(url));
+    const badNames = payload.photos.filter((photo) => hasCatalogLikePhotoName(photo.name));
+    const smallPhotos = payload.photos.filter((photo) => photo.width && photo.height && (photo.width < 800 || photo.height < 600));
+    const hugePhotos = payload.photos.filter((photo) => Number(photo.size || 0) > 25 * 1024 * 1024);
+    const nonSecureUrls = payload.photoUrls.filter((url) => !/^https:\/\//i.test(url));
+
+    if (!photoCount) {
+      add("danger", "Нет фото", "Для публикации нужны реальные фотографии товара. Без них карточку почти наверняка придется дорабатывать.", 35);
+    } else if (photoCount < 3) {
+      add("warn", "Мало фото", "Лучше добавить 3-5 фото: общий вид, экран, корпус, торцы, комплект и заметные нюансы.", 12);
+    } else {
+      add("pass", "Фото есть", "Количество фото выглядит нормально для первичной публикации.", 0);
+    }
+
+    if (payload.photoSource === "site" || siteUrls.length) {
+      add("warn", "Фото взяты с сайта", "Для Авито лучше добавить живые уникальные фото конкретного экземпляра. Фото с сайта могут выглядеть как повторные или каталожные.", 18);
+    }
+
+    if (payload.photoSource === "supplier") {
+      add("danger", "Каталожные фото", "Каталожные или поставщицкие фото лучше не отправлять без живых снимков товара. Это высокий риск отклонения или низкого доверия.", 30);
+    }
+
+    if (payload.photoSource === "mixed") {
+      add("warn", "Смешанные фото", "Проверь, чтобы первой стояла живая фотография товара, а не картинка с сайта или поставщика.", 8);
+    }
+
+    if (badNames.length) {
+      add("warn", "Подозрительные имена файлов", `Проверь файлы: ${badNames.map((photo) => photo.name).join(", ")}. Названия похожи на баннер, скриншот или шаблон.`, 10);
+    }
+
+    if (smallPhotos.length) {
+      add("warn", "Низкое разрешение", "Часть фото меньше 800x600. Лучше заменить на более четкие снимки.", 10);
+    }
+
+    if (hugePhotos.length) {
+      add("warn", "Слишком тяжелые фото", "Часть файлов тяжелее 25 МБ. Перед выгрузкой лучше сжать их.", 10);
+    }
+
+    if (nonSecureUrls.length) {
+      add("warn", "Фото-ссылки без HTTPS", "Для XML лучше использовать прямые HTTPS-ссылки на изображения.", 8);
+    }
+
+    if (payload.photos.length && !payload.photoUrls.length) {
+      add("warn", "Нет публичных ссылок для XML", "Для ручной загрузки фото подходят, но для XML/API нужны публичные ссылки на изображения.", 8);
+    }
+
+    if (!payload.photos.length && !payload.photoUrls.length && payload.existingPhotosCount) {
+      add("warn", "Фото есть только как счетчик", "В товаре указано количество фото, но сами файлы или ссылки не прикреплены к выгрузке. Для реальной отправки нужны файлы или публичные URL.", 10);
+    }
+
+    if (!payload.price || payload.price <= 0) {
+      add("danger", "Нет цены", "Цена обязательна для публикации.", 20);
+    }
+
+    if (!payload.description || payload.description.trim().length < 80) {
+      add("warn", "Короткое описание", "Добавь состояние, гарантию, комплектацию, нюансы и что клиент может проверить при покупке.", 12);
+    }
+
+    if (hasExternalContactInDescription(payload.description)) {
+      add("warn", "Контакты в описании", "Ссылки, мессенджеры и телефоны лучше держать в разрешенных полях площадки, а не в тексте описания.", 12);
+    }
+
+    if (!payload.kit) {
+      add("warn", "Не указана комплектация", "Для техники лучше явно указать коробку, кабель, чек, гарантию и состояние АКБ, если это телефон.", 8);
+    }
+
+    if (payload.condition === "Требует проверки") {
+      add("warn", "Слабый статус состояния", "Для объявления лучше указать понятное состояние и отдельно описать нюансы.", 8);
+    }
+
+    if (!items.some((item) => item.level !== "pass")) {
+      add("pass", "Карточка выглядит чисто", "Можно готовить выгрузку. Перед реальной публикацией все равно стоит открыть предпросмотр Авито.", 0);
+    }
+
+    const hasDanger = items.some((item) => item.level === "danger");
+    const hasWarn = items.some((item) => item.level === "warn");
+    const normalizedScore = Math.max(0, Math.min(100, score));
+    return {
+      status: hasDanger ? "Высокий риск" : hasWarn ? "Нужно проверить" : "Готово",
+      score: normalizedScore,
+      statusClass: hasDanger ? "danger" : hasWarn ? "warning" : "blue",
+      items
     };
   }
 
   function getAvitoPayloadText(payload) {
     if (!payload) return "";
+    const report = getAvitoModerationReport(payload);
     return [
       `Название: ${payload.title}`,
       `Категория: ${payload.category}`,
@@ -1050,8 +1180,11 @@
       `Город: ${payload.city}`,
       `Контакт: ${payload.contact}`,
       `Комплектация: ${payload.kit || "не указана"}`,
+      `Источник фото: ${getAvitoPhotoSourceLabel(payload.photoSource)}`,
       `Фото: ${payload.photos.length ? payload.photos.map((photo) => photo.name).join(", ") : "не прикреплены"}`,
+      `Фото в карточке: ${payload.existingPhotosCount || 0}`,
       `Фото URL для XML: ${payload.photoUrls.length ? payload.photoUrls.join(", ") : "не указаны"}`,
+      `Предпроверка: ${report.status} (${report.score}/100)`,
       "",
       "Описание:",
       payload.description || "Описание не заполнено."
@@ -1076,6 +1209,7 @@
     byId("avitoKit").value = product.kit || "";
     byId("avitoDescription").value = product.description || product.comment || "";
     byId("avitoPhotoUrls").value = (product.photoUrls || []).join("\n");
+    byId("avitoPhotoSource").value = product.photoSource || (product.photoUrls?.length ? "site" : "own");
     byId("avitoPhotos").value = "";
 
     renderAvitoPhotoPreview();
@@ -1092,12 +1226,25 @@
   function fileToAvitoPhoto(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve({
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        dataUrl: reader.result
-      });
+      reader.onload = () => {
+        const dataUrl = reader.result;
+        const image = new Image();
+        image.onload = () => resolve({
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          width: image.naturalWidth,
+          height: image.naturalHeight,
+          dataUrl
+        });
+        image.onerror = () => resolve({
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          dataUrl
+        });
+        image.src = dataUrl;
+      };
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
@@ -1168,8 +1315,33 @@
 
   function renderAvitoPayloadPreview() {
     const target = byId("avitoPayloadPreview");
+    const payload = getAvitoPayload();
+    if (target) target.textContent = getAvitoPayloadText(payload);
+    renderAvitoModerationReport(payload);
+  }
+
+  function renderAvitoModerationReport(payload) {
+    const target = byId("avitoModerationBox");
     if (!target) return;
-    target.textContent = getAvitoPayloadText(getAvitoPayload());
+
+    const report = getAvitoModerationReport(payload);
+    target.innerHTML = `
+      <div class="moderation-head">
+        <div class="moderation-title">
+          <strong>Предпроверка модерации</strong>
+          <span>Оценка не гарантирует публикацию, но заранее показывает слабые места карточки.</span>
+        </div>
+        <span class="status-pill ${report.statusClass}">${escapeHtml(report.status)} · ${report.score}/100</span>
+      </div>
+      <div class="moderation-list">
+        ${report.items.slice(0, 6).map((item) => `
+          <div class="moderation-item ${item.level}">
+            <strong>${escapeHtml(item.title)}</strong>
+            <span>${escapeHtml(item.text)}</span>
+          </div>
+        `).join("")}
+      </div>
+    `;
   }
 
   function validateAvitoPayload(payload) {
@@ -1190,21 +1362,27 @@
       return;
     }
 
-    payload.product.avitoStatus = "Готово к Авито";
+    const report = getAvitoModerationReport(payload);
+    payload.product.avitoStatus = report.status === "Готово" ? "Готово к Авито" : "Нужна проверка Авито";
+    payload.product.avitoModeration = report.status;
+    payload.product.avitoModerationScore = report.score;
     payload.product.price = payload.price;
     payload.product.condition = payload.condition;
     payload.product.kit = payload.kit;
     payload.product.description = payload.description;
-    payload.product.photosCount = Math.max(payload.photos.length, payload.photoUrls.length);
+    payload.product.photosCount = Math.max(payload.photos.length, payload.photoUrls.length, payload.existingPhotosCount || 0);
     payload.product.photoUrls = payload.photoUrls;
+    payload.product.photoSource = payload.photoSource;
 
     avitoDrafts.unshift({
       id: Date.now(),
       sku: payload.product.sku,
       title: payload.title,
       price: payload.price,
-      photosCount: Math.max(payload.photos.length, payload.photoUrls.length),
-      status: "Демо-загрузка Авито",
+      photosCount: Math.max(payload.photos.length, payload.photoUrls.length, payload.existingPhotosCount || 0),
+      status: payload.product.avitoStatus,
+      moderationStatus: report.status,
+      moderationScore: report.score,
       createdAt: new Date().toLocaleString("ru-RU")
     });
 
@@ -1283,7 +1461,7 @@
         <div class="panel-header">
           <div>
             <div class="attention-title">${escapeHtml(item.title)}</div>
-            <div class="activity-meta">${money(item.price)} · фото: ${item.photosCount} · ${escapeHtml(item.createdAt)}</div>
+            <div class="activity-meta">${money(item.price)} · фото: ${item.photosCount} · модерация: ${escapeHtml(item.moderationStatus || "не проверено")} · ${escapeHtml(item.createdAt)}</div>
           </div>
           <span class="status-pill blue">${escapeHtml(item.status)}</span>
         </div>
@@ -1305,6 +1483,11 @@
         pill: "Готово",
         title: "XML/JSON подготовка карточек",
         meta: "В товаре можно заполнить фото, описание, комплектацию и скачать XML или JSON."
+      },
+      {
+        pill: "Готово",
+        title: "Предпроверка модерации",
+        meta: "Ассистент заранее подсвечивает риски: фото с сайта, мало фото, каталожные изображения, короткое описание и контакты в тексте."
       },
       {
         pill: "Нужен доступ",
@@ -1338,13 +1521,14 @@
       const photos = getProductPhotoCount(product);
       const status = product.avitoStatus || (product.price > 0 && product.stock > 0 ? "Нужно подготовить" : "Не готово");
       const statusClass = product.avitoStatus ? "blue" : product.price > 0 && product.stock > 0 ? "warning" : "danger";
+      const moderation = product.avitoModeration ? `${product.avitoModeration} · ${product.avitoModerationScore}/100` : "не проверено";
       return `
         <tr>
           <td><strong>${escapeHtml(product.name)}</strong><div class="activity-meta">${escapeHtml(product.sku || "")}</div></td>
           <td>${money(product.price)}</td>
           <td>${product.stock} шт.</td>
           <td>${photos ? `${photos} фото` : "нет фото"}</td>
-          <td><span class="status-pill ${statusClass}">${escapeHtml(status)}</span></td>
+          <td><span class="status-pill ${statusClass}">${escapeHtml(status)}</span><div class="activity-meta">${escapeHtml(moderation)}</div></td>
           <td><a class="ghost-btn compact-btn" href="inventory.html">Подготовить</a></td>
         </tr>
       `;
@@ -1400,6 +1584,7 @@
       showToast(error);
       return;
     }
+    const report = getAvitoModerationReport(payload);
     const json = {
       externalId: payload.product.sku,
       title: payload.title,
@@ -1410,8 +1595,15 @@
       contact: payload.contact,
       kit: payload.kit,
       description: payload.description,
+      photoSource: payload.photoSource,
+      existingPhotosCount: payload.existingPhotosCount,
       photoUrls: payload.photoUrls,
-      localPhotos: payload.photos.map((photo) => ({ name: photo.name, size: photo.size, type: photo.type }))
+      localPhotos: payload.photos.map((photo) => ({ name: photo.name, size: photo.size, type: photo.type, width: photo.width, height: photo.height })),
+      moderation: {
+        status: report.status,
+        score: report.score,
+        issues: report.items.filter((item) => item.level !== "pass")
+      }
     };
     downloadTextFile(`avito-${payload.product.sku}.json`, JSON.stringify(json, null, 2), "application/json;charset=utf-8");
   }
@@ -1468,6 +1660,7 @@
               <button class="ghost-btn compact-btn" type="button" data-avito-open="${index}">Загрузить</button>
             </div>
             ${product.avitoStatus ? `<div class="activity-meta">${escapeHtml(product.avitoStatus)}</div>` : ""}
+            ${product.avitoModeration ? `<div class="activity-meta">Проверка: ${escapeHtml(product.avitoModeration)} · ${product.avitoModerationScore}/100</div>` : ""}
           </td>
           <td>${escapeHtml(product.comment)}</td>
         </tr>
@@ -1522,6 +1715,7 @@
       kit: "",
       description: getFieldText("newProductComment", ""),
       photosCount: 0,
+      photoSource: "own",
       avitoStatus: ""
     });
 
@@ -1608,6 +1802,7 @@
       .split(/[;,\n]/)
       .map((url) => url.trim())
       .filter(Boolean);
+    const photoSource = getValueByAliases(row, ["photoSource", "photo_source", "источник фото"], photoUrls.length ? "site" : "own");
 
     return normalizeProduct({
       sku: getValueByAliases(row, ["sku", "id", "article", "артикул", "imei"], `IMPORT-${Date.now()}-${index + 1}`),
@@ -1625,6 +1820,7 @@
       description: getValueByAliases(row, ["description", "описание"], ""),
       photosCount: photoUrls.length,
       photoUrls,
+      photoSource,
       avitoStatus: ""
     });
   }
@@ -1704,6 +1900,7 @@
           kit: "Коробка, кабель USB-C, чек магазина",
           description: "Описание состояния, гарантии и нюансов товара.",
           comment: "Внутренний комментарий",
+          photoSource: "site",
           photoUrls: [
             "https://site.ru/photos/iphone-15-pro-1.jpg",
             "https://site.ru/photos/iphone-15-pro-2.jpg"
@@ -1716,8 +1913,8 @@
 
   function downloadCsvTemplate() {
     const csv = [
-      "sku,name,category,status,stock,cost,price,condition,kit,description,comment,photoUrls",
-      "\"IPH15P-256-NT\",\"iPhone 15 Pro 256 GB\",\"Смартфоны\",\"Готов к продаже\",1,111000,123900,\"Отличное\",\"Коробка, кабель USB-C, чек магазина\",\"Описание состояния, гарантии и нюансов товара.\",\"Внутренний комментарий\",\"https://site.ru/photos/iphone-15-pro-1.jpg;https://site.ru/photos/iphone-15-pro-2.jpg\""
+      "sku,name,category,status,stock,cost,price,condition,kit,description,comment,photoSource,photoUrls",
+      "\"IPH15P-256-NT\",\"iPhone 15 Pro 256 GB\",\"Смартфоны\",\"Готов к продаже\",1,111000,123900,\"Отличное\",\"Коробка, кабель USB-C, чек магазина\",\"Описание состояния, гарантии и нюансов товара.\",\"Внутренний комментарий\",\"site\",\"https://site.ru/photos/iphone-15-pro-1.jpg;https://site.ru/photos/iphone-15-pro-2.jpg\""
     ].join("\n");
     downloadTextFile("imagnate-products-template.csv", csv, "text/csv;charset=utf-8");
   }
@@ -2525,7 +2722,7 @@
     byId("downloadAvitoJson")?.addEventListener("click", downloadAvitoJson);
     byId("copyAvitoProfile")?.addEventListener("click", copyAvitoProfileUrl);
     byId("avitoPhotos")?.addEventListener("change", handleAvitoPhotoUpload);
-    ["avitoPrice", "avitoCategory", "avitoCondition", "avitoCity", "avitoContact", "avitoKit", "avitoDescription", "avitoPhotoUrls"].forEach((id) => {
+    ["avitoPrice", "avitoCategory", "avitoCondition", "avitoCity", "avitoContact", "avitoKit", "avitoDescription", "avitoPhotoUrls", "avitoPhotoSource"].forEach((id) => {
       byId(id)?.addEventListener("input", renderAvitoPayloadPreview);
       byId(id)?.addEventListener("change", renderAvitoPayloadPreview);
     });

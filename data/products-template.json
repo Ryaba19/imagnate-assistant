@@ -12,6 +12,7 @@
       "kit": "Коробка, кабель USB-C, чек магазина",
       "description": "Описание состояния, гарантии и нюансов товара.",
       "comment": "Внутренний комментарий",
+      "photoSource": "site",
       "photoUrls": [
         "https://site.ru/photos/iphone-15-pro-1.jpg",
         "https://site.ru/photos/iphone-15-pro-2.jpg"
