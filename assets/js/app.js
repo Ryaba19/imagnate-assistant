@@ -13,6 +13,33 @@
   let activeReplyQuestionId = null;
   const tasks = loadTasks();
   const activity = seed.activity || [];
+  const imagnateCatalogFallback = [
+    { sku: "IMG-IP17P-256-SILVER", name: "Смартфон Apple iPhone 17 Pro 256 ГБ, Silver (eSim)", category: "Смартфоны", price: 94180, sourceUrl: "https://imagnate.ru/", sourceSection: "Популярные товары" },
+    { sku: "IMG-DYSON-HS09-AMBER", name: "Стайлер Dyson HS09 Airwrap Co-Anda 2X Amber Silk", category: "Dyson", price: 46680, sourceUrl: "https://imagnate.ru/", sourceSection: "Популярные товары" },
+    { sku: "IMG-IP17E-256-BLACK", name: "Смартфон Apple iPhone 17e 256 ГБ Black (eSim)", category: "Смартфоны", price: 56980, sourceUrl: "https://imagnate.ru/", sourceSection: "Популярные товары" },
+    { sku: "IMG-PS5-SLIM-1TB", name: "Игровая приставка Sony Playstation 5 Slim 1 ТБ", category: "Игровые приставки", price: 58380, sourceUrl: "https://imagnate.ru/", sourceSection: "Популярные товары" },
+    { sku: "IMG-IP17-256-MIST", name: "Смартфон Apple iPhone 17 256 ГБ Mist Blue (eSim)", category: "Смартфоны", price: 69580, sourceUrl: "https://imagnate.ru/", sourceSection: "Популярные товары" },
+    { sku: "IMG-SONY-XM6-SILVER", name: "Sony WH-1000XM6 (Silver)", category: "Аудио", price: 29480, sourceUrl: "https://imagnate.ru/", sourceSection: "Популярные товары" },
+    { sku: "IMG-AW11-42-JETBLACK", name: "Часы Apple Watch Series 11, 42 mm, Jet Black Aluminum Black Sport Band", category: "Умные часы", price: 32280, sourceUrl: "https://imagnate.ru/", sourceSection: "Популярные товары" },
+    { sku: "IMG-AIRPODS-PRO-3", name: "Беспроводные наушники Apple AirPods Pro 3 (2025)", category: "Аудио", price: 18880, sourceUrl: "https://imagnate.ru/", sourceSection: "Популярные товары" },
+    { sku: "IMG-IP17-256-BLACK", name: "Смартфон Apple iPhone 17 256 ГБ Black (eSim)", category: "Смартфоны", price: 70680, sourceUrl: "https://imagnate.ru/", sourceSection: "Новинки" },
+    { sku: "IMG-IPAIR-256-SKY", name: "Смартфон Apple iPhone Air 256 ГБ Sky Blue (eSim)", category: "Смартфоны", price: 73580, sourceUrl: "https://imagnate.ru/", sourceSection: "Новинки" },
+    { sku: "IMG-IP16-128-ULTRA", name: "Смартфон Apple iPhone 16 128 ГБ, Ultramarine (Sim+eSim)", category: "Смартфоны", price: 60180, sourceUrl: "https://imagnate.ru/", sourceSection: "Новинки" },
+    { sku: "IMG-DYSON-HS08-VINCA", name: "Стайлер Dyson Airwrap Complete Long HS08 Vinca blue/topaz", category: "Dyson", price: 36700, sourceUrl: "https://imagnate.ru/", sourceSection: "Новинки" },
+    { sku: "IMG-IP17E-256-WHITE-SIM", name: "Смартфон Apple iPhone 17e 256 ГБ White (Sim+eSim)", category: "Смартфоны", price: 57380, sourceUrl: "https://imagnate.ru/catalog/apple/iphone", sourceSection: "iPhone" },
+    { sku: "IMG-IP17E-256-PINK-SIM", name: "Смартфон Apple iPhone 17e 256 ГБ Soft Pink (Sim+eSIM)", category: "Смартфоны", price: 57780, sourceUrl: "https://imagnate.ru/catalog/apple/iphone", sourceSection: "iPhone" },
+    { sku: "IMG-IP17E-512-BLACK", name: "Смартфон Apple iPhone 17e 512 ГБ Black (eSim)", category: "Смартфоны", price: 66380, sourceUrl: "https://imagnate.ru/catalog/apple/iphone", sourceSection: "iPhone" },
+    { sku: "IMG-IP17PM-512-DEEP", name: "Смартфон Apple iPhone 17 Pro Max 512 ГБ Deep Blue (eSim)", category: "Смартфоны", price: 120380, sourceUrl: "https://imagnate.ru/catalog/apple/iphone", sourceSection: "iPhone" },
+    { sku: "IMG-IP17PM-256-SILVER", name: "Смартфон Apple iPhone 17 Pro Max 256 ГБ, Silver (eSim)", category: "Смартфоны", price: 104880, sourceUrl: "https://imagnate.ru/catalog/apple/iphone", sourceSection: "iPhone" },
+    { sku: "IMG-IP17PM-2TB-DEEP", name: "Смартфон Apple iPhone 17 Pro Max 2 ТБ Deep Blue (eSim)", category: "Смартфоны", price: 153380, sourceUrl: "https://imagnate.ru/catalog/apple/iphone", sourceSection: "iPhone" },
+    { sku: "IMG-IP17P-512-DEEP", name: "Смартфон Apple iPhone 17 Pro 512 ГБ Deep Blue (eSim)", category: "Смартфоны", price: 113680, sourceUrl: "https://imagnate.ru/catalog/apple/iphone?page=2", sourceSection: "iPhone" },
+    { sku: "IMG-IP17P-512-SILVER", name: "Смартфон Apple iPhone 17 Pro 512 ГБ, Silver (eSim)", category: "Смартфоны", price: 112580, sourceUrl: "https://imagnate.ru/catalog/apple/iphone?page=2", sourceSection: "iPhone" },
+    { sku: "IMG-IP17P-256-ORANGE", name: "Смартфон Apple iPhone 17 Pro 256 ГБ Cosmic Orange (eSim)", category: "Смартфоны", price: 92180, sourceUrl: "https://imagnate.ru/catalog/apple/iphone?page=2", sourceSection: "iPhone" },
+    { sku: "IMG-IP17-512-LAVENDER", name: "Смартфон Apple iPhone 17 512 ГБ Lavender (eSim)", category: "Смартфоны", price: 92180, sourceUrl: "https://imagnate.ru/catalog/apple/iphone?page=2", sourceSection: "iPhone" },
+    { sku: "IMG-IP17-512-BLACK", name: "Смартфон Apple iPhone 17 512 ГБ Black (eSim)", category: "Смартфоны", price: 88480, sourceUrl: "https://imagnate.ru/catalog/apple/iphone?page=2", sourceSection: "iPhone" },
+    { sku: "IMG-IP17-256-SAGE", name: "Смартфон Apple iPhone 17 256 ГБ Sage (eSim)", category: "Смартфоны", price: 74080, sourceUrl: "https://imagnate.ru/catalog/apple/iphone?page=2", sourceSection: "iPhone" },
+    { sku: "IMG-IP17-256-MIST-CAT", name: "Смартфон Apple iPhone 17 256 ГБ Mist Blue (eSim)", category: "Смартфоны", price: 74680, sourceUrl: "https://imagnate.ru/catalog/apple/iphone?page=2", sourceSection: "iPhone" }
+  ];
 
   const roleRules = {
     owner: {
@@ -176,7 +203,9 @@
       photoSource: product.photoSource || product.photo_source || "",
       avitoStatus: product.avitoStatus || "",
       avitoModeration: product.avitoModeration || "",
-      avitoModerationScore: Number(product.avitoModerationScore ?? 0)
+      avitoModerationScore: Number(product.avitoModerationScore ?? 0),
+      sourceUrl: product.sourceUrl || product.source_url || "",
+      sourceSection: product.sourceSection || product.source_section || ""
     };
   }
 
@@ -343,6 +372,106 @@
   function getFieldText(id, fallback) {
     const field = byId(id);
     return field ? field.value.trim() : String(fallback || "");
+  }
+
+  function getImagnateCatalog() {
+    const source = Array.isArray(seed.imagnateCatalog) && seed.imagnateCatalog.length
+      ? seed.imagnateCatalog
+      : imagnateCatalogFallback;
+    const seen = new Set();
+    return source
+      .filter((item) => item?.sku && item?.name)
+      .filter((item) => {
+        if (seen.has(item.sku)) return false;
+        seen.add(item.sku);
+        return true;
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, "ru"));
+  }
+
+  function getSelectedImagnateProduct() {
+    const sku = getFieldText("newProductPreset", "");
+    if (!sku) return null;
+    return getImagnateCatalog().find((item) => item.sku === sku) || null;
+  }
+
+  function ensureSelectOption(id, value) {
+    const field = byId(id);
+    if (!field || !value) return;
+    const exists = Array.from(field.options).some((option) => option.value === value || option.textContent === value);
+    if (!exists) field.append(new Option(value, value));
+  }
+
+  function buildCatalogComment(item) {
+    return [
+      `Подтянуто из публичного каталога iMagnate: ${money(item.price)}.`,
+      "Перед продажей проверить наличие, актуальность цены, закупочную цену и реальные фото конкретной единицы.",
+      item.sourceSection ? `Раздел сайта: ${item.sourceSection}.` : ""
+    ].filter(Boolean).join(" ");
+  }
+
+  function buildCatalogDescription(item) {
+    const categoryText = {
+      "Смартфоны": "Смартфон готов к продаже: укажи состояние корпуса, аккумулятора, комплект и гарантию магазина. Для Авито лучше добавить живые фото именно этого экземпляра.",
+      "Игровые приставки": "Игровая система для дома и подарка. Перед публикацией проверь комплектацию, состояние корпуса, геймпад и кабели.",
+      "Аудио": "Аудиотехника из ассортимента iMagnate. В карточке стоит указать состояние, комплект, гарантию и возможность проверки перед покупкой.",
+      "Умные часы": "Умные часы из ассортимента iMagnate. В описании нужно уточнить размер, ремешок, состояние, комплект и гарантию.",
+      "Dyson": "Техника Dyson из ассортимента iMagnate. Для карточки важно уточнить комплект насадок, состояние, гарантию и региональную версию.",
+      "Аксессуары": "Аксессуар из ассортимента iMagnate. Укажи совместимость, комплект, состояние упаковки и гарантию."
+    };
+    return [
+      `${item.name}.`,
+      `Цена на сайте iMagnate: ${money(item.price)}.`,
+      categoryText[item.category] || "Карточка подготовлена по данным публичного каталога iMagnate. Перед публикацией проверь наличие, цену, комплект и фото.",
+      "Описание создано ассистентом автоматически и готово для доработки продавцом."
+    ].join(" ");
+  }
+
+  function renderProductAssistantPreview(item = getSelectedImagnateProduct()) {
+    const target = byId("newProductAssistantPreview");
+    if (!target) return;
+    if (!item) {
+      target.innerHTML = "Выбери товар из списка — ассистент заполнит категорию, цену, комментарий и описание.";
+      return;
+    }
+
+    target.innerHTML = `
+      <strong>${escapeHtml(item.name)}</strong><br>
+      Категория: ${escapeHtml(item.category)} · Цена продажи: ${money(item.price)}<br>
+      Источник: <a href="${escapeHtml(item.sourceUrl || store.siteUrl || "#")}" target="_blank" rel="noreferrer">${escapeHtml(item.sourceSection || "iMagnate")}</a><br>
+      Ассистент подготовил комментарий и описание. Останется проверить наличие, закупку и фото.
+    `;
+  }
+
+  function renderProductPresetOptions() {
+    const target = byId("newProductPreset");
+    if (!target || target.dataset.ready === "true") return;
+
+    const catalog = getImagnateCatalog();
+    target.innerHTML = [
+      `<option value="">Выбрать товар из справочника iMagnate</option>`,
+      ...catalog.map((item) => `<option value="${escapeHtml(item.sku)}">${escapeHtml(item.name)} · ${money(item.price)}</option>`)
+    ].join("");
+    target.dataset.ready = "true";
+    renderProductAssistantPreview(null);
+  }
+
+  function applyProductPreset() {
+    const item = getSelectedImagnateProduct();
+    renderProductAssistantPreview(item);
+    if (!item) return;
+
+    ensureSelectOption("newProductCategory", item.category);
+    byId("newProductName").value = item.name;
+    byId("newProductSku").value = item.sku;
+    byId("newProductCategory").value = item.category;
+    byId("newProductStatus").value = "Готов к продаже";
+    byId("newProductStock").value = "1";
+    byId("newProductCost").value = "0";
+    byId("newProductPrice").value = String(item.price || 0);
+    byId("newProductDays").value = "0";
+    byId("newProductComment").value = buildCatalogComment(item);
+    byId("newProductDescription").value = buildCatalogDescription(item);
   }
 
   function getShiftValues() {
@@ -1693,6 +1822,7 @@
   function addProductFromForm(event) {
     event.preventDefault();
 
+    const preset = getSelectedImagnateProduct();
     const name = getFieldText("newProductName", "");
     if (!name) {
       showToast("Введите название товара");
@@ -1709,19 +1839,25 @@
       cost: getFieldNumber("newProductCost", 0),
       price: getFieldNumber("newProductPrice", 0),
       days: getFieldNumber("newProductDays", 0),
-      source: "manual",
+      source: preset ? "imagnate" : "manual",
       comment: getFieldText("newProductComment", ""),
-      condition: "Отличное",
-      kit: "",
-      description: getFieldText("newProductComment", ""),
+      condition: preset ? "Новое" : "Отличное",
+      kit: preset ? "Комплектация уточняется при приемке или продаже" : "",
+      description: getFieldText("newProductDescription", getFieldText("newProductComment", "")),
       photosCount: 0,
-      photoSource: "own",
-      avitoStatus: ""
+      photoSource: preset ? "site" : "own",
+      avitoStatus: "",
+      sourceUrl: preset?.sourceUrl || "",
+      sourceSection: preset?.sourceSection || ""
     });
 
     products.unshift(product);
     saveProducts();
     event.target.reset();
+    if (byId("newProductPreset")) {
+      byId("newProductPreset").value = "";
+      renderProductAssistantPreview(null);
+    }
     if (byId("newProductStock")) byId("newProductStock").value = "1";
     if (byId("newProductDays")) byId("newProductDays").value = "0";
     renderProducts();
@@ -2713,6 +2849,7 @@
     byId("inventoryFilter")?.addEventListener("change", renderProducts);
     byId("inventorySearch")?.addEventListener("input", renderProducts);
     byId("addProductForm")?.addEventListener("submit", addProductFromForm);
+    byId("newProductPreset")?.addEventListener("change", applyProductPreset);
     byId("resetInventoryProducts")?.addEventListener("click", resetInventoryProducts);
     byId("closeAvitoModal")?.addEventListener("click", closeAvitoModal);
     byId("cancelAvitoModal")?.addEventListener("click", closeAvitoModal);
@@ -2804,6 +2941,7 @@
     renderChat();
     renderContent();
     renderShift();
+    renderProductPresetOptions();
     renderProducts();
     renderInventoryMetrics();
     renderAvitoOverview();

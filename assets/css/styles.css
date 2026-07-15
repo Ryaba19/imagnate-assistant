@@ -600,6 +600,29 @@
       grid-column: 1 / -1;
     }
 
+    .catalog-assist {
+      border: 1px solid rgba(43, 196, 189, 0.24);
+      border-radius: var(--radius);
+      background: rgba(20, 62, 73, 0.22);
+      color: var(--muted);
+      padding: 10px 11px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .catalog-assist strong {
+      color: var(--ink);
+    }
+
+    .catalog-assist a {
+      color: #b9e6ff;
+      text-decoration: none;
+    }
+
+    .catalog-assist a:hover {
+      text-decoration: underline;
+    }
+
     .panel-note {
       margin-top: 5px;
       max-width: 720px;
