@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Авито | iMagnate Assistant</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-page="avito">
+  <div class="app">
+    <aside class="sidebar" aria-label="Навигация">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">IA</div>
+        <div>
+          <div class="brand-name">iMagnate Assistant</div>
+          <div class="brand-note">Демо помощника магазина</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="nav-button" href="index.html" data-page-link="dashboard"><span class="nav-icon">01</span><span>Главная</span></a>
+        <a class="nav-button" href="content.html" data-page-link="content"><span class="nav-icon">02</span><span>Контент</span></a>
+        <a class="nav-button" href="shift.html" data-page-link="shift"><span class="nav-icon">03</span><span>Смена</span></a>
+        <a class="nav-button" href="inventory.html" data-page-link="inventory"><span class="nav-icon">04</span><span>Товары</span></a>
+        <a class="nav-button" href="questions.html" data-page-link="questions"><span class="nav-icon">05</span><span>Вопросы</span></a>
+        <a class="nav-button" href="avito.html" data-page-link="avito"><span class="nav-icon">06</span><span>Авито</span></a>
+        <a class="nav-button" href="site-import.html" data-page-link="site-import" data-permission="site-import"><span class="nav-icon">07</span><span>Сайт</span></a>
+        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees"><span class="nav-icon">08</span><span>Сотрудники</span></a>
+      </nav>
+      <div class="sidebar-footer">
+        <span>Авито-центр</span>
+        <span>Профиль, публикации и будущий API</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1>Авито iMagnate</h1>
+          <p class="subtitle">Рабочая страница для сотрудников: профиль магазина, подготовленные публикации и состояние будущей интеграции.</p>
+        </div>
+        <div class="badge-row">
+          <span class="badge"><span class="dot"></span><span id="todayLabel">Сегодня</span></span>
+          <span class="badge"><span data-current-user>Пользователь</span>: <span data-current-role>роль</span></span>
+        </div>
+      </header>
+
+      <section class="view active" aria-labelledby="avitoTitle">
+        <h2 id="avitoTitle">Публикации</h2>
+
+        <div class="metrics" id="avitoMetrics"></div>
+
+        <section class="panel avito-profile-panel" aria-labelledby="avitoProfileTitle">
+          <div class="panel-header">
+            <div>
+              <h3 id="avitoProfileTitle">Профиль магазина</h3>
+              <p class="panel-note">Все сотрудники могут открыть публичную витрину Авито в отдельной вкладке и сверить опубликованные объявления.</p>
+            </div>
+            <span class="status-pill blue">Публичная ссылка</span>
+          </div>
+          <div class="avito-profile-card">
+            <div>
+              <div class="attention-title">iMagnate на Авито</div>
+              <div class="activity-meta" id="avitoProfileUrl">Ссылка будет подставлена из настроек магазина.</div>
+            </div>
+            <div class="content-actions">
+              <a class="primary-btn" id="openAvitoProfile" href="#" target="_blank" rel="noreferrer">Открыть Авито</a>
+              <button class="ghost-btn" type="button" id="copyAvitoProfile">Скопировать ссылку</button>
+            </div>
+          </div>
+        </section>
+
+        <div class="layout-2">
+          <section class="panel" aria-labelledby="avitoPreparedTitle">
+            <div class="panel-header">
+              <h3 id="avitoPreparedTitle">Подготовленные карточки</h3>
+              <a class="ghost-btn" href="inventory.html">Перейти к товарам</a>
+            </div>
+            <div class="task-list" id="avitoPreparedList"></div>
+          </section>
+
+          <section class="panel" aria-labelledby="avitoIntegrationTitle">
+            <h3 id="avitoIntegrationTitle">Интеграция</h3>
+            <div class="attention-list" id="avitoIntegrationList"></div>
+          </section>
+        </div>
+
+        <section class="panel" aria-labelledby="avitoProductsTitle">
+          <div class="panel-header">
+            <h3 id="avitoProductsTitle">Товары для Авито</h3>
+            <span class="status-pill" id="avitoProductsCount">0 товаров</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Товар</th>
+                  <th>Цена</th>
+                  <th>Остаток</th>
+                  <th>Фото</th>
+                  <th>Статус</th>
+                  <th>Действие</th>
+                </tr>
+              </thead>
+              <tbody id="avitoProductsTable"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="assets/js/demo-data.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

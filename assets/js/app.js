@@ -607,7 +607,7 @@
         "- остаток;",
         "- город и контакт.",
         "",
-        "Открой “Товары”, нажми “Загрузить” у нужной позиции, прикрепи фото и заполни окно загрузки."
+        "Открой “Авито”, чтобы посмотреть профиль магазина и список публикаций. Для подготовки новой карточки перейди в “Товары” и нажми “Загрузить” у нужной позиции."
       ].join("\n");
     }
 
@@ -1218,6 +1218,141 @@
   function copyAvitoPayload() {
     const payload = getAvitoPayload();
     copyText(getAvitoPayloadText(payload));
+  }
+
+  function getAvitoProfileUrl() {
+    return store.avitoProfileUrl || "https://www.avito.ru/user/45b3050882d7589ba21bf140dde5c6f8/profile?src=sharing";
+  }
+
+  function getProductPhotoCount(product) {
+    return Math.max(Number(product.photosCount || 0), getAvitoPhotos(product).length, product.photoUrls?.length || 0);
+  }
+
+  function renderAvitoOverview() {
+    const metricsTarget = byId("avitoMetrics");
+    const profileLink = byId("openAvitoProfile");
+    const profileUrlText = byId("avitoProfileUrl");
+    if (!metricsTarget && !profileLink && !profileUrlText) return;
+
+    const profileUrl = getAvitoProfileUrl();
+    const preparedProducts = products.filter((product) => product.avitoStatus);
+    const productsWithPhotos = products.filter((product) => getProductPhotoCount(product) > 0);
+    const readyProducts = products.filter((product) => product.price > 0 && product.stock > 0 && (product.description || product.comment));
+
+    if (profileLink) profileLink.href = profileUrl;
+    if (profileUrlText) profileUrlText.textContent = profileUrl;
+
+    if (metricsTarget) {
+      const metrics = [
+        { label: "Профиль Авито", value: "Подключен", context: "Публичная ссылка магазина" },
+        { label: "Готово к Авито", value: String(preparedProducts.length), context: "Карточки с демо-статусом" },
+        { label: "С фото", value: String(productsWithPhotos.length), context: "Есть фото или ссылки" },
+        { label: "Можно готовить", value: String(readyProducts.length), context: "Цена, остаток и описание", attention: true }
+      ];
+
+      metricsTarget.innerHTML = metrics.map((item) => `
+        <article class="metric-card ${item.attention ? "attention" : ""}">
+          <div class="metric-label">${item.label}</div>
+          <div class="metric-value">${item.value}</div>
+          <div class="metric-context">${item.context}</div>
+        </article>
+      `).join("");
+    }
+
+    renderAvitoPreparedList();
+    renderAvitoIntegrationList();
+    renderAvitoProductsTable();
+  }
+
+  function renderAvitoPreparedList() {
+    const target = byId("avitoPreparedList");
+    if (!target) return;
+
+    if (!avitoDrafts.length) {
+      target.innerHTML = `
+        <article class="activity-item">
+          <div class="attention-title">Подготовленных карточек пока нет</div>
+          <div class="activity-meta">Открой “Товары”, нажми “Загрузить” в колонке Авито и подготовь карточку.</div>
+        </article>
+      `;
+      return;
+    }
+
+    target.innerHTML = avitoDrafts.slice(0, 6).map((item) => `
+      <article class="activity-item">
+        <div class="panel-header">
+          <div>
+            <div class="attention-title">${escapeHtml(item.title)}</div>
+            <div class="activity-meta">${money(item.price)} · фото: ${item.photosCount} · ${escapeHtml(item.createdAt)}</div>
+          </div>
+          <span class="status-pill blue">${escapeHtml(item.status)}</span>
+        </div>
+      </article>
+    `).join("");
+  }
+
+  function renderAvitoIntegrationList() {
+    const target = byId("avitoIntegrationList");
+    if (!target) return;
+
+    const items = [
+      {
+        pill: "Готово",
+        title: "Публичный профиль магазина",
+        meta: "Сотрудники могут открыть витрину Авито из ассистента и сверить объявления."
+      },
+      {
+        pill: "Готово",
+        title: "XML/JSON подготовка карточек",
+        meta: "В товаре можно заполнить фото, описание, комплектацию и скачать XML или JSON."
+      },
+      {
+        pill: "Нужен доступ",
+        title: "Официальный API Авито",
+        meta: "Для настоящей синхронизации нужны доступы Авито: приложение, токены, права на объявления и профиль магазина.",
+        warning: true
+      },
+      {
+        pill: "Следующий шаг",
+        title: "Сообщения и статистика",
+        meta: "После API можно подтягивать просмотры, обращения, статусы модерации и диалоги клиентов."
+      }
+    ];
+
+    target.innerHTML = items.map((item) => `
+      <article class="attention-item">
+        <span class="status-pill ${item.warning ? "warning" : ""}">${escapeHtml(item.pill)}</span>
+        <div class="attention-title">${escapeHtml(item.title)}</div>
+        <div class="attention-meta">${escapeHtml(item.meta)}</div>
+      </article>
+    `).join("");
+  }
+
+  function renderAvitoProductsTable() {
+    const target = byId("avitoProductsTable");
+    const counter = byId("avitoProductsCount");
+    if (!target) return;
+    if (counter) counter.textContent = `${products.length} товаров`;
+
+    target.innerHTML = products.map((product) => {
+      const photos = getProductPhotoCount(product);
+      const status = product.avitoStatus || (product.price > 0 && product.stock > 0 ? "Нужно подготовить" : "Не готово");
+      const statusClass = product.avitoStatus ? "blue" : product.price > 0 && product.stock > 0 ? "warning" : "danger";
+      return `
+        <tr>
+          <td><strong>${escapeHtml(product.name)}</strong><div class="activity-meta">${escapeHtml(product.sku || "")}</div></td>
+          <td>${money(product.price)}</td>
+          <td>${product.stock} шт.</td>
+          <td>${photos ? `${photos} фото` : "нет фото"}</td>
+          <td><span class="status-pill ${statusClass}">${escapeHtml(status)}</span></td>
+          <td><a class="ghost-btn compact-btn" href="inventory.html">Подготовить</a></td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function copyAvitoProfileUrl() {
+    copyText(getAvitoProfileUrl());
   }
 
   function getAvitoXml(payload) {
@@ -2388,6 +2523,7 @@
     byId("copyAvitoPayload")?.addEventListener("click", copyAvitoPayload);
     byId("downloadAvitoXml")?.addEventListener("click", downloadAvitoXml);
     byId("downloadAvitoJson")?.addEventListener("click", downloadAvitoJson);
+    byId("copyAvitoProfile")?.addEventListener("click", copyAvitoProfileUrl);
     byId("avitoPhotos")?.addEventListener("change", handleAvitoPhotoUpload);
     ["avitoPrice", "avitoCategory", "avitoCondition", "avitoCity", "avitoContact", "avitoKit", "avitoDescription", "avitoPhotoUrls"].forEach((id) => {
       byId(id)?.addEventListener("input", renderAvitoPayloadPreview);
@@ -2473,6 +2609,7 @@
     renderShift();
     renderProducts();
     renderInventoryMetrics();
+    renderAvitoOverview();
     renderTasks();
     renderEmployees();
     renderEmployeeMetrics();

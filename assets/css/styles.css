@@ -708,6 +708,29 @@
       align-items: start;
     }
 
+    .avito-profile-panel {
+      border-color: rgba(243, 181, 76, 0.28);
+      background:
+        linear-gradient(135deg, rgba(51, 39, 24, 0.34), rgba(17, 26, 43, 0.96)),
+        var(--surface);
+    }
+
+    .avito-profile-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(13, 21, 38, 0.74);
+      padding: 14px;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      justify-content: space-between;
+      min-width: 0;
+    }
+
+    .avito-profile-card > div:first-child {
+      min-width: 0;
+    }
+
     .modal-actions {
       display: flex;
       justify-content: flex-end;
@@ -1089,7 +1112,7 @@
       }
 
       .nav {
-        grid-template-columns: repeat(7, minmax(0, 1fr));
+        grid-template-columns: repeat(8, minmax(0, 1fr));
       }
 
       .nav-button {
@@ -1164,6 +1187,10 @@
       }
 
       .modal-actions {
+        display: grid;
+      }
+
+      .avito-profile-card {
         display: grid;
       }
 

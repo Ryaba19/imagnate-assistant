@@ -22,6 +22,7 @@ CREATE TABLE stores (
   owner_name TEXT,
   city TEXT,
   site_url TEXT,
+  avito_profile_url TEXT,
   phone TEXT,
   telegram TEXT,
   whatsapp TEXT,

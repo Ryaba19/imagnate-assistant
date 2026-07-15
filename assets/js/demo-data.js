@@ -4,6 +4,7 @@ window.StoreAssistantSeed = {
     "ownerName": "Леонид",
     "city": "Домодедово",
     "siteUrl": "https://imagnate.ru/",
+    "avitoProfileUrl": "https://www.avito.ru/user/45b3050882d7589ba21bf140dde5c6f8/profile?src=sharing",
     "phone": "+7 993 277-27-74",
     "telegram": "https://t.me/imagnate_news",
     "whatsapp": "https://wa.me/79932772774"

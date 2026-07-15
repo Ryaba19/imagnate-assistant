@@ -21,14 +21,15 @@ def main() -> None:
         store = data["store"]
         cursor = connection.execute(
             """
-            INSERT INTO stores (name, owner_name, city, site_url, phone, telegram, whatsapp)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO stores (name, owner_name, city, site_url, avito_profile_url, phone, telegram, whatsapp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 store["name"],
                 store["ownerName"],
                 store["city"],
                 store["siteUrl"],
+                store.get("avitoProfileUrl", ""),
                 store["phone"],
                 store["telegram"],
                 store["whatsapp"],
