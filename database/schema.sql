@@ -58,6 +58,7 @@ CREATE TABLE products (
   kit TEXT,
   description TEXT,
   photos_count INTEGER NOT NULL DEFAULT 0,
+  photo_urls TEXT,
   avito_status TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (store_id, sku),

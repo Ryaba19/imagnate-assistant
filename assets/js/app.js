@@ -71,6 +71,27 @@
       .replaceAll("'", "&#039;");
   }
 
+  function escapeXml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&apos;");
+  }
+
+  function downloadTextFile(filename, content, type = "text/plain;charset=utf-8") {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   function normalizeEmployee(employee) {
     const role = employee.role || "seller";
     return {
@@ -149,6 +170,9 @@
       kit: product.kit || product.package || "",
       description: product.description || product.comment || "",
       photosCount: Number(product.photosCount ?? product.photoCount ?? 0),
+      photoUrls: Array.isArray(product.photoUrls)
+        ? product.photoUrls
+        : String(product.photoUrls || "").split(/[;,\n]/).map((url) => url.trim()).filter(Boolean),
       avitoStatus: product.avitoStatus || ""
     };
   }
@@ -985,11 +1009,22 @@
     return avitoPhotosBySku[product.sku] || [];
   }
 
+  function getAvitoPhotoUrls(product = getAvitoProduct()) {
+    const fromField = getFieldText("avitoPhotoUrls", "")
+      .split(/\n|;|,/)
+      .map((url) => url.trim())
+      .filter(Boolean);
+    if (fromField.length) return fromField;
+    if (product?.photoUrls?.length) return product.photoUrls;
+    return getAvitoPhotos(product).map((photo) => photo.url || photo.dataUrl).filter((url) => /^https?:\/\//i.test(url));
+  }
+
   function getAvitoPayload() {
     const product = getAvitoProduct();
     if (!product) return null;
 
     const photos = getAvitoPhotos(product);
+    const photoUrls = getAvitoPhotoUrls(product);
     return {
       product,
       title: shortenAvitoTitle(product.name),
@@ -1000,7 +1035,8 @@
       contact: getFieldText("avitoContact", store.phone || ""),
       kit: getFieldText("avitoKit", product.kit || ""),
       description: getFieldText("avitoDescription", product.description || product.comment || ""),
-      photos
+      photos,
+      photoUrls
     };
   }
 
@@ -1015,6 +1051,7 @@
       `Контакт: ${payload.contact}`,
       `Комплектация: ${payload.kit || "не указана"}`,
       `Фото: ${payload.photos.length ? payload.photos.map((photo) => photo.name).join(", ") : "не прикреплены"}`,
+      `Фото URL для XML: ${payload.photoUrls.length ? payload.photoUrls.join(", ") : "не указаны"}`,
       "",
       "Описание:",
       payload.description || "Описание не заполнено."
@@ -1038,6 +1075,7 @@
     byId("avitoContact").value = store.phone || "";
     byId("avitoKit").value = product.kit || "";
     byId("avitoDescription").value = product.description || product.comment || "";
+    byId("avitoPhotoUrls").value = (product.photoUrls || []).join("\n");
     byId("avitoPhotos").value = "";
 
     renderAvitoPhotoPreview();
@@ -1136,7 +1174,7 @@
 
   function validateAvitoPayload(payload) {
     if (!payload) return "Выберите товар";
-    if (!payload.photos.length) return "Прикрепите хотя бы одно фото";
+    if (!payload.photos.length && !payload.photoUrls.length) return "Прикрепите фото или укажите ссылки";
     if (!payload.price) return "Укажите цену";
     if (!payload.description || payload.description.length < 20) return "Добавьте описание товара";
     if (!payload.kit) return "Укажите комплектацию";
@@ -1157,14 +1195,15 @@
     payload.product.condition = payload.condition;
     payload.product.kit = payload.kit;
     payload.product.description = payload.description;
-    payload.product.photosCount = payload.photos.length;
+    payload.product.photosCount = Math.max(payload.photos.length, payload.photoUrls.length);
+    payload.product.photoUrls = payload.photoUrls;
 
     avitoDrafts.unshift({
       id: Date.now(),
       sku: payload.product.sku,
       title: payload.title,
       price: payload.price,
-      photosCount: payload.photos.length,
+      photosCount: Math.max(payload.photos.length, payload.photoUrls.length),
       status: "Демо-загрузка Авито",
       createdAt: new Date().toLocaleString("ru-RU")
     });
@@ -1179,6 +1218,67 @@
   function copyAvitoPayload() {
     const payload = getAvitoPayload();
     copyText(getAvitoPayloadText(payload));
+  }
+
+  function getAvitoXml(payload) {
+    const imageUrls = payload.photoUrls.length
+      ? payload.photoUrls
+      : payload.photos.map((photo, index) => `https://example.com/photos/${encodeURIComponent(payload.product.sku)}-${index + 1}.jpg`);
+    const cdataDescription = `${payload.description}\n\nКомплектация: ${payload.kit}\nСостояние: ${payload.condition}`.replaceAll("]]>", "]]]]><![CDATA[>");
+
+    return [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<Ads formatVersion="3" target="Avito.ru">',
+      '  <Ad>',
+      `    <Id>${escapeXml(payload.product.sku)}</Id>`,
+      `    <Title>${escapeXml(payload.title)}</Title>`,
+      `    <Category>${escapeXml(payload.category)}</Category>`,
+      `    <Description><![CDATA[${cdataDescription}]]></Description>`,
+      `    <Price>${Math.round(Number(payload.price || 0))}</Price>`,
+      `    <Address>${escapeXml(payload.city)}</Address>`,
+      `    <Condition>${escapeXml(payload.condition)}</Condition>`,
+      '    <Images>',
+      ...imageUrls.map((url) => `      <Image url="${escapeXml(url)}" />`),
+      '    </Images>',
+      '  </Ad>',
+      '</Ads>'
+    ].join("\n");
+  }
+
+  function downloadAvitoXml() {
+    const payload = getAvitoPayload();
+    const error = validateAvitoPayload(payload);
+    if (error) {
+      showToast(error);
+      return;
+    }
+    if (!payload.photoUrls.length) {
+      showToast("XML скачан с примерными ссылками на фото");
+    }
+    downloadTextFile(`avito-${payload.product.sku}.xml`, getAvitoXml(payload), "application/xml;charset=utf-8");
+  }
+
+  function downloadAvitoJson() {
+    const payload = getAvitoPayload();
+    const error = validateAvitoPayload(payload);
+    if (error) {
+      showToast(error);
+      return;
+    }
+    const json = {
+      externalId: payload.product.sku,
+      title: payload.title,
+      category: payload.category,
+      price: payload.price,
+      condition: payload.condition,
+      city: payload.city,
+      contact: payload.contact,
+      kit: payload.kit,
+      description: payload.description,
+      photoUrls: payload.photoUrls,
+      localPhotos: payload.photos.map((photo) => ({ name: photo.name, size: photo.size, type: photo.type }))
+    };
+    downloadTextFile(`avito-${payload.product.sku}.json`, JSON.stringify(json, null, 2), "application/json;charset=utf-8");
   }
 
   function renderProducts() {
@@ -1317,6 +1417,180 @@
     renderDigest();
     renderMetrics();
     showToast("Демо-товары сброшены");
+  }
+
+  function getValueByAliases(row, aliases, fallback = "") {
+    const normalized = Object.fromEntries(Object.entries(row).map(([key, value]) => [key.trim().toLowerCase(), value]));
+    for (const alias of aliases) {
+      const value = normalized[alias.toLowerCase()];
+      if (value !== undefined && value !== "") return value;
+    }
+    return fallback;
+  }
+
+  function parseCsv(text) {
+    const rows = [];
+    let row = [];
+    let cell = "";
+    let insideQuotes = false;
+
+    for (let index = 0; index < text.length; index += 1) {
+      const char = text[index];
+      const next = text[index + 1];
+
+      if (char === '"' && insideQuotes && next === '"') {
+        cell += '"';
+        index += 1;
+      } else if (char === '"') {
+        insideQuotes = !insideQuotes;
+      } else if ((char === "," || char === ";") && !insideQuotes) {
+        row.push(cell.trim());
+        cell = "";
+      } else if ((char === "\n" || char === "\r") && !insideQuotes) {
+        if (char === "\r" && next === "\n") index += 1;
+        row.push(cell.trim());
+        if (row.some(Boolean)) rows.push(row);
+        row = [];
+        cell = "";
+      } else {
+        cell += char;
+      }
+    }
+
+    row.push(cell.trim());
+    if (row.some(Boolean)) rows.push(row);
+    if (rows.length < 2) return [];
+
+    const headers = rows[0];
+    return rows.slice(1).map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
+  }
+
+  function normalizeImportedProduct(row, index) {
+    const price = Number(getValueByAliases(row, ["price", "salePrice", "sale_price", "цена", "цена продажи"], 0));
+    const cost = Number(getValueByAliases(row, ["cost", "costPrice", "cost_price", "закупка", "себестоимость"], 0));
+    const stock = Number(getValueByAliases(row, ["stock", "stockQty", "stock_qty", "остаток", "количество"], 1));
+    const photoUrls = String(getValueByAliases(row, ["photoUrls", "photo_urls", "photos", "фото", "ссылки на фото"], ""))
+      .split(/[;,\n]/)
+      .map((url) => url.trim())
+      .filter(Boolean);
+
+    return normalizeProduct({
+      sku: getValueByAliases(row, ["sku", "id", "article", "артикул", "imei"], `IMPORT-${Date.now()}-${index + 1}`),
+      name: getValueByAliases(row, ["name", "title", "название", "товар"], "Новый товар"),
+      category: getValueByAliases(row, ["category", "категория"], "Без категории"),
+      status: getValueByAliases(row, ["status", "статус"], "Остаток"),
+      stock,
+      cost,
+      price,
+      days: Number(getValueByAliases(row, ["days", "daysInSale", "дней в продаже"], 0)),
+      source: "import",
+      comment: getValueByAliases(row, ["comment", "комментарий"], ""),
+      condition: getValueByAliases(row, ["condition", "состояние"], "Отличное"),
+      kit: getValueByAliases(row, ["kit", "комплектация"], ""),
+      description: getValueByAliases(row, ["description", "описание"], ""),
+      photosCount: photoUrls.length,
+      photoUrls,
+      avitoStatus: ""
+    });
+  }
+
+  function importProductsFromRows(rows) {
+    const imported = rows.map(normalizeImportedProduct).filter((product) => product.name && product.sku);
+    if (!imported.length) {
+      showToast("В файле не найдены товары");
+      return;
+    }
+
+    products = imported;
+    avitoPhotosBySku = Object.fromEntries(imported
+      .filter((product) => product.photoUrls.length)
+      .map((product) => [product.sku, product.photoUrls.map((url, index) => ({
+        name: `Фото по ссылке ${index + 1}`,
+        size: 0,
+        type: "url",
+        dataUrl: url,
+        url
+      }))]));
+    avitoDrafts = [];
+    saveProducts();
+    saveAvitoPhotos();
+    saveAvitoDrafts();
+    refreshAll();
+    const result = byId("realDataImportResult");
+    if (result) {
+      result.textContent = [
+        `Импортировано товаров: ${imported.length}.`,
+        `Единиц на складе: ${getStockUnits()}.`,
+        `Источник: файл владельца/CRM.`,
+        "",
+        "Теперь эти товары используются в разделе “Товары”, в AI-сводке и в подготовке Авито."
+      ].join("\n");
+    }
+    showToast(`Импортировано товаров: ${imported.length}`);
+  }
+
+  async function importRealDataFile() {
+    const input = byId("realDataFile");
+    const file = input?.files?.[0];
+    if (!file) {
+      showToast("Выберите JSON или CSV файл");
+      return;
+    }
+
+    const text = await file.text();
+    const lowerName = file.name.toLowerCase();
+    let rows = [];
+
+    try {
+      if (lowerName.endsWith(".json")) {
+        const parsed = JSON.parse(text);
+        rows = Array.isArray(parsed) ? parsed : parsed.products || [];
+      } else {
+        rows = parseCsv(text);
+      }
+      importProductsFromRows(rows);
+    } catch {
+      showToast("Не удалось прочитать файл");
+    }
+  }
+
+  function downloadJsonTemplate() {
+    const template = {
+      products: [
+        {
+          sku: "IPH15P-256-NT",
+          name: "iPhone 15 Pro 256 GB",
+          category: "Смартфоны",
+          status: "Готов к продаже",
+          stock: 1,
+          cost: 111000,
+          price: 123900,
+          condition: "Отличное",
+          kit: "Коробка, кабель USB-C, чек магазина",
+          description: "Описание состояния, гарантии и нюансов товара.",
+          comment: "Внутренний комментарий",
+          photoUrls: [
+            "https://site.ru/photos/iphone-15-pro-1.jpg",
+            "https://site.ru/photos/iphone-15-pro-2.jpg"
+          ]
+        }
+      ]
+    };
+    downloadTextFile("imagnate-products-template.json", JSON.stringify(template, null, 2), "application/json;charset=utf-8");
+  }
+
+  function downloadCsvTemplate() {
+    const csv = [
+      "sku,name,category,status,stock,cost,price,condition,kit,description,comment,photoUrls",
+      "\"IPH15P-256-NT\",\"iPhone 15 Pro 256 GB\",\"Смартфоны\",\"Готов к продаже\",1,111000,123900,\"Отличное\",\"Коробка, кабель USB-C, чек магазина\",\"Описание состояния, гарантии и нюансов товара.\",\"Внутренний комментарий\",\"https://site.ru/photos/iphone-15-pro-1.jpg;https://site.ru/photos/iphone-15-pro-2.jpg\""
+    ].join("\n");
+    downloadTextFile("imagnate-products-template.csv", csv, "text/csv;charset=utf-8");
+  }
+
+  function resetRealDataToDemo() {
+    resetInventoryProducts();
+    const result = byId("realDataImportResult");
+    if (result) result.textContent = "Демо-товары возвращены. Можно снова загрузить JSON или CSV с реальными остатками.";
   }
 
   function renderTasks() {
@@ -2112,11 +2386,17 @@
     byId("cancelAvitoModal")?.addEventListener("click", closeAvitoModal);
     byId("submitAvitoListing")?.addEventListener("click", submitAvitoListing);
     byId("copyAvitoPayload")?.addEventListener("click", copyAvitoPayload);
+    byId("downloadAvitoXml")?.addEventListener("click", downloadAvitoXml);
+    byId("downloadAvitoJson")?.addEventListener("click", downloadAvitoJson);
     byId("avitoPhotos")?.addEventListener("change", handleAvitoPhotoUpload);
-    ["avitoPrice", "avitoCategory", "avitoCondition", "avitoCity", "avitoContact", "avitoKit", "avitoDescription"].forEach((id) => {
+    ["avitoPrice", "avitoCategory", "avitoCondition", "avitoCity", "avitoContact", "avitoKit", "avitoDescription", "avitoPhotoUrls"].forEach((id) => {
       byId(id)?.addEventListener("input", renderAvitoPayloadPreview);
       byId(id)?.addEventListener("change", renderAvitoPayloadPreview);
     });
+    byId("importRealData")?.addEventListener("click", importRealDataFile);
+    byId("downloadJsonTemplate")?.addEventListener("click", downloadJsonTemplate);
+    byId("downloadCsvTemplate")?.addEventListener("click", downloadCsvTemplate);
+    byId("resetRealData")?.addEventListener("click", resetRealDataToDemo);
     byId("avitoModal")?.addEventListener("click", (event) => {
       if (event.target === byId("avitoModal")) closeAvitoModal();
     });

@@ -1,0 +1,21 @@
+{
+  "products": [
+    {
+      "sku": "IPH15P-256-NT",
+      "name": "iPhone 15 Pro 256 GB",
+      "category": "Смартфоны",
+      "status": "Готов к продаже",
+      "stock": 1,
+      "cost": 111000,
+      "price": 123900,
+      "condition": "Отличное",
+      "kit": "Коробка, кабель USB-C, чек магазина",
+      "description": "Описание состояния, гарантии и нюансов товара.",
+      "comment": "Внутренний комментарий",
+      "photoUrls": [
+        "https://site.ru/photos/iphone-15-pro-1.jpg",
+        "https://site.ru/photos/iphone-15-pro-2.jpg"
+      ]
+    }
+  ]
+}

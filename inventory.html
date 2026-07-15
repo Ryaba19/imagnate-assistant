@@ -177,6 +177,10 @@
             <input id="avitoPhotos" type="file" accept="image/*" multiple>
           </div>
           <div class="photo-preview-grid compact" id="avitoPhotoPreview"></div>
+          <div class="field">
+            <label for="avitoPhotoUrls">Ссылки на фото для XML</label>
+            <textarea id="avitoPhotoUrls" placeholder="https://site.ru/photos/iphone-15-1.jpg&#10;https://site.ru/photos/iphone-15-2.jpg"></textarea>
+          </div>
         </section>
 
         <section class="field-grid">
@@ -228,7 +232,11 @@
       <div class="generator-result">
         <div class="panel-header">
           <h3>Что уйдет в Авито</h3>
-          <button class="ghost-btn compact-btn" type="button" id="copyAvitoPayload">Скопировать</button>
+          <div class="content-actions">
+            <button class="ghost-btn compact-btn" type="button" id="copyAvitoPayload">Скопировать</button>
+            <button class="ghost-btn compact-btn" type="button" id="downloadAvitoXml">Скачать XML</button>
+            <button class="ghost-btn compact-btn" type="button" id="downloadAvitoJson">Скачать JSON</button>
+          </div>
         </div>
         <div class="result-text" id="avitoPayloadPreview"></div>
       </div>

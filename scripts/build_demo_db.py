@@ -60,9 +60,9 @@ def main() -> None:
             INSERT INTO products (
               store_id, sku, name, category, status, days_in_sale,
               cost_price, sale_price, stock_qty, source, comment,
-              condition, kit, description, photos_count, avito_status
+              condition, kit, description, photos_count, photo_urls, avito_status
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -81,6 +81,7 @@ def main() -> None:
                     product.get("kit", ""),
                     product.get("description", product["comment"]),
                     product.get("photosCount", 0),
+                    ";".join(product.get("photoUrls", [])),
                     product.get("avitoStatus", ""),
                 )
                 for product in data["products"]
