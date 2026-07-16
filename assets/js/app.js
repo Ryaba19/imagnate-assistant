@@ -75,11 +75,13 @@
     {
       role: "assistant",
       title: "Ассистент",
-      body: "Привет. Я демо-ассистент магазина. Могу сделать сводку, найти проблемные товары, подготовить задачи и сформировать текст для владельца."
+      body: "Привет. Я AI-продавец iMagnate. Могу помочь с подбором товара, ответами сотрудникам, сводкой по магазину, Авито и задачами. Если сервер с API-ключом запущен, отвечаю через реальную нейронку."
     }
   ];
 
   let chatHistory = loadChat();
+  let realAiAvailable = false;
+  let aiStatusText = "Демо-режим";
 
   function byId(id) {
     return document.getElementById(id);
@@ -650,7 +652,7 @@
 
   function renderChat() {
     const messages = chatHistory.map((message) => `
-      <article class="message ${message.role}">
+      <article class="message ${message.role} ${message.pending ? "pending" : ""}">
         <div class="message-title">${escapeHtml(message.title)}</div>
         <div class="message-body">${escapeHtml(message.body)}</div>
       </article>
@@ -660,6 +662,104 @@
       box.innerHTML = messages;
       box.scrollTop = box.scrollHeight;
     });
+  }
+
+  function getAiApiUrl() {
+    if (window.StoreAssistantConfig?.aiApiUrl) return window.StoreAssistantConfig.aiApiUrl;
+    if (window.location.protocol === "file:") return "http://127.0.0.1:8787/api/assistant";
+    return "api/assistant";
+  }
+
+  function setAiStatus(text, isReal = false) {
+    aiStatusText = text;
+    realAiAvailable = isReal;
+    const target = byId("floatingAiStatus");
+    if (target) {
+      target.textContent = text;
+      target.classList.toggle("live", isReal);
+    }
+  }
+
+  function getAiContext() {
+    const canSeeFinance = can("finance");
+    const shift = getShiftValues();
+    const visibleProducts = products.slice(0, 20).map((product) => ({
+      sku: product.sku,
+      name: product.name,
+      category: product.category,
+      status: product.status,
+      condition: product.condition,
+      kit: product.kit,
+      description: product.description,
+      stock: product.stock,
+      price: product.price,
+      daysInSale: product.days,
+      comment: product.comment,
+      photosCount: getProductPhotoCount(product),
+      cost: canSeeFinance ? product.cost : undefined,
+      margin: canSeeFinance ? product.margin : undefined
+    }));
+
+    return {
+      store: {
+        name: store.name || "iMagnate",
+        city: store.city || "Домодедово",
+        siteUrl: store.siteUrl || "https://imagnate.ru/",
+        avitoProfileUrl: store.avitoProfileUrl || "",
+        phone: store.phone || "",
+        telegram: store.telegram || "",
+        whatsapp: store.whatsapp || ""
+      },
+      user: currentUser
+        ? { name: currentUser.name, login: currentUser.login, role: currentUser.role, roleLabel: currentUser.roleLabel }
+        : null,
+      permissions: {
+        canSeeFinance,
+        canManageEmployees: can("manage-employees"),
+        canImportSite: can("site-import")
+      },
+      products: visibleProducts,
+      lowStock: getLowStockProducts().map((product) => ({
+        name: product.name,
+        stock: product.stock,
+        price: product.price
+      })),
+      tasks: tasks.filter((task) => !task.done).slice(0, 10),
+      questions: questions.filter((item) => item.status !== "done").slice(0, 10),
+      shift: canSeeFinance
+        ? {
+            revenue: getRevenue(),
+            expectedCash: shift.expected,
+            actualCash: shift.actual,
+            difference: shift.difference
+          }
+        : null,
+      publications: {
+        siteDrafts: sitePublications.length,
+        avitoDrafts: avitoDrafts.length
+      }
+    };
+  }
+
+  async function requestRealAssistant(prompt, options = {}) {
+    const response = await fetch(getAiApiUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt,
+        mode: options.mode || "store_assistant",
+        context: getAiContext(),
+        question: options.question || null
+      })
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok || !data.answer) {
+      throw new Error(data.error || "AI недоступен");
+    }
+
+    setAiStatus(`Реальный AI: ${data.model || "включен"}`, true);
+    return data.answer;
   }
 
   function assistantAnswer(prompt) {
@@ -792,16 +892,29 @@
     ].join("\n");
   }
 
-  async function getAssistantResponse(prompt) {
-    return assistantAnswer(prompt);
+  async function getAssistantResponse(prompt, options = {}) {
+    try {
+      return await requestRealAssistant(prompt, options);
+    } catch (error) {
+      setAiStatus("Демо-режим", false);
+      return typeof options.fallback === "function" ? options.fallback() : assistantAnswer(prompt);
+    }
   }
 
   async function askAssistant(prompt) {
     chatHistory.push({ role: "user", title: "Вы", body: prompt });
+    const pendingId = Date.now();
+    chatHistory.push({ role: "assistant", title: realAiAvailable ? "AI-продавец" : "Ассистент", body: "Думаю над ответом...", pending: true, pendingId });
     renderChat();
 
     const answer = await getAssistantResponse(prompt);
-    chatHistory.push({ role: "assistant", title: "Ассистент", body: answer });
+    const pendingIndex = chatHistory.findIndex((message) => message.pendingId === pendingId);
+    const message = { role: "assistant", title: realAiAvailable ? "AI-продавец iMagnate" : "Ассистент", body: answer };
+    if (pendingIndex >= 0) {
+      chatHistory[pendingIndex] = message;
+    } else {
+      chatHistory.push(message);
+    }
     saveChat();
     renderChat();
   }
@@ -2538,6 +2651,7 @@
           <label for="questionReply${item.id}">Ответ для ${escapeHtml(item.authorName)}</label>
           <textarea id="questionReply${item.id}" data-question-reply-text="${item.id}">${escapeHtml(answerText || getQuestionReplyStart(item))}</textarea>
           <div class="content-actions">
+            <button class="ghost-btn compact-btn" type="button" data-question-ai-reply="${item.id}">AI-черновик</button>
             <button class="primary-btn compact-btn" type="button" data-question-save-reply="${item.id}">Сохранить ответ</button>
             <button class="ghost-btn compact-btn" type="button" data-question-copy-reply="${item.id}">Скопировать</button>
             <button class="ghost-btn compact-btn" type="button" data-question-cancel-reply="${item.id}">Отмена</button>
@@ -2573,6 +2687,9 @@
     document.querySelectorAll("[data-question-save-reply]").forEach((button) => {
       button.addEventListener("click", () => saveQuestionReply(Number(button.dataset.questionSaveReply)));
     });
+    document.querySelectorAll("[data-question-ai-reply]").forEach((button) => {
+      button.addEventListener("click", () => draftQuestionReply(Number(button.dataset.questionAiReply)));
+    });
     document.querySelectorAll("[data-question-copy-reply]").forEach((button) => {
       button.addEventListener("click", () => copyQuestionReply(Number(button.dataset.questionCopyReply)));
     });
@@ -2594,6 +2711,45 @@
     return `Привет, ${question.authorName}! \n\n`;
   }
 
+  function createLocalQuestionReplyDraft(question) {
+    const text = `${question.title} ${question.text || ""}`.toLowerCase();
+    const intro = getQuestionReplyStart(question);
+
+    if (text.includes("авито")) {
+      return `${intro}По Авито сначала проверь, что в карточке есть живые фото, цена, состояние, комплектация и понятное описание без лишних контактов в тексте. Если фото взяты с сайта, лучше заменить их на реальные фото товара: так меньше риск модерации.\n\nЕсли карточка уже готова, открой раздел “Товары”, нажми “Загрузить” в колонке Авито и проверь предупреждения ассистента.`;
+    }
+
+    if (text.includes("доступ") || text.includes("логин") || text.includes("парол")) {
+      return `${intro}Понял. Доступ лучше не передавать в чатах. Я проверю роль сотрудника в разделе “Сотрудники” и выдам только те права, которые нужны для работы.\n\nЕсли нужно срочно, напиши, к какой странице нужен доступ и зачем.`;
+    }
+
+    if (text.includes("товар") || text.includes("остат") || text.includes("склад")) {
+      return `${intro}Сначала проверь товар в разделе “Товары”: остаток, статус, цену, фото и комментарий. Если позиция есть в наличии, но не опубликована, добавь фото и подготовь публикацию.\n\nЕсли остаток не сходится с фактом, не меняй его молча: добавь комментарий, чтобы потом было понятно, откуда расхождение.`;
+    }
+
+    if (text.includes("цена") || text.includes("скид")) {
+      return `${intro}По цене ориентируйся на состояние товара, комплект, срок нахождения в продаже и похожие предложения. Самостоятельно большую скидку лучше не ставить: сначала напиши мне товар, текущую цену и причину снижения.\n\nЕсли товар лежит давно, можно предложить переоценку или обновить фото/описание.`;
+    }
+
+    return `${intro}Понял вопрос. Я бы сделал так: сначала зафиксируй конкретный товар или ситуацию, добавь фото/скрин при необходимости и коротко напиши, что именно нужно решить.\n\nЕсли это повторяющаяся проблема, оставим ответ в карточке вопроса, чтобы потом превратить его в правило для сотрудников.`;
+  }
+
+  function buildQuestionDraftPrompt(question) {
+    return [
+      `Сформируй ответ сотруднику магазина iMagnate.`,
+      `Автор: ${question.authorName}.`,
+      `Тип: ${question.type}.`,
+      `Приоритет: ${question.priority}.`,
+      `Коротко: ${question.title}.`,
+      question.text ? `Подробности: ${question.text}.` : "",
+      "",
+      `Ответ должен начинаться строго с фразы: "Привет, ${question.authorName}!"`,
+      "Пиши как владелец/старший сотрудник магазина: спокойно, конкретно, без воды.",
+      "Если вопрос про клиента или товар, дай понятный порядок действий.",
+      "Не обещай скидки, возвраты, гарантию или доступы, если их нет в данных."
+    ].filter(Boolean).join("\n");
+  }
+
   function openQuestionReply(id) {
     activeReplyQuestionId = id;
     renderQuestions();
@@ -2602,6 +2758,35 @@
 
   function getQuestionReplyText(id) {
     return document.querySelector(`[data-question-reply-text="${id}"]`)?.value.trim() || "";
+  }
+
+  async function draftQuestionReply(id) {
+    const question = questions.find((item) => item.id === id);
+    if (!question) return;
+
+    if (activeReplyQuestionId !== id) {
+      activeReplyQuestionId = id;
+      renderQuestions();
+    }
+
+    const textarea = document.querySelector(`[data-question-reply-text="${id}"]`);
+    if (!textarea) return;
+
+    textarea.value = `${getQuestionReplyStart(question)}Готовлю AI-черновик...`;
+    textarea.disabled = true;
+
+    const draft = await getAssistantResponse(buildQuestionDraftPrompt(question), {
+      mode: "employee_question_reply",
+      question,
+      fallback: () => createLocalQuestionReplyDraft(question)
+    });
+
+    textarea.disabled = false;
+    textarea.value = draft.startsWith(`Привет, ${question.authorName}!`)
+      ? draft
+      : `${getQuestionReplyStart(question)}${draft}`;
+    textarea.focus();
+    showToast(realAiAvailable ? "AI-черновик готов" : "Демо-черновик готов");
   }
 
   function saveQuestionReply(id) {
@@ -2892,8 +3077,8 @@
       <section class="floating-assistant" id="floatingAssistant" aria-label="AI-ассистент" hidden>
         <div class="floating-header">
           <div class="floating-title">
-            <strong>AI-ассистент</strong>
-            <span class="metric-label">Пока демо-логика, позже подключим нейросеть</span>
+            <strong>AI-продавец iMagnate</strong>
+            <span class="metric-label ai-status" id="floatingAiStatus">${escapeHtml(aiStatusText)}</span>
           </div>
           <div class="floating-actions">
             <button class="icon-btn" type="button" id="floatingClear" aria-label="Очистить диалог">C</button>

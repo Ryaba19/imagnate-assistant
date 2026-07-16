@@ -501,6 +501,10 @@
       justify-self: start;
     }
 
+    .message.pending {
+      opacity: 0.72;
+    }
+
     .message-title {
       font-size: 12px;
       font-weight: 700;
@@ -1121,6 +1125,11 @@
 
     .floating-title strong {
       font-size: 15px;
+    }
+
+    .ai-status.live {
+      color: var(--primary);
+      font-weight: 700;
     }
 
     .floating-actions {
