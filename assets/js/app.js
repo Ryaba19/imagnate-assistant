@@ -535,6 +535,17 @@
     };
   }
 
+  function getShiftExpenseBreakdown() {
+    const hasBreakdown = byId("expenseDelivery") || byId("expenseSupplies") || byId("expenseOther");
+    const delivery = getFieldNumber("expenseDelivery", 0);
+    const supplies = getFieldNumber("expenseSupplies", 0);
+    const other = getFieldNumber("expenseOther", 0);
+    const total = hasBreakdown ? delivery + supplies + other : getFieldNumber("expenses", seed.shift?.expenses);
+    const totalField = byId("expenses");
+    if (totalField && hasBreakdown) totalField.value = total;
+    return { delivery, supplies, other, total };
+  }
+
   function getShiftValues() {
     const shift = seed.shift || {};
     const people = getShiftPeople();
@@ -543,13 +554,14 @@
     const cardSales = getFieldNumber("cardSales", shift.cardSales);
     const transfers = getFieldNumber("transfers", shift.transfers);
     const refunds = getFieldNumber("refunds", shift.refunds);
-    const expenses = getFieldNumber("expenses", shift.expenses);
+    const expenseBreakdown = getShiftExpenseBreakdown();
+    const expenses = expenseBreakdown.total;
     const collection = getFieldNumber("collection", shift.collection);
     const cashActual = getFieldNumber("cashActual", shift.cashActual);
     const expected = cashStart + cashSales - refunds - expenses - collection;
     const difference = cashActual - expected;
     const totalRevenue = cashSales + cardSales + transfers;
-    return { people, cashStart, cashSales, cardSales, transfers, refunds, expenses, collection, cashActual, expected, difference, totalRevenue };
+    return { people, cashStart, cashSales, cardSales, transfers, refunds, expenses, expenseBreakdown, collection, cashActual, expected, difference, totalRevenue };
   }
 
   function getOwnerDigest() {
@@ -595,7 +607,7 @@
     const metrics = [
       { label: "Смена", value: "Открыта", context: shiftPeople.label },
       { label: "Открытые задачи", value: String(openTasks), context: "Перейти в задачи", attention: openTasks > 3 },
-      { label: "Вопросы AI", value: String(openQuestions), context: "Ожидают ответа" },
+      { label: "Открытые вопросы", value: String(openQuestions), context: "Ответит ассистент" },
       { label: "Авито", value: String(preparedAvito), context: "Подготовлено карточек" }
     ];
 
@@ -1426,6 +1438,10 @@
         <strong>${money(values.cashActual)}</strong>
       </div>
       <div class="mini-card">
+        <span class="metric-label">Расходы по смене</span>
+        <strong>${money(values.expenses)}</strong>
+      </div>
+      <div class="mini-card">
         <span class="metric-label">Расхождение</span>
         <strong class="${values.difference === 0 ? "money-positive" : "money-negative"}">${money(values.difference)}</strong>
       </div>
@@ -1442,7 +1458,12 @@
       `Оплаты картой: ${money(values.cardSales)}.`,
       `Переводы: ${money(values.transfers)}.`,
       `Расходы: ${money(values.expenses)}.`,
+      `- доставка: ${money(values.expenseBreakdown.delivery)}.`,
+      `- закупка/хозяйственные: ${money(values.expenseBreakdown.supplies)}.`,
+      `- прочее: ${money(values.expenseBreakdown.other)}.`,
       `Инкассация: ${money(values.collection)}.`,
+      "",
+      `Калькуляция кассы: ${money(values.cashStart)} + ${money(values.cashSales)} - ${money(values.refunds)} - ${money(values.expenses)} - ${money(values.collection)} = ${money(values.expected)}.`,
       `Ожидаемый остаток: ${money(values.expected)}.`,
       `Фактический остаток: ${money(values.cashActual)}.`,
       `Расхождение: ${money(values.difference)}.`,
@@ -1475,7 +1496,8 @@
           <div>
             <span class="status-pill ${item.difference === 0 ? "blue" : "warning"}">${item.difference === 0 ? "Сошлось" : "Расхождение"}</span>
             <div class="task-title">${escapeHtml(item.people)} · ${escapeHtml(item.closedAt)}</div>
-            <div class="task-meta">Выручка: ${money(item.totalRevenue)}. Остаток: ${money(item.cashActual)}. Расхождение: ${money(item.difference)}.</div>
+            <div class="task-meta">Выручка: ${money(item.totalRevenue)}. Расходы: ${money(item.expenses)}. Ожидалось: ${money(item.expected)}. Факт: ${money(item.cashActual)}. Расхождение: ${money(item.difference)}.</div>
+            ${item.cashStart !== undefined ? `<div class="task-meta">Касса: ${money(item.cashStart)} + ${money(item.cashSales)} - ${money(item.refunds)} - ${money(item.expenses)} - ${money(item.collection)} = ${money(item.expected)}.</div>` : ""}
           </div>
         </div>
       </article>
@@ -1496,6 +1518,14 @@
       closedBy: currentUser?.name || values.people.primary || "Сотрудник",
       closedAt: new Date().toLocaleString("ru-RU"),
       totalRevenue: values.totalRevenue,
+      cashStart: values.cashStart,
+      cashSales: values.cashSales,
+      cardSales: values.cardSales,
+      transfers: values.transfers,
+      refunds: values.refunds,
+      expenses: values.expenses,
+      expenseBreakdown: values.expenseBreakdown,
+      collection: values.collection,
       cashActual: values.cashActual,
       expected: values.expected,
       difference: values.difference,
@@ -2138,9 +2168,9 @@
     target.innerHTML = products.map((product) => {
       const photos = getProductPhotoCount(product);
       const canPrepare = product.price > 0 && product.stock > 0;
-      const status = product.avitoStatus ? "Черновик готов" : canPrepare ? "Можно собрать" : "Нет в наличии";
+      const status = product.avitoStatus ? "Черновик готов" : canPrepare ? "Подготовить" : "Нет в наличии";
       const statusClass = product.avitoStatus ? "blue" : canPrepare ? "warning" : "danger";
-      const moderation = product.avitoModeration ? `Проверка: ${product.avitoModeration} · ${product.avitoModerationScore}/100` : "Ассистент соберет карточку из товара";
+      const moderation = product.avitoModeration ? `Проверка: ${product.avitoModeration} · ${product.avitoModerationScore}/100` : "Карточка заполнится из данных товара";
       return `
         <tr>
           <td><strong>${escapeHtml(product.name)}</strong><div class="activity-meta">${escapeHtml(product.sku || "")}</div></td>
@@ -2232,6 +2262,18 @@
     downloadTextFile(`avito-${payload.product.sku}.json`, JSON.stringify(json, null, 2), "application/json;charset=utf-8");
   }
 
+  function getProductNextAction(product) {
+    if (!product) return "Проверить карточку";
+    if (product.stock <= 0) return "Снять с публикаций и проверить наличие";
+    if (product.status === "На диагностике") return "Закончить диагностику и добавить итоговое состояние";
+    if (getProductPhotoCount(product) === 0) return "Добавить реальные фото перед публикацией";
+    if (product.days >= 30) return "Обновить цену, фото и площадки";
+    if (product.stock <= 2 && product.category === "Аксессуары") return "Запланировать закупку";
+    if (!product.avitoStatus && product.stock > 0) return "Подготовить карточку Авито";
+    if (product.avitoStatus) return "Проверить статус публикации";
+    return "Карточка готова к работе";
+  }
+
   function renderProducts() {
     const target = byId("productsTable");
     if (!target) return;
@@ -2283,7 +2325,7 @@
             ${product.avitoStatus ? `<div class="activity-meta">${escapeHtml(product.avitoStatus)}</div>` : ""}
             ${product.avitoModeration ? `<div class="activity-meta">Проверка: ${escapeHtml(product.avitoModeration)} · ${product.avitoModerationScore}/100</div>` : ""}
           </td>
-          <td>${escapeHtml(product.comment)}</td>
+          <td>${escapeHtml(getProductNextAction(product))}</td>
         </tr>
       `;
     }).join("");
@@ -3605,7 +3647,7 @@
       }
     });
 
-    ["shiftEmployeePrimary", "shiftEmployeeSecondary", "cashStart", "cashSales", "cardSales", "transfers", "refunds", "expenses", "collection", "cashActual", "shiftComment"].forEach((id) => {
+    ["shiftEmployeePrimary", "shiftEmployeeSecondary", "cashStart", "cashSales", "cardSales", "transfers", "refunds", "expenseDelivery", "expenseSupplies", "expenseOther", "expenses", "collection", "cashActual", "shiftComment"].forEach((id) => {
       byId(id)?.addEventListener("input", () => {
         renderShift();
         renderDigest();
