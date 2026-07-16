@@ -93,6 +93,23 @@ window.StoreAssistantSeed = {
       "photosCount": 5
     },
     {
+      "sku": "IPH16-128-ULTRA",
+      "name": "iPhone 16 128 GB Ultramarine",
+      "category": "Смартфоны",
+      "status": "Готов к продаже",
+      "daysInSale": 2,
+      "costPrice": 54800,
+      "salePrice": 60180,
+      "stockQty": 1,
+      "source": "demo",
+      "comment": "Реальные фото из Авито-базы iMagnate уже прикреплены к карточке.",
+      "condition": "Новое",
+      "kit": "Телефон, коробка, кабель USB-C, гарантия магазина",
+      "description": "iPhone 16 128 GB Ultramarine в новом состоянии. Красивый синий цвет, актуальная модель, комплект с коробкой и кабелем USB-C. Можно проверить при покупке в магазине iMagnate.",
+      "photosCount": 4,
+      "photoSet": "iphone-16-ultramarine"
+    },
+    {
       "sku": "PS5-SLIM",
       "name": "PlayStation 5 Slim",
       "category": "Игровые приставки",
@@ -173,6 +190,38 @@ window.StoreAssistantSeed = {
       "photosCount": 0
     }
   ],
+  "productPhotoSets": {
+    "iphone-16-white": [
+      { "url": "assets/img/products/iphone-16/iphone-16-white-01.jpg", "label": "iPhone 16 White" },
+      { "url": "assets/img/products/iphone-16/iphone-16-white-02.jpg", "label": "iPhone 16 White" },
+      { "url": "assets/img/products/iphone-16/iphone-16-white-03.jpg", "label": "iPhone 16 White" },
+      { "url": "assets/img/products/iphone-16/iphone-16-white-04.jpg", "label": "iPhone 16 White" }
+    ],
+    "iphone-16-pink": [
+      { "url": "assets/img/products/iphone-16/iphone-16-pink-01.jpg", "label": "iPhone 16 Pink" },
+      { "url": "assets/img/products/iphone-16/iphone-16-pink-02.jpg", "label": "iPhone 16 Pink" }
+    ],
+    "iphone-16-black": [
+      { "url": "assets/img/products/iphone-16/iphone-16-black-01.jpg", "label": "iPhone 16 Black" },
+      { "url": "assets/img/products/iphone-16/iphone-16-black-02.jpg", "label": "iPhone 16 Black" }
+    ],
+    "iphone-16-ultramarine": [
+      { "url": "assets/img/products/iphone-16/iphone-16-ultramarine-01.jpg", "label": "iPhone 16 Ultramarine" },
+      { "url": "assets/img/products/iphone-16/iphone-16-ultramarine-02.jpg", "label": "iPhone 16 Ultramarine" },
+      { "url": "assets/img/products/iphone-16/iphone-16-ultramarine-03.jpg", "label": "iPhone 16 Ultramarine" },
+      { "url": "assets/img/products/iphone-16/iphone-16-ultramarine-04.jpg", "label": "iPhone 16 Ultramarine" }
+    ],
+    "iphone-16-teal": [
+      { "url": "assets/img/products/iphone-16/iphone-16-teal-01.jpg", "label": "iPhone 16 Teal" },
+      { "url": "assets/img/products/iphone-16/iphone-16-teal-02.jpg", "label": "iPhone 16 Teal" },
+      { "url": "assets/img/products/iphone-16/iphone-16-teal-03.jpg", "label": "iPhone 16 Teal" },
+      { "url": "assets/img/products/iphone-16/iphone-16-teal-04.jpg", "label": "iPhone 16 Teal" },
+      { "url": "assets/img/products/iphone-16/iphone-16-teal-05.jpg", "label": "iPhone 16 Teal" },
+      { "url": "assets/img/products/iphone-16/iphone-16-teal-06.jpg", "label": "iPhone 16 Teal" },
+      { "url": "assets/img/products/iphone-16/iphone-16-teal-07.jpg", "label": "iPhone 16 Teal" },
+      { "url": "assets/img/products/iphone-16/iphone-16-teal-08.jpg", "label": "iPhone 16 Teal" }
+    ]
+  },
   "tasks": [
     {
       "title": "Обновить цену iPhone 15 Pro",

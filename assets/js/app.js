@@ -14,6 +14,7 @@
   let shiftClosures = loadShiftClosures();
   const tasks = loadTasks();
   const activity = seed.activity || [];
+  const productPhotoSets = seed.productPhotoSets || {};
   const imagnateCatalogFallback = [
     { sku: "IMG-IP17P-256-SILVER", name: "Смартфон Apple iPhone 17 Pro 256 ГБ, Silver (eSim)", category: "Смартфоны", price: 94180, sourceUrl: "https://imagnate.ru/", sourceSection: "Популярные товары" },
     { sku: "IMG-DYSON-HS09-AMBER", name: "Стайлер Dyson HS09 Airwrap Co-Anda 2X Amber Silk", category: "Dyson", price: 46680, sourceUrl: "https://imagnate.ru/", sourceSection: "Популярные товары" },
@@ -200,6 +201,7 @@
       kit: product.kit || product.package || "",
       description: product.description || product.comment || "",
       photosCount: Number(product.photosCount ?? product.photoCount ?? 0),
+      photoSet: product.photoSet || product.photo_set || "",
       photoUrls: Array.isArray(product.photoUrls)
         ? product.photoUrls
         : String(product.photoUrls || "").split(/[;,\n]/).map((url) => url.trim()).filter(Boolean),
@@ -221,8 +223,9 @@
       const saved = localStorage.getItem("storeAssistantProducts");
       if (!saved) return getSeedProducts();
 
-      const seedBySku = new Map(getSeedProducts().map((product) => [product.sku, product]));
-      return JSON.parse(saved).map(normalizeProduct).map((product) => {
+      const seedProducts = getSeedProducts();
+      const seedBySku = new Map(seedProducts.map((product) => [product.sku, product]));
+      const merged = JSON.parse(saved).map(normalizeProduct).map((product) => {
         const seedProduct = seedBySku.get(product.sku);
         if (!seedProduct) return product;
         return {
@@ -231,9 +234,15 @@
           kit: product.kit || seedProduct.kit,
           description: product.description && product.description !== product.comment ? product.description : seedProduct.description || product.description,
           photosCount: product.photosCount || seedProduct.photosCount,
+          photoSet: product.photoSet || seedProduct.photoSet,
           avitoStatus: product.avitoStatus || ""
         };
       });
+      const existingSkus = new Set(merged.map((product) => product.sku));
+      seedProducts.forEach((seedProduct) => {
+        if (!existingSkus.has(seedProduct.sku)) merged.push(seedProduct);
+      });
+      return merged;
     } catch {
       return getSeedProducts();
     }
@@ -727,6 +736,19 @@
       cost: canSeeFinance ? product.cost : undefined,
       margin: canSeeFinance ? product.margin : undefined
     }));
+    const answeredQuestions = questions
+      .filter((item) => item.status === "done" && item.answer)
+      .slice(0, 12)
+      .map((item) => ({
+        type: item.type,
+        priority: item.priority,
+        title: item.title,
+        text: item.text,
+        authorName: item.authorName,
+        answer: item.answer,
+        answeredBy: item.answeredBy,
+        answeredAt: item.answeredAt
+      }));
 
     return {
       store: {
@@ -754,6 +776,10 @@
       })),
       tasks: tasks.filter((task) => !task.done).slice(0, 10),
       questions: questions.filter((item) => item.status !== "done").slice(0, 10),
+      knowledgeBase: {
+        answeredQuestions,
+        rule: "Используй закрытые вопросы как примеры стиля и правил iMagnate. Не придумывай новые условия, если их нет в этих ответах или данных магазина."
+      },
       shift: canSeeFinance
         ? {
             revenue: getRevenue(),
@@ -1457,6 +1483,11 @@
   }
 
   function closeShift() {
+    if (currentUser?.role === "owner") {
+      showToast("Лёня смотрит закрытые смены, но не закрывает их");
+      return;
+    }
+
     const values = getShiftValues();
     const comment = getFieldText("shiftComment", seed.shift?.comment);
     shiftClosures.unshift({
@@ -1518,7 +1549,8 @@
 
     const photos = getAvitoPhotos(product);
     const photoUrls = byId("avitoPhotoUrls") ? getAvitoPhotoUrls(product) : [];
-    const existingPhotosCount = Number(product.photosCount || 0);
+    const assetPhotos = getProductPhotoAssets(product);
+    const existingPhotosCount = Math.max(Number(product.photosCount || 0), assetPhotos.length);
     return {
       product,
       title: shortenAvitoTitle(product.name),
@@ -1529,9 +1561,10 @@
       contact: getFieldText("avitoContact", store.phone || ""),
       kit: getFieldText("avitoKit", product.kit || ""),
       description: getFieldText("avitoDescription", product.description || product.comment || ""),
-      photoSource: photos.length ? "own" : existingPhotosCount ? "database" : "own",
+      photoSource: photos.length ? "own" : assetPhotos.length ? "database" : existingPhotosCount ? "database" : "own",
       photos,
       photoUrls,
+      assetPhotos,
       existingPhotosCount
     };
   }
@@ -1768,6 +1801,19 @@
 
     const photos = getAvitoPhotos(product);
     if (!photos.length) {
+      const assets = getProductPhotoAssets(product);
+      if (assets.length) {
+        target.innerHTML = assets.slice(0, 6).map((photo, index) => `
+          <article class="photo-preview">
+            <img src="${escapeHtml(photo.url)}" alt="${escapeHtml(photo.alt || product.name)}">
+            <div class="photo-meta">
+              <strong>Фото ${index + 1} из базы</strong>
+              <span>${escapeHtml(photo.label || product.name)}</span>
+            </div>
+          </article>
+        `).join("");
+        return;
+      }
       const existing = Number(product.photosCount || 0);
       if (existing > 0) {
         target.innerHTML = Array.from({ length: Math.min(existing, 4) }).map((_, index) => `
@@ -1879,7 +1925,7 @@
     payload.product.condition = payload.condition;
     payload.product.kit = payload.kit;
     payload.product.description = payload.description;
-    payload.product.photosCount = Math.max(payload.photos.length, payload.photoUrls.length, payload.existingPhotosCount || 0);
+    payload.product.photosCount = Math.max(payload.photos.length, payload.photoUrls.length, payload.assetPhotos?.length || 0, payload.existingPhotosCount || 0);
     payload.product.photoUrls = payload.photoUrls;
     payload.product.photoSource = payload.photoSource;
 
@@ -1888,7 +1934,7 @@
       sku: payload.product.sku,
       title: payload.title,
       price: payload.price,
-      photosCount: Math.max(payload.photos.length, payload.photoUrls.length, payload.existingPhotosCount || 0),
+      photosCount: Math.max(payload.photos.length, payload.photoUrls.length, payload.assetPhotos?.length || 0, payload.existingPhotosCount || 0),
       status: payload.product.avitoStatus,
       moderationStatus: report.status,
       moderationScore: report.score,
@@ -1944,7 +1990,26 @@
   }
 
   function getProductPhotoCount(product) {
-    return Math.max(Number(product.photosCount || 0), getAvitoPhotos(product).length, product.photoUrls?.length || 0);
+    return Math.max(Number(product.photosCount || 0), getAvitoPhotos(product).length, product.photoUrls?.length || 0, getProductPhotoAssets(product).length);
+  }
+
+  function getProductPhotoSetKey(product) {
+    if (!product) return "";
+    if (product.photoSet && productPhotoSets[product.photoSet]) return product.photoSet;
+
+    const text = `${product.name || ""} ${product.sku || ""} ${product.comment || ""}`.toLowerCase();
+    if (!text.includes("iphone 16")) return "";
+    if (text.includes("ultramarine") || text.includes("ультрамарин") || text.includes("blue") || text.includes("синий")) return "iphone-16-ultramarine";
+    if (text.includes("teal") || text.includes("green") || text.includes("зелен")) return "iphone-16-teal";
+    if (text.includes("pink") || text.includes("роз")) return "iphone-16-pink";
+    if (text.includes("black") || text.includes("чер")) return "iphone-16-black";
+    if (text.includes("white") || text.includes("бел")) return "iphone-16-white";
+    return "";
+  }
+
+  function getProductPhotoAssets(product) {
+    const key = getProductPhotoSetKey(product);
+    return key ? productPhotoSets[key] || [] : [];
   }
 
   function getProductShortName(product) {
@@ -1963,6 +2028,9 @@
     if (!metricsTarget && !profileLink && !profileUrlText) return;
 
     const profileUrl = getAvitoProfileUrl();
+    const preparedProducts = products.filter((product) => product.avitoStatus);
+    const productsWithPhotos = products.filter((product) => getProductPhotoCount(product) > 0);
+    const readyProducts = products.filter((product) => product.price > 0 && product.stock > 0 && (product.description || product.comment));
     if (profileLink) profileLink.href = profileUrl;
     if (profileUrlText) profileUrlText.textContent = profileUrl;
     renderAvitoConnectionStatus();
@@ -2094,6 +2162,8 @@
       ? payload.photoUrls
       : payload.photos.length
         ? payload.photos.map((photo, index) => `https://imagnate-assets.local/photos/${encodeURIComponent(payload.product.sku)}-${index + 1}.jpg`)
+        : payload.assetPhotos?.length
+          ? payload.assetPhotos.map((photo) => photo.url)
         : Array.from({ length: payload.existingPhotosCount || 0 }).map((_, index) => `https://imagnate.example/photos/${encodeURIComponent(payload.product.sku)}-${index + 1}.jpg`);
     const cdataDescription = `${payload.description}\n\nКомплектация: ${payload.kit}\nСостояние: ${payload.condition}`.replaceAll("]]>", "]]]]><![CDATA[>");
 
@@ -2150,6 +2220,7 @@
       photoSource: payload.photoSource,
       existingPhotosCount: payload.existingPhotosCount,
       photoUrls: payload.photoUrls,
+      assetPhotos: payload.assetPhotos || [],
       localPhotos: payload.photos.map((photo) => ({ name: photo.name, size: photo.size, type: photo.type, width: photo.width, height: photo.height })),
       moderation: {
         status: report.status,
@@ -3356,6 +3427,9 @@
       const resetInventory = byId("resetInventoryProducts");
       if (resetInventory) resetInventory.hidden = true;
     }
+
+    const closeShiftButton = byId("closeShift");
+    if (closeShiftButton) closeShiftButton.hidden = currentUser.role === "owner";
 
     document.querySelectorAll("[data-current-user]").forEach((element) => {
       element.textContent = currentUser.name;
