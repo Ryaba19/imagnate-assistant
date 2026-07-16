@@ -2623,6 +2623,7 @@
 
     const open = questions.filter((item) => item.status !== "done").length;
     const urgent = questions.filter((item) => item.status !== "done" && item.priority === "Срочно").length;
+    const aiReady = questions.filter((item) => item.status !== "done" && getQuestionAiDecision(item).canAutoAnswer).length;
     const mine = can("manage-employees")
       ? questions.filter((item) => item.answeredBy === currentUser?.name).length
       : questions.filter((item) => item.authorLogin === currentUser?.login).length;
@@ -2631,6 +2632,7 @@
     const metrics = [
       { label: "Открытые", value: String(open), context: "Ждут решения" },
       { label: "Срочные", value: String(urgent), context: "Разобрать первыми", attention: urgent > 0 },
+      { label: "AI может закрыть", value: String(aiReady), context: "Типовые вопросы" },
       { label: can("manage-employees") ? "Мои ответы" : "Мои вопросы", value: String(mine), context: currentUser?.name || "Сотрудник" },
       { label: "Закрытые", value: String(done), context: "Уже разобраны" }
     ];
@@ -2642,6 +2644,50 @@
         <div class="metric-context">${item.context}</div>
       </article>
     `).join("");
+  }
+
+  function getQuestionAiDecision(question) {
+    const text = `${question.title || ""} ${question.text || ""} ${question.type || ""}`.toLowerCase();
+    const riskyPatterns = [
+      "скид", "деньг", "зарплат", "касс", "недостач", "возврат", "гарант",
+      "доступ", "парол", "логин", "увол", "брак", "жалоб", "конфликт",
+      "директор", "леонид", "лёня", "оплат", "рассроч", "кредит"
+    ];
+    const autoPatterns = [
+      "авито", "фото", "товар", "карточ", "описан", "остат", "склад",
+      "публикац", "сайт", "telegram", "телеграм", "комплектац", "цена на авито",
+      "подготов", "где найти", "как оформить"
+    ];
+    const hasRisk = riskyPatterns.some((pattern) => text.includes(pattern));
+    const hasAutoTopic = autoPatterns.some((pattern) => text.includes(pattern));
+    const isUrgent = question.priority === "Срочно";
+
+    if (hasRisk || isUrgent) {
+      return {
+        canAutoAnswer: false,
+        label: "Нужен Лёня",
+        className: "danger",
+        reason: isUrgent
+          ? "Срочный вопрос лучше подтвердить владельцу."
+          : "Тема может касаться денег, доступов, гарантии или спорной ситуации."
+      };
+    }
+
+    if (hasAutoTopic) {
+      return {
+        canAutoAnswer: true,
+        label: "AI ответит",
+        className: "blue",
+        reason: "Типовой рабочий вопрос: можно дать порядок действий без Лёни."
+      };
+    }
+
+    return {
+      canAutoAnswer: true,
+      label: "AI черновик",
+      className: "warning",
+      reason: "AI может подготовить ответ, но сотруднику стоит проверить детали."
+    };
   }
 
   function renderQuestions() {
@@ -2665,6 +2711,8 @@
       const canReply = can("manage-employees");
       const isReplyOpen = activeReplyQuestionId === item.id;
       const priorityClass = item.priority === "Срочно" ? "danger" : item.priority === "Важно" ? "warning" : "";
+      const aiDecision = getQuestionAiDecision(item);
+      const canAskAi = !canReply && item.status !== "done" && aiDecision.canAutoAnswer && item.authorLogin === currentUser?.login;
       const answerText = item.answer || "";
       const answerBlock = answerText && !isReplyOpen ? `
         <div class="question-answer">
@@ -2691,11 +2739,14 @@
             <div>
               <span class="status-pill ${priorityClass}">${escapeHtml(item.priority)}</span>
               <span class="status-pill blue">${escapeHtml(item.type)}</span>
+              <span class="status-pill ${aiDecision.className}">${escapeHtml(aiDecision.label)}</span>
               <div class="task-title">${escapeHtml(item.title)}</div>
               <div class="task-meta">${escapeHtml(item.text || "Без подробностей")}</div>
+              <div class="task-meta">AI-оценка: ${escapeHtml(aiDecision.reason)}</div>
               <div class="task-meta">Автор: ${escapeHtml(item.authorName)} · ${escapeHtml(item.createdAt)} · Статус: ${item.status === "done" ? "закрыт" : "открыт"}</div>
             </div>
             <div class="question-actions">
+              ${canAskAi ? `<button class="primary-btn compact-btn" type="button" data-question-auto-answer="${item.id}">Получить ответ AI</button>` : ""}
               ${canReply ? `<button class="ghost-btn compact-btn" type="button" data-question-reply="${item.id}">${answerText ? "Изменить ответ" : "Ответить"}</button>` : ""}
               ${canClose ? `<button class="ghost-btn compact-btn" type="button" data-question-done="${item.id}">Закрыть</button>` : ""}
               ${canReopen ? `<button class="ghost-btn compact-btn" type="button" data-question-open="${item.id}">Вернуть</button>` : ""}
@@ -2715,6 +2766,9 @@
     });
     document.querySelectorAll("[data-question-ai-reply]").forEach((button) => {
       button.addEventListener("click", () => draftQuestionReply(Number(button.dataset.questionAiReply)));
+    });
+    document.querySelectorAll("[data-question-auto-answer]").forEach((button) => {
+      button.addEventListener("click", () => autoAnswerQuestion(Number(button.dataset.questionAutoAnswer)));
     });
     document.querySelectorAll("[data-question-copy-reply]").forEach((button) => {
       button.addEventListener("click", () => copyQuestionReply(Number(button.dataset.questionCopyReply)));
@@ -2786,6 +2840,44 @@
     return document.querySelector(`[data-question-reply-text="${id}"]`)?.value.trim() || "";
   }
 
+  async function getQuestionDraft(question) {
+    const draft = await getAssistantResponse(buildQuestionDraftPrompt(question), {
+      mode: "employee_question_reply",
+      question,
+      fallback: () => createLocalQuestionReplyDraft(question)
+    });
+
+    return draft.startsWith(`Привет, ${question.authorName}!`)
+      ? draft
+      : `${getQuestionReplyStart(question)}${draft}`;
+  }
+
+  async function autoAnswerQuestion(id) {
+    const question = questions.find((item) => item.id === id);
+    if (!question) return;
+
+    const decision = getQuestionAiDecision(question);
+    if (!decision.canAutoAnswer) {
+      showToast("Этот вопрос лучше оставить Лёне");
+      return;
+    }
+
+    question.answer = `${getQuestionReplyStart(question)}AI готовит ответ...`;
+    question.answeredBy = "AI-продавец";
+    question.answeredAt = new Date().toLocaleString("ru-RU");
+    renderQuestions();
+
+    const answer = await getQuestionDraft(question);
+    question.answer = answer;
+    question.answeredBy = realAiAvailable ? "AI-продавец" : "AI-продавец (демо)";
+    question.answeredAt = new Date().toLocaleString("ru-RU");
+    question.status = "done";
+    saveQuestions();
+    renderQuestions();
+    renderQuestionMetrics();
+    showToast(realAiAvailable ? "AI ответил на вопрос" : "Демо-AI ответил на вопрос");
+  }
+
   async function draftQuestionReply(id) {
     const question = questions.find((item) => item.id === id);
     if (!question) return;
@@ -2801,16 +2893,10 @@
     textarea.value = `${getQuestionReplyStart(question)}Готовлю AI-черновик...`;
     textarea.disabled = true;
 
-    const draft = await getAssistantResponse(buildQuestionDraftPrompt(question), {
-      mode: "employee_question_reply",
-      question,
-      fallback: () => createLocalQuestionReplyDraft(question)
-    });
+    const draft = await getQuestionDraft(question);
 
     textarea.disabled = false;
-    textarea.value = draft.startsWith(`Привет, ${question.authorName}!`)
-      ? draft
-      : `${getQuestionReplyStart(question)}${draft}`;
+    textarea.value = draft;
     textarea.focus();
     showToast(realAiAvailable ? "AI-черновик готов" : "Демо-черновик готов");
   }
