@@ -81,7 +81,7 @@
 
   let chatHistory = loadChat();
   let realAiAvailable = false;
-  let aiStatusText = "Демо-режим";
+  let aiStatusText = "Демо без API";
 
   function byId(id) {
     return document.getElementById(id);
@@ -922,7 +922,7 @@
     try {
       return await requestRealAssistant(prompt, options);
     } catch (error) {
-      setAiStatus("Демо-режим", false);
+      setAiStatus("Демо без API", false);
       return typeof options.fallback === "function" ? options.fallback() : assistantAnswer(prompt);
     }
   }

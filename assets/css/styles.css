@@ -546,6 +546,24 @@
       transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
     }
 
+    .btn:focus,
+    .ghost-btn:focus,
+    .primary-btn:focus,
+    .icon-btn:focus {
+      outline: none;
+    }
+
+    .btn:focus-visible,
+    .ghost-btn:focus-visible,
+    .primary-btn:focus-visible,
+    .icon-btn:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible {
+      outline: 2px solid rgba(43, 196, 189, 0.72);
+      outline-offset: 2px;
+    }
+
     .btn-block {
       width: 100%;
     }
@@ -1115,13 +1133,13 @@
     }
 
     .floating-header {
-      padding: 14px;
+      padding: 13px 14px;
       border-bottom: 1px solid var(--line);
       display: flex;
       justify-content: space-between;
       gap: 12px;
       align-items: flex-start;
-      background: #0d1526;
+      background: linear-gradient(135deg, #0d1526, #121d31);
     }
 
     .floating-title {
@@ -1131,6 +1149,10 @@
 
     .floating-title strong {
       font-size: 15px;
+    }
+
+    .ai-status {
+      color: #c7d3e4;
     }
 
     .ai-status.live {
@@ -1176,22 +1198,23 @@
 
     .floating-controls {
       border-top: 1px solid var(--line);
-      padding: 12px;
+      padding: 10px;
       display: grid;
-      gap: 10px;
+      gap: 9px;
       background: var(--surface);
     }
 
     .floating-prompts {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 7px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px;
     }
 
     .floating-prompts .btn {
-      min-height: 36px;
-      padding: 7px 9px;
-      font-size: 13px;
+      min-height: 32px;
+      padding: 6px 7px;
+      font-size: 12px;
+      white-space: nowrap;
     }
 
     .floating-input {
@@ -1324,9 +1347,12 @@
         width: calc(100vw - 32px);
       }
 
-      .floating-input,
-      .floating-prompts {
+      .floating-input {
         grid-template-columns: 1fr;
+      }
+
+      .floating-prompts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
     }
   
