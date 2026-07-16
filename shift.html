@@ -113,9 +113,20 @@
             <div class="generator-result">
               <div class="result-text" id="shiftReport"></div>
             </div>
-            <button class="ghost-btn" type="button" id="copyShift">Скопировать отчет</button>
+            <div class="content-actions">
+              <button class="primary-btn" type="button" id="closeShift">Закрыть смену</button>
+              <button class="ghost-btn" type="button" id="copyShift">Скопировать отчет</button>
+            </div>
           </section>
         </div>
+
+        <section class="panel" aria-labelledby="shiftHistoryTitle" data-permission="finance">
+          <div class="panel-header">
+            <h3 id="shiftHistoryTitle">Закрытые смены для Лёни</h3>
+            <span class="status-pill blue" id="shiftHistoryCount">0 смен</span>
+          </div>
+          <div class="task-list" id="shiftHistoryList"></div>
+        </section>
       </section>
     </main>
   </div>

@@ -11,6 +11,7 @@
   let activeAvitoProductIndex = null;
   let questions = loadQuestions();
   let activeReplyQuestionId = null;
+  let shiftClosures = loadShiftClosures();
   const tasks = loadTasks();
   const activity = seed.activity || [];
   const imagnateCatalogFallback = [
@@ -282,7 +283,7 @@
   }
 
   function getDefaultQuestions() {
-    return (seed.questions || []).map((item, index) => ({
+    return normalizeQuestionAutoAnswers((seed.questions || []).map((item, index) => ({
       id: item.id || index + 1,
       type: item.type || "Вопрос",
       priority: item.priority || "Обычный",
@@ -295,13 +296,26 @@
       answer: item.answer || "",
       answeredBy: item.answeredBy || "",
       answeredAt: item.answeredAt || ""
-    }));
+    })));
+  }
+
+  function normalizeQuestionAutoAnswers(items) {
+    return items.map((item) => {
+      if (item.answer) return item;
+      return {
+        ...item,
+        status: "done",
+        answer: createLocalQuestionReplyDraft(item),
+        answeredBy: "AI-продавец (демо)",
+        answeredAt: item.answeredAt || item.createdAt || new Date().toLocaleString("ru-RU")
+      };
+    });
   }
 
   function loadQuestions() {
     try {
       const saved = localStorage.getItem("storeAssistantQuestions");
-      return saved ? JSON.parse(saved) : getDefaultQuestions();
+      return saved ? normalizeQuestionAutoAnswers(JSON.parse(saved)) : getDefaultQuestions();
     } catch {
       return getDefaultQuestions();
     }
@@ -322,6 +336,19 @@
 
   function saveTasks() {
     localStorage.setItem("storeAssistantTasks", JSON.stringify(tasks));
+  }
+
+  function loadShiftClosures() {
+    try {
+      const saved = localStorage.getItem("storeAssistantShiftClosures");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveShiftClosures() {
+    localStorage.setItem("storeAssistantShiftClosures", JSON.stringify(shiftClosures));
   }
 
   function loadChat() {
@@ -1396,6 +1423,56 @@
       values.difference === 0 ? "Проверка: остаток сходится." : "Проверка: есть расхождение, нужна сверка операций.",
       comment ? `Комментарий: ${comment}` : ""
     ].filter(Boolean).join("\n");
+
+    renderShiftHistory();
+  }
+
+  function renderShiftHistory() {
+    const target = byId("shiftHistoryList");
+    const counter = byId("shiftHistoryCount");
+    if (counter) counter.textContent = `${shiftClosures.length} смен`;
+    if (!target) return;
+
+    if (!shiftClosures.length) {
+      target.innerHTML = `
+        <article class="task-item">
+          <div class="task-title">Пока нет закрытых смен</div>
+          <div class="task-meta">После нажатия “Закрыть смену” отчет появится здесь.</div>
+        </article>
+      `;
+      return;
+    }
+
+    target.innerHTML = shiftClosures.slice(0, 6).map((item) => `
+      <article class="task-item">
+        <div class="panel-header">
+          <div>
+            <span class="status-pill ${item.difference === 0 ? "blue" : "warning"}">${item.difference === 0 ? "Сошлось" : "Расхождение"}</span>
+            <div class="task-title">${escapeHtml(item.people)} · ${escapeHtml(item.closedAt)}</div>
+            <div class="task-meta">Выручка: ${money(item.totalRevenue)}. Остаток: ${money(item.cashActual)}. Расхождение: ${money(item.difference)}.</div>
+          </div>
+        </div>
+      </article>
+    `).join("");
+  }
+
+  function closeShift() {
+    const values = getShiftValues();
+    const comment = getFieldText("shiftComment", seed.shift?.comment);
+    shiftClosures.unshift({
+      id: Date.now(),
+      people: values.people.label,
+      closedBy: currentUser?.name || values.people.primary || "Сотрудник",
+      closedAt: new Date().toLocaleString("ru-RU"),
+      totalRevenue: values.totalRevenue,
+      cashActual: values.cashActual,
+      expected: values.expected,
+      difference: values.difference,
+      comment
+    });
+    saveShiftClosures();
+    renderShiftHistory();
+    showToast(values.difference === 0 ? "Смена закрыта, остаток сходится" : "Смена закрыта с расхождением");
   }
 
   function getAvitoCategory(category) {
@@ -1440,7 +1517,8 @@
     if (!product) return null;
 
     const photos = getAvitoPhotos(product);
-    const photoUrls = getAvitoPhotoUrls(product);
+    const photoUrls = byId("avitoPhotoUrls") ? getAvitoPhotoUrls(product) : [];
+    const existingPhotosCount = Number(product.photosCount || 0);
     return {
       product,
       title: shortenAvitoTitle(product.name),
@@ -1451,10 +1529,10 @@
       contact: getFieldText("avitoContact", store.phone || ""),
       kit: getFieldText("avitoKit", product.kit || ""),
       description: getFieldText("avitoDescription", product.description || product.comment || ""),
-      photoSource: getFieldText("avitoPhotoSource", product.photoSource || (product.photoUrls?.length ? "site" : "own")),
+      photoSource: photos.length ? "own" : existingPhotosCount ? "database" : "own",
       photos,
       photoUrls,
-      existingPhotosCount: Number(product.photosCount || 0)
+      existingPhotosCount
     };
   }
 
@@ -1463,7 +1541,8 @@
       own: "Живые фото конкретного товара",
       site: "Фото с сайта магазина",
       supplier: "Каталожные фото поставщика",
-      mixed: "Смешанный набор"
+      mixed: "Смешанный набор",
+      database: "Фото из базы товара"
     };
     return labels[source] || labels.own;
   }
@@ -1513,6 +1592,10 @@
 
     if (payload.photoSource === "site" || siteUrls.length) {
       add("warn", "Фото взяты с сайта", "Для Авито лучше добавить живые уникальные фото конкретного экземпляра. Фото с сайта могут выглядеть как повторные или каталожные.", 18);
+    }
+
+    if (payload.photoSource === "database" && !payload.photos.length) {
+      add("pass", "Фото подтянуты из базы", "Ассистент использует фотографии, которые уже закреплены за товаром.", 0);
     }
 
     if (payload.photoSource === "supplier") {
@@ -1593,10 +1676,7 @@
       `Город: ${payload.city}`,
       `Контакт: ${payload.contact}`,
       `Комплектация: ${payload.kit || "не указана"}`,
-      `Источник фото: ${getAvitoPhotoSourceLabel(payload.photoSource)}`,
-      `Фото: ${payload.photos.length ? payload.photos.map((photo) => photo.name).join(", ") : "не прикреплены"}`,
-      `Фото в карточке: ${payload.existingPhotosCount || 0}`,
-      `Фото URL для XML: ${payload.photoUrls.length ? payload.photoUrls.join(", ") : "не указаны"}`,
+      `Фото: ${payload.photos.length ? payload.photos.map((photo) => photo.name).join(", ") : `из базы товара: ${payload.existingPhotosCount || 0}`}`,
       `Предпроверка: ${report.status} (${report.score}/100)`,
       "",
       "Описание:",
@@ -1621,8 +1701,8 @@
     byId("avitoContact").value = store.phone || "";
     byId("avitoKit").value = product.kit || "";
     byId("avitoDescription").value = product.description || product.comment || "";
-    byId("avitoPhotoUrls").value = (product.photoUrls || []).join("\n");
-    byId("avitoPhotoSource").value = product.photoSource || (product.photoUrls?.length ? "site" : "own");
+    if (byId("avitoPhotoUrls")) byId("avitoPhotoUrls").value = (product.photoUrls || []).join("\n");
+    if (byId("avitoPhotoSource")) byId("avitoPhotoSource").value = product.photoSource || (product.photoUrls?.length ? "site" : "own");
     byId("avitoPhotos").value = "";
 
     renderAvitoPhotoPreview();
@@ -1688,9 +1768,25 @@
 
     const photos = getAvitoPhotos(product);
     if (!photos.length) {
+      const existing = Number(product.photosCount || 0);
+      if (existing > 0) {
+        target.innerHTML = Array.from({ length: Math.min(existing, 4) }).map((_, index) => `
+          <article class="photo-preview product-photo-placeholder">
+            <div class="demo-product-photo">
+              <strong>${escapeHtml(getProductShortName(product))}</strong>
+              <span>Фото ${index + 1}</span>
+            </div>
+            <div class="photo-meta">
+              <strong>Фото из базы</strong>
+              <span>${escapeHtml(product.name)}</span>
+            </div>
+          </article>
+        `).join("");
+        return;
+      }
       target.innerHTML = `
         <div class="photo-empty">
-          Фото пока не прикреплены. Для Авито лучше добавить 3-5 реальных фото товара.
+          В базе нет фото. Добавь 3-5 реальных фото товара.
         </div>
       `;
       return;
@@ -1759,7 +1855,7 @@
 
   function validateAvitoPayload(payload) {
     if (!payload) return "Выберите товар";
-    if (!payload.photos.length && !payload.photoUrls.length) return "Прикрепите фото или укажите ссылки";
+    if (!payload.photos.length && !payload.photoUrls.length && !payload.existingPhotosCount) return "Прикрепите фото товара";
     if (!payload.price) return "Укажите цену";
     if (!payload.description || payload.description.length < 20) return "Добавьте описание товара";
     if (!payload.kit) return "Укажите комплектацию";
@@ -1818,9 +1914,9 @@
   function loadAvitoConnectionStatus() {
     try {
       const saved = localStorage.getItem("storeAssistantAvitoConnection");
-      return saved ? JSON.parse(saved) : { status: "демо-профиль подключен", updatedAt: "" };
+      return saved ? JSON.parse(saved) : { status: "ссылка магазина добавлена", updatedAt: "" };
     } catch {
-      return { status: "демо-профиль подключен", updatedAt: "" };
+      return { status: "ссылка магазина добавлена", updatedAt: "" };
     }
   }
 
@@ -1834,13 +1930,13 @@
     if (!statusTarget && !updatedTarget) return;
 
     const status = loadAvitoConnectionStatus();
-    if (statusTarget) statusTarget.textContent = status.status || "демо-профиль подключен";
+    if (statusTarget) statusTarget.textContent = status.status || "ссылка магазина добавлена";
     if (updatedTarget) updatedTarget.textContent = status.updatedAt ? ` · проверено ${status.updatedAt}` : "";
   }
 
   function refreshAvitoConnectionStatus() {
     saveAvitoConnectionStatus({
-      status: "публичная ссылка активна",
+      status: "ссылка открывается",
       updatedAt: new Date().toLocaleString("ru-RU")
     });
     renderAvitoConnectionStatus();
@@ -1851,6 +1947,15 @@
     return Math.max(Number(product.photosCount || 0), getAvitoPhotos(product).length, product.photoUrls?.length || 0);
   }
 
+  function getProductShortName(product) {
+    const text = String(product?.name || "Товар")
+      .replace(/Смартфон Apple\s*/i, "")
+      .replace(/Игровая приставка\s*/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    return text.split(" ").slice(0, 3).join(" ");
+  }
+
   function renderAvitoOverview() {
     const metricsTarget = byId("avitoMetrics");
     const profileLink = byId("openAvitoProfile");
@@ -1858,17 +1963,13 @@
     if (!metricsTarget && !profileLink && !profileUrlText) return;
 
     const profileUrl = getAvitoProfileUrl();
-    const preparedProducts = products.filter((product) => product.avitoStatus);
-    const productsWithPhotos = products.filter((product) => getProductPhotoCount(product) > 0);
-    const readyProducts = products.filter((product) => product.price > 0 && product.stock > 0 && (product.description || product.comment));
-
     if (profileLink) profileLink.href = profileUrl;
     if (profileUrlText) profileUrlText.textContent = profileUrl;
     renderAvitoConnectionStatus();
 
     if (metricsTarget) {
       const metrics = [
-        { label: "Профиль", value: "Есть", context: "Публичная витрина" },
+        { label: "Профиль", value: "Есть", context: "Ссылка магазина" },
         { label: "Готово к Авито", value: String(preparedProducts.length), context: "Подготовленные карточки" },
         { label: "С фото", value: String(productsWithPhotos.length), context: "Есть фото или ссылки" },
         { label: "Можно готовить", value: String(readyProducts.length), context: "Цена, остаток, описание", attention: readyProducts.length > 0 }
@@ -1967,9 +2068,10 @@
 
     target.innerHTML = products.map((product) => {
       const photos = getProductPhotoCount(product);
-      const status = product.avitoStatus || (product.price > 0 && product.stock > 0 ? "Нужно подготовить" : "Не готово");
-      const statusClass = product.avitoStatus ? "blue" : product.price > 0 && product.stock > 0 ? "warning" : "danger";
-      const moderation = product.avitoModeration ? `${product.avitoModeration} · ${product.avitoModerationScore}/100` : "не проверено";
+      const canPrepare = product.price > 0 && product.stock > 0;
+      const status = product.avitoStatus ? "Черновик готов" : canPrepare ? "Можно собрать" : "Нет в наличии";
+      const statusClass = product.avitoStatus ? "blue" : canPrepare ? "warning" : "danger";
+      const moderation = product.avitoModeration ? `Проверка: ${product.avitoModeration} · ${product.avitoModerationScore}/100` : "Ассистент соберет карточку из товара";
       return `
         <tr>
           <td><strong>${escapeHtml(product.name)}</strong><div class="activity-meta">${escapeHtml(product.sku || "")}</div></td>
@@ -1977,7 +2079,7 @@
           <td>${product.stock} шт.</td>
           <td>${photos ? `${photos} фото` : "нет фото"}</td>
           <td><span class="status-pill ${statusClass}">${escapeHtml(status)}</span><div class="activity-meta">${escapeHtml(moderation)}</div></td>
-          <td><a class="ghost-btn compact-btn" href="inventory.html">Подготовить</a></td>
+          <td><a class="ghost-btn compact-btn" href="inventory.html">Открыть в товарах</a></td>
         </tr>
       `;
     }).join("");
@@ -1990,7 +2092,9 @@
   function getAvitoXml(payload) {
     const imageUrls = payload.photoUrls.length
       ? payload.photoUrls
-      : payload.photos.map((photo, index) => `https://example.com/photos/${encodeURIComponent(payload.product.sku)}-${index + 1}.jpg`);
+      : payload.photos.length
+        ? payload.photos.map((photo, index) => `https://imagnate-assets.local/photos/${encodeURIComponent(payload.product.sku)}-${index + 1}.jpg`)
+        : Array.from({ length: payload.existingPhotosCount || 0 }).map((_, index) => `https://imagnate.example/photos/${encodeURIComponent(payload.product.sku)}-${index + 1}.jpg`);
     const cdataDescription = `${payload.description}\n\nКомплектация: ${payload.kit}\nСостояние: ${payload.condition}`.replaceAll("]]>", "]]]]><![CDATA[>");
 
     return [
@@ -2746,9 +2850,10 @@
   }
 
   function renderQuestionRoleUi() {
+    const isManager = can("manage-employees");
     const sellerLayout = byId("sellerQuestionLayout");
     const ownerPanel = byId("ownerQuestionPanel");
-    if (sellerLayout) sellerLayout.hidden = false;
+    if (sellerLayout) sellerLayout.hidden = isManager;
     if (ownerPanel) ownerPanel.hidden = true;
 
     const filter = byId("questionFilter");
@@ -2843,11 +2948,8 @@
     }
 
     target.innerHTML = visible.map((item) => {
-      const canClose = (can("manage-employees") || item.authorLogin === currentUser?.login) && item.status !== "done";
-      const canReopen = can("manage-employees") && item.status === "done";
       const priorityClass = item.priority === "Срочно" ? "danger" : item.priority === "Важно" ? "warning" : "";
       const aiDecision = getQuestionAiDecision(item);
-      const canAskAi = item.status !== "done";
       const answerText = item.answer || "";
       const answerBlock = answerText ? `
         <div class="question-answer">
@@ -2862,32 +2964,16 @@
             <div>
               <span class="status-pill ${priorityClass}">${escapeHtml(item.priority)}</span>
               <span class="status-pill blue">${escapeHtml(item.type)}</span>
-              <span class="status-pill ${aiDecision.className}">${escapeHtml(aiDecision.label)}</span>
+              <span class="status-pill ${aiDecision.className}">AI ответил</span>
               <div class="task-title">${escapeHtml(item.title)}</div>
               <div class="task-meta">${escapeHtml(item.text || "Без подробностей")}</div>
-              <div class="task-meta">AI-оценка: ${escapeHtml(aiDecision.reason)}</div>
-              <div class="task-meta">Автор: ${escapeHtml(item.authorName)} · ${escapeHtml(item.createdAt)} · Статус: ${item.status === "done" ? "закрыт" : "открыт"}</div>
-            </div>
-            <div class="question-actions">
-              ${canAskAi ? `<button class="primary-btn compact-btn" type="button" data-question-auto-answer="${item.id}">Ответ AI</button>` : ""}
-              ${canClose ? `<button class="ghost-btn compact-btn" type="button" data-question-done="${item.id}">Закрыть</button>` : ""}
-              ${canReopen ? `<button class="ghost-btn compact-btn" type="button" data-question-open="${item.id}">Вернуть</button>` : ""}
+              <div class="task-meta">Автор: ${escapeHtml(item.authorName)} · ${escapeHtml(item.createdAt)}</div>
             </div>
           </div>
           ${answerBlock}
         </article>
       `;
     }).join("");
-
-    document.querySelectorAll("[data-question-auto-answer]").forEach((button) => {
-      button.addEventListener("click", () => autoAnswerQuestion(Number(button.dataset.questionAutoAnswer)));
-    });
-    document.querySelectorAll("[data-question-done]").forEach((button) => {
-      button.addEventListener("click", () => updateQuestionStatus(Number(button.dataset.questionDone), "done"));
-    });
-    document.querySelectorAll("[data-question-open]").forEach((button) => {
-      button.addEventListener("click", () => updateQuestionStatus(Number(button.dataset.questionOpen), "open"));
-    });
   }
 
   function getQuestionReplyStart(question) {
@@ -3390,6 +3476,7 @@
     });
     byId("copyDigest")?.addEventListener("click", () => copyText(byId("ownerDigest").textContent));
     byId("copyShift")?.addEventListener("click", () => copyText(byId("shiftReport").textContent));
+    byId("closeShift")?.addEventListener("click", closeShift);
     byId("inventoryFilter")?.addEventListener("change", renderProducts);
     byId("inventorySearch")?.addEventListener("input", renderProducts);
     byId("addProductForm")?.addEventListener("submit", addProductFromForm);

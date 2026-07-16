@@ -47,8 +47,6 @@
       <section class="view active" aria-labelledby="inventoryTitle">
         <h2 id="inventoryTitle">Склад</h2>
 
-        <div class="metrics inventory-metrics" id="inventoryMetrics"></div>
-
         <section class="panel" aria-label="Таблица остатков">
           <div class="panel-header">
             <h3>Все товары</h3>
@@ -90,8 +88,8 @@
     <div class="modal">
       <div class="panel-header">
         <div>
-          <h3 id="avitoModalTitle">Загрузка на Авито</h3>
-          <p class="panel-note">Пока это демо-черновик. Позже сюда подключим Авито API или XML-автозагрузку.</p>
+          <h3 id="avitoModalTitle">Карточка Авито</h3>
+          <p class="panel-note">Ассистент уже собрал фото, комплектацию и описание. Сотрудник только проверяет карточку перед отправкой.</p>
         </div>
         <button class="icon-btn" type="button" id="closeAvitoModal" aria-label="Закрыть">X</button>
       </div>
@@ -100,23 +98,14 @@
 
       <div class="avito-modal-grid">
         <section class="stack">
+          <div class="auto-block">
+            <span class="status-pill blue">Фото из базы</span>
+            <div class="photo-preview-grid compact" id="avitoPhotoPreview"></div>
+          </div>
           <div class="field">
-            <label for="avitoPhotos">Фото товара</label>
+            <label for="avitoPhotos">Заменить или добавить фото</label>
             <input id="avitoPhotos" type="file" accept="image/*" multiple>
-          </div>
-          <div class="photo-preview-grid compact" id="avitoPhotoPreview"></div>
-          <div class="field">
-            <label for="avitoPhotoUrls">Ссылки на фото для XML</label>
-            <textarea id="avitoPhotoUrls" placeholder="https://site.ru/photos/iphone-15-1.jpg&#10;https://site.ru/photos/iphone-15-2.jpg"></textarea>
-          </div>
-          <div class="field">
-            <label for="avitoPhotoSource">Источник фото</label>
-            <select id="avitoPhotoSource">
-              <option value="own">Живые фото конкретного товара</option>
-              <option value="site">Фото с сайта магазина</option>
-              <option value="supplier">Каталожные фото поставщика</option>
-              <option value="mixed">Смешанный набор</option>
-            </select>
+            <div class="activity-meta">Если у товара уже есть фото в базе, этот шаг можно пропустить.</div>
           </div>
           <div class="moderation-box" id="avitoModerationBox"></div>
         </section>
@@ -158,30 +147,26 @@
           </div>
           <div class="field full">
             <label for="avitoKit">Комплектация</label>
-            <input id="avitoKit" placeholder="Коробка, кабель, чек магазина">
+            <input id="avitoKit" readonly>
           </div>
           <div class="field full">
-            <label for="avitoDescription">Описание</label>
-            <textarea id="avitoDescription" placeholder="Состояние, гарантия, нюансы, что можно проверить при встрече"></textarea>
+            <label for="avitoDescription">Описание от AI</label>
+            <textarea id="avitoDescription" readonly></textarea>
           </div>
         </section>
       </div>
 
       <div class="generator-result">
         <div class="panel-header">
-          <h3>Что уйдет в Авито</h3>
-          <div class="content-actions">
-            <button class="ghost-btn compact-btn" type="button" id="copyAvitoPayload">Скопировать</button>
-            <button class="ghost-btn compact-btn" type="button" id="downloadAvitoXml">Скачать XML</button>
-            <button class="ghost-btn compact-btn" type="button" id="downloadAvitoJson">Скачать JSON</button>
-          </div>
+          <h3>Итог карточки</h3>
+          <span class="status-pill blue">Автозаполнение</span>
         </div>
         <div class="result-text" id="avitoPayloadPreview"></div>
       </div>
 
       <div class="modal-actions">
         <button class="ghost-btn" type="button" id="cancelAvitoModal">Отмена</button>
-        <button class="primary-btn" type="button" id="submitAvitoListing">Загрузить на Авито</button>
+        <button class="primary-btn" type="button" id="submitAvitoListing">Подготовить к загрузке</button>
       </div>
     </div>
   </section>
