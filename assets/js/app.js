@@ -1608,7 +1608,8 @@
       };
     }
 
-    const photoCount = Math.max(payload.photos.length, payload.photoUrls.length, payload.existingPhotosCount || 0);
+    const assetPhotoCount = payload.assetPhotos?.length || 0;
+    const photoCount = Math.max(payload.photos.length, payload.photoUrls.length, assetPhotoCount, payload.existingPhotosCount || 0);
     const siteUrls = payload.photoUrls.filter((url) => /imagnate\.ru|site\.ru|cdn|static|catalog/i.test(url));
     const badNames = payload.photos.filter((photo) => hasCatalogLikePhotoName(photo.name));
     const smallPhotos = payload.photos.filter((photo) => photo.width && photo.height && (photo.width < 800 || photo.height < 600));
@@ -1659,7 +1660,7 @@
       add("warn", "Нет публичных ссылок для XML", "Для ручной загрузки фото подходят, но для XML/API нужны публичные ссылки на изображения.", 8);
     }
 
-    if (!payload.photos.length && !payload.photoUrls.length && payload.existingPhotosCount) {
+    if (!payload.photos.length && !payload.photoUrls.length && !assetPhotoCount && payload.existingPhotosCount) {
       add("warn", "Фото есть только как счетчик", "В товаре указано количество фото, но сами файлы или ссылки не прикреплены к выгрузке. Для реальной отправки нужны файлы или публичные URL.", 10);
     }
 
