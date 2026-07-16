@@ -1,6 +1,6 @@
 {
   "name": "imagnate-assistant",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "Demo assistant for a small electronics store with optional OpenAI-backed answers.",
   "scripts": {

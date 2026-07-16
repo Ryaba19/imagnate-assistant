@@ -19,13 +19,12 @@
       </div>
       <nav class="nav">
         <a class="nav-button" href="index.html" data-page-link="dashboard"><span class="nav-icon">01</span><span>Главная</span></a>
-        <a class="nav-button" href="content.html" data-page-link="content"><span class="nav-icon">02</span><span>Публикации</span></a>
+        <a class="nav-button" href="tasks.html" data-page-link="tasks"><span class="nav-icon">02</span><span>Задачи</span></a>
         <a class="nav-button" href="shift.html" data-page-link="shift"><span class="nav-icon">03</span><span>Смена</span></a>
         <a class="nav-button" href="inventory.html" data-page-link="inventory"><span class="nav-icon">04</span><span>Товары</span></a>
         <a class="nav-button" href="questions.html" data-page-link="questions"><span class="nav-icon">05</span><span>Вопросы</span></a>
         <a class="nav-button" href="avito.html" data-page-link="avito"><span class="nav-icon">06</span><span>Авито</span></a>
-        <a class="nav-button" href="site-import.html" data-page-link="site-import" data-permission="site-import"><span class="nav-icon">07</span><span>Сайт</span></a>
-        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees"><span class="nav-icon">08</span><span>Сотрудники</span></a>
+        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees"><span class="nav-icon">07</span><span>Сотрудники</span></a>
       </nav>
       <a class="sidebar-footer access-shortcut" href="#accessControlPanel" data-permission="manage-employees">
         <span>Управление доступами</span>
@@ -37,7 +36,7 @@
       <header class="topbar">
         <div>
           <h1>Сотрудники</h1>
-          <p class="subtitle">Логины, демо-пароли, роли и добавление новых сотрудников в прототип.</p>
+          <p class="subtitle">Доступы сотрудников: роль, статус входа и добавление нового человека.</p>
         </div>
         <div class="badge-row">
           <span class="badge"><span class="dot"></span><span id="todayLabel">Сегодня</span></span>
@@ -46,9 +45,7 @@
       </header>
 
       <section class="view active" aria-labelledby="employeesTitle">
-        <h2 id="employeesTitle">Управление</h2>
-
-        <div class="metrics" id="employeeMetrics"></div>
+        <h2 id="employeesTitle">Доступы</h2>
 
         <section class="panel access-panel" id="accessControlPanel" aria-labelledby="accessControlTitle">
           <div class="panel-header">
@@ -84,8 +81,7 @@
           <div class="access-hint" id="accessHint">Выберите сотрудника, чтобы изменить его доступ.</div>
         </section>
 
-        <div class="layout-2">
-          <section class="panel" aria-labelledby="addEmployeeTitle">
+        <section class="panel" aria-labelledby="addEmployeeTitle">
             <div class="panel-header">
               <h3 id="addEmployeeTitle">Добавить сотрудника</h3>
               <span class="status-pill">Лёня / админ</span>
@@ -115,28 +111,6 @@
               </div>
             </form>
           </section>
-
-          <section class="panel" aria-labelledby="rightsTitle">
-            <h3 id="rightsTitle">Права ролей</h3>
-            <div class="attention-list">
-              <article class="attention-item">
-                <span class="status-pill">Начальник</span>
-                <div class="attention-title">Леонид</div>
-                <div class="attention-meta">Видит финансы, сайт, склад, смены, контент, сотрудников и добавляет новых людей.</div>
-              </article>
-              <article class="attention-item">
-                <span class="status-pill blue">Админ</span>
-                <div class="attention-title">Алексей</div>
-                <div class="attention-meta">Технический полный доступ: сотрудники, сайт, склад, смены, контент и настройки демо.</div>
-              </article>
-              <article class="attention-item">
-                <span class="status-pill warning">Продавец</span>
-                <div class="attention-title">Иван, Вячеслав, Дарья, Владислав</div>
-                <div class="attention-meta">Рабочие разделы: склад, контент, закрытие смены и AI. Без сотрудников, импорта сайта и финансов владельца.</div>
-              </article>
-            </div>
-          </section>
-        </div>
 
         <section class="panel" aria-label="Таблица сотрудников">
           <div class="panel-header">

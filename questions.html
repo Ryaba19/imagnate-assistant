@@ -19,13 +19,12 @@
       </div>
       <nav class="nav">
         <a class="nav-button" href="index.html" data-page-link="dashboard"><span class="nav-icon">01</span><span>Главная</span></a>
-        <a class="nav-button" href="content.html" data-page-link="content"><span class="nav-icon">02</span><span>Публикации</span></a>
+        <a class="nav-button" href="tasks.html" data-page-link="tasks"><span class="nav-icon">02</span><span>Задачи</span></a>
         <a class="nav-button" href="shift.html" data-page-link="shift"><span class="nav-icon">03</span><span>Смена</span></a>
         <a class="nav-button" href="inventory.html" data-page-link="inventory"><span class="nav-icon">04</span><span>Товары</span></a>
         <a class="nav-button" href="questions.html" data-page-link="questions"><span class="nav-icon">05</span><span>Вопросы</span></a>
         <a class="nav-button" href="avito.html" data-page-link="avito"><span class="nav-icon">06</span><span>Авито</span></a>
-        <a class="nav-button" href="site-import.html" data-page-link="site-import" data-permission="site-import"><span class="nav-icon">07</span><span>Сайт</span></a>
-        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees"><span class="nav-icon">08</span><span>Сотрудники</span></a>
+        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees"><span class="nav-icon">07</span><span>Сотрудники</span></a>
       </nav>
       <div class="sidebar-footer">
         <span>Вопросы собираются в одном месте</span>
@@ -37,7 +36,7 @@
       <header class="topbar">
         <div>
           <h1>Вопросы и наблюдения</h1>
-          <p class="subtitle">Сотрудники оставляют вопросы, идеи и проблемы здесь, чтобы Лёня видел их списком и не отвечал на одно и то же по кругу.</p>
+          <p class="subtitle">Сотрудник задает вопрос, AI-продавец готовит ответ и сохраняет его в журнал.</p>
         </div>
         <div class="badge-row">
           <span class="badge"><span class="dot"></span><span id="todayLabel">Сегодня</span></span>
@@ -54,7 +53,7 @@
           <section class="panel" id="questionFormPanel" aria-labelledby="addQuestionTitle">
             <div class="panel-header">
               <h3 id="addQuestionTitle">Добавить вопрос</h3>
-              <span class="status-pill">Для Лёни</span>
+              <span class="status-pill blue">Ответит AI</span>
             </div>
             <form id="questionForm" class="field-grid">
               <div class="field">
@@ -90,48 +89,26 @@
           </section>
 
           <section class="panel" id="whyQuestionsPanel" aria-labelledby="whyQuestionsTitle">
-            <h3 id="whyQuestionsTitle">Зачем этот раздел</h3>
+            <h3 id="whyQuestionsTitle">Как это работает</h3>
             <div class="attention-list">
               <article class="attention-item">
-                <span class="status-pill">Меньше хаоса</span>
-                <div class="attention-title">Вопросы не теряются в переписках</div>
-                <div class="attention-meta">Лёня видит список, приоритет и автора вопроса.</div>
+                <span class="status-pill blue">AI</span>
+                <div class="attention-title">Ответ появляется в карточке вопроса</div>
+                <div class="attention-meta">В демо используется локальная логика, после API будет отвечать реальная нейронка.</div>
               </article>
               <article class="attention-item">
-                <span class="status-pill blue">База знаний</span>
-                <div class="attention-title">Повторяющиеся вопросы можно превращать в правила</div>
-                <div class="attention-meta">Позже AI сможет отвечать продавцам по этим правилам автоматически.</div>
+                <span class="status-pill">Журнал</span>
+                <div class="attention-title">Открытые и закрытые вопросы хранятся отдельно</div>
+                <div class="attention-meta">Можно вернуться к ответу и понять, что уже разобрано.</div>
               </article>
               <article class="attention-item">
-                <span class="status-pill warning">Без лишних звонков</span>
-                <div class="attention-title">Срочное видно сразу, обычное можно разобрать позже</div>
-                <div class="attention-meta">Так снижается количество однотипных вопросов владельцу.</div>
+                <span class="status-pill warning">Обучение</span>
+                <div class="attention-title">Ответы Лёни потом станут правилами</div>
+                <div class="attention-meta">Сейчас это прототип, дальше можно подключить базу знаний магазина.</div>
               </article>
             </div>
           </section>
         </div>
-
-        <section class="panel owner-question-panel" id="ownerQuestionPanel" aria-labelledby="ownerQuestionTitle" hidden>
-          <div class="panel-header">
-            <div>
-              <h3 id="ownerQuestionTitle">Входящие вопросы сотрудников</h3>
-              <p class="panel-note">AI закрывает типовые вопросы сам, а Лёня видит только то, где нужен владелец: деньги, доступы, гарантия, спорные случаи.</p>
-            </div>
-            <span class="status-pill blue">Режим владельца</span>
-          </div>
-          <div class="quick-grid">
-            <article class="mini-card">
-              <span class="metric-label">Как отвечать</span>
-              <strong>AI или Лёня</strong>
-              <span class="metric-context">Типовые вопросы закрывает AI, важные остаются владельцу.</span>
-            </article>
-            <article class="mini-card">
-              <span class="metric-label">Зачем</span>
-              <strong>Меньше отвлечений</strong>
-              <span class="metric-context">Ответы сохраняются и постепенно становятся базой знаний.</span>
-            </article>
-          </div>
-        </section>
 
         <section class="panel" aria-label="Журнал вопросов">
           <div class="panel-header">

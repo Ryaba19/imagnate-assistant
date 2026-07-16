@@ -488,8 +488,20 @@
     }
   }
 
+  function getShiftPeople() {
+    const primary = getFieldText("shiftEmployeePrimary", "Вячеслав");
+    const secondary = getFieldText("shiftEmployeeSecondary", "Дарья");
+    const names = [primary, secondary].filter(Boolean);
+    return {
+      primary,
+      secondary,
+      label: names.join(" + ") || currentUser?.name || "Сотрудник"
+    };
+  }
+
   function getShiftValues() {
     const shift = seed.shift || {};
+    const people = getShiftPeople();
     const cashStart = getFieldNumber("cashStart", shift.cashStart);
     const cashSales = getFieldNumber("cashSales", shift.cashSales);
     const cardSales = getFieldNumber("cardSales", shift.cardSales);
@@ -501,7 +513,7 @@
     const expected = cashStart + cashSales - refunds - expenses - collection;
     const difference = cashActual - expected;
     const totalRevenue = cashSales + cardSales + transfers;
-    return { cashStart, cashSales, cardSales, transfers, refunds, expenses, collection, cashActual, expected, difference, totalRevenue };
+    return { people, cashStart, cashSales, cardSales, transfers, refunds, expenses, collection, cashActual, expected, difference, totalRevenue };
   }
 
   function getOwnerDigest() {
@@ -540,19 +552,16 @@
     const target = byId("metrics");
     if (!target) return;
 
-    const metrics = can("finance")
-      ? [
-          { label: "Выручка сегодня", value: money(getRevenue()), context: "Наличные, карта и переводы" },
-          { label: "Оценочная маржа", value: money(getProfit()), context: "По демо-товарам" },
-          { label: "Открытые задачи", value: String(tasks.filter((task) => !task.done).length), context: "Нужно закрыть сегодня" },
-          { label: "Внимание", value: String(getAttentionProducts().length), context: "Товары, остатки и касса", attention: true }
-        ]
-      : [
-          { label: "Рабочая смена", value: "Открыта", context: currentUser ? `${currentUser.name}, ${currentUser.roleLabel}` : "Сотрудник" },
-          { label: "Единиц на складе", value: String(getStockUnits()), context: "Все остатки" },
-          { label: "Открытые задачи", value: String(tasks.filter((task) => !task.done).length), context: "К выполнению" },
-          { label: "Низкий остаток", value: String(getLowStockProducts().length), context: "Нужно проверить", attention: true }
-        ];
+    const shiftPeople = getShiftPeople();
+    const openTasks = tasks.filter((task) => !task.done).length;
+    const openQuestions = questions.filter((item) => item.status !== "done").length;
+    const preparedAvito = products.filter((product) => product.avitoStatus).length;
+    const metrics = [
+      { label: "Смена", value: "Открыта", context: shiftPeople.label },
+      { label: "Открытые задачи", value: String(openTasks), context: "Перейти в задачи", attention: openTasks > 3 },
+      { label: "Вопросы AI", value: String(openQuestions), context: "Ожидают ответа" },
+      { label: "Авито", value: String(preparedAvito), context: "Подготовлено карточек" }
+    ];
 
     target.innerHTML = metrics.map((item) => `
       <article class="metric-card ${item.attention ? "attention" : ""}">
@@ -567,21 +576,13 @@
     const target = byId("inventoryMetrics");
     if (!target) return;
 
-    const metrics = can("finance")
-      ? [
-          { label: "Позиций", value: String(products.length), context: "Уникальные карточки" },
-          { label: "Единиц на складе", value: String(getStockUnits()), context: "Сумма всех остатков" },
-          { label: "Себестоимость товаров", value: money(getStockCostValue()), context: "Закупка × остаток" },
-          { label: "Потенциальная выручка", value: money(getStockSaleValue()), context: "Продажа × остаток" },
-          { label: "Низкий остаток", value: String(getLowStockProducts().length), context: "2 шт. или меньше", attention: true }
-        ]
-      : [
-          { label: "Позиций", value: String(products.length), context: "Уникальные карточки" },
-          { label: "Единиц на складе", value: String(getStockUnits()), context: "Сумма всех остатков" },
-          { label: "Готово к продаже", value: String(products.filter((product) => product.status === "Готов к продаже" || product.status === "Опубликован").length), context: "Можно предлагать клиенту" },
-          { label: "На диагностике", value: String(products.filter((product) => product.status === "На диагностике").length), context: "Нужно проверить" },
-          { label: "Низкий остаток", value: String(getLowStockProducts().length), context: "2 шт. или меньше", attention: true }
-        ];
+    const metrics = [
+      { label: "Позиций", value: String(products.length), context: "Карточки склада" },
+      { label: "Единиц", value: String(getStockUnits()), context: "Всего в наличии" },
+      { label: "Готово к продаже", value: String(products.filter((product) => product.status === "Готов к продаже" || product.status === "Опубликован").length), context: "Можно предлагать" },
+      { label: "Нужны фото", value: String(products.filter((product) => getProductPhotoCount(product) === 0).length), context: "Перед Авито" },
+      { label: "Низкий остаток", value: String(getLowStockProducts().length), context: "2 шт. или меньше", attention: getLowStockProducts().length > 0 }
+    ];
 
     target.innerHTML = metrics.map((item) => `
       <article class="metric-card ${item.attention ? "attention" : ""}">
@@ -617,7 +618,7 @@
         meta: "Не хватает финального фото и результата диагностики.",
         type: "blue"
       }
-    ];
+    ].slice(0, 4);
 
     const counter = byId("attentionCount");
     if (counter) counter.textContent = `${items.length} пунктов`;
@@ -730,7 +731,7 @@
         ? {
             revenue: getRevenue(),
             expectedCash: shift.expected,
-            actualCash: shift.actual,
+            actualCash: shift.cashActual,
             difference: shift.difference
           }
         : null,
@@ -1381,6 +1382,7 @@
     report.textContent = [
       "Отчет по закрытию смены",
       "",
+      `Смена закрывается: ${values.people.label}.`,
       `Выручка: ${money(values.totalRevenue)}.`,
       `Наличные на начало: ${money(values.cashStart)}.`,
       `Продажи наличными: ${money(values.cashSales)}.`,
@@ -1391,6 +1393,7 @@
       `Ожидаемый остаток: ${money(values.expected)}.`,
       `Фактический остаток: ${money(values.cashActual)}.`,
       `Расхождение: ${money(values.difference)}.`,
+      values.difference === 0 ? "Проверка: остаток сходится." : "Проверка: есть расхождение, нужна сверка операций.",
       comment ? `Комментарий: ${comment}` : ""
     ].filter(Boolean).join("\n");
   }
@@ -1812,6 +1815,38 @@
     return store.avitoProfileUrl || "https://www.avito.ru/user/45b3050882d7589ba21bf140dde5c6f8/profile?src=sharing";
   }
 
+  function loadAvitoConnectionStatus() {
+    try {
+      const saved = localStorage.getItem("storeAssistantAvitoConnection");
+      return saved ? JSON.parse(saved) : { status: "демо-профиль подключен", updatedAt: "" };
+    } catch {
+      return { status: "демо-профиль подключен", updatedAt: "" };
+    }
+  }
+
+  function saveAvitoConnectionStatus(status) {
+    localStorage.setItem("storeAssistantAvitoConnection", JSON.stringify(status));
+  }
+
+  function renderAvitoConnectionStatus() {
+    const statusTarget = byId("avitoConnectionStatus");
+    const updatedTarget = byId("avitoStatusUpdated");
+    if (!statusTarget && !updatedTarget) return;
+
+    const status = loadAvitoConnectionStatus();
+    if (statusTarget) statusTarget.textContent = status.status || "демо-профиль подключен";
+    if (updatedTarget) updatedTarget.textContent = status.updatedAt ? ` · проверено ${status.updatedAt}` : "";
+  }
+
+  function refreshAvitoConnectionStatus() {
+    saveAvitoConnectionStatus({
+      status: "публичная ссылка активна",
+      updatedAt: new Date().toLocaleString("ru-RU")
+    });
+    renderAvitoConnectionStatus();
+    showToast("Статус Авито обновлен");
+  }
+
   function getProductPhotoCount(product) {
     return Math.max(Number(product.photosCount || 0), getAvitoPhotos(product).length, product.photoUrls?.length || 0);
   }
@@ -1829,13 +1864,14 @@
 
     if (profileLink) profileLink.href = profileUrl;
     if (profileUrlText) profileUrlText.textContent = profileUrl;
+    renderAvitoConnectionStatus();
 
     if (metricsTarget) {
       const metrics = [
-        { label: "Профиль Авито", value: "Подключен", context: "Публичная ссылка магазина" },
-        { label: "Готово к Авито", value: String(preparedProducts.length), context: "Карточки с демо-статусом" },
+        { label: "Профиль", value: "Есть", context: "Публичная витрина" },
+        { label: "Готово к Авито", value: String(preparedProducts.length), context: "Подготовленные карточки" },
         { label: "С фото", value: String(productsWithPhotos.length), context: "Есть фото или ссылки" },
-        { label: "Можно готовить", value: String(readyProducts.length), context: "Цена, остаток и описание", attention: true }
+        { label: "Можно готовить", value: String(readyProducts.length), context: "Цена, остаток, описание", attention: readyProducts.length > 0 }
       ];
 
       metricsTarget.innerHTML = metrics.map((item) => `
@@ -1848,7 +1884,6 @@
     }
 
     renderAvitoPreparedList();
-    renderAvitoIntegrationList();
     renderAvitoProductsTable();
   }
 
@@ -1874,6 +1909,9 @@
             <div class="activity-meta">${money(item.price)} · фото: ${item.photosCount} · модерация: ${escapeHtml(item.moderationStatus || "не проверено")} · ${escapeHtml(item.createdAt)}</div>
           </div>
           <span class="status-pill blue">${escapeHtml(item.status)}</span>
+        </div>
+        <div class="content-actions">
+          <a class="ghost-btn compact-btn" href="inventory.html">Открыть товар</a>
         </div>
       </article>
     `).join("");
@@ -2039,7 +2077,7 @@
     if (!visible.length) {
       target.innerHTML = `
         <tr>
-          <td colspan="9">По текущему фильтру товаров нет.</td>
+          <td colspan="6">По текущему фильтру товаров нет.</td>
         </tr>
       `;
       return;
@@ -2047,13 +2085,12 @@
 
     target.innerHTML = visible.map((product) => {
       const index = products.indexOf(product);
-      const margin = product.price - product.cost;
       const pillClass = product.days >= 30 || product.stock <= 2 ? "warning" : product.status === "На диагностике" ? "blue" : "";
       const stockClass = product.stock <= 0 ? "danger" : product.stock <= 2 ? "warning" : "";
+      const photos = getProductPhotoCount(product);
       return `
         <tr>
-          <td><strong>${escapeHtml(product.name)}</strong><div class="activity-meta">${escapeHtml(product.sku || "")}</div></td>
-          <td>${escapeHtml(product.category)}</td>
+          <td><strong>${escapeHtml(product.name)}</strong><div class="activity-meta">${escapeHtml(product.sku || "")} · ${escapeHtml(product.category)}</div></td>
           <td><span class="status-pill ${pillClass}">${escapeHtml(product.status)}</span></td>
           <td>
             <span class="status-pill ${stockClass}">${product.stock} шт.</span>
@@ -2062,9 +2099,7 @@
               <button class="icon-btn" type="button" data-stock-inc="${index}" aria-label="Увеличить остаток">+</button>
             </div>
           </td>
-          <td>${product.days}</td>
-          <td>${can("finance") ? money(product.cost * product.stock) : "Скрыто"}</td>
-          <td>${can("finance") ? money(margin) : "Скрыто"}</td>
+          <td><span class="status-pill ${photos ? "blue" : "warning"}">${photos ? `${photos} фото` : "Нет фото"}</span></td>
           <td>
             <div class="stock-actions">
               <button class="ghost-btn compact-btn" type="button" data-avito-open="${index}">Загрузить</button>
@@ -2169,6 +2204,15 @@
     renderDigest();
     renderMetrics();
     showToast("Демо-товары сброшены");
+  }
+
+  function syncInventoryFromImagnate() {
+    saveProducts();
+    renderProducts();
+    renderInventoryMetrics();
+    renderMetrics();
+    renderAttention();
+    showToast("Остатки обновлены из демо-базы iMagnate");
   }
 
   function getValueByAliases(row, aliases, fallback = "") {
@@ -2348,18 +2392,97 @@
     if (result) result.textContent = "Демо-товары возвращены. Можно снова загрузить JSON или CSV с реальными остатками.";
   }
 
+  function getVisibleTaskEntries() {
+    const filter = byId("taskFilter")?.value || "open";
+    return tasks
+      .map((task, index) => ({ task, index }))
+      .filter(({ task }) => {
+        if (filter === "all") return true;
+        if (filter === "done") return task.done;
+        if (filter === "high") return !task.done && task.priority === "Высокий";
+        return !task.done;
+      });
+  }
+
+  function renderTaskMetrics() {
+    const target = byId("taskMetrics");
+    if (!target) return;
+
+    const open = tasks.filter((task) => !task.done).length;
+    const done = tasks.filter((task) => task.done).length;
+    const high = tasks.filter((task) => !task.done && task.priority === "Высокий").length;
+    const today = tasks.filter((task) => !task.done && task.due === "Сегодня").length;
+    const metrics = [
+      { label: "Открытые", value: String(open), context: "Нужно закрыть" },
+      { label: "Сегодня", value: String(today), context: "В текущую смену" },
+      { label: "Высокий приоритет", value: String(high), context: "Разобрать первыми", attention: high > 0 },
+      { label: "Закрытые", value: String(done), context: "Уже выполнены" }
+    ];
+
+    target.innerHTML = metrics.map((item) => `
+      <article class="metric-card ${item.attention ? "attention" : ""}">
+        <div class="metric-label">${escapeHtml(item.label)}</div>
+        <div class="metric-value">${escapeHtml(item.value)}</div>
+        <div class="metric-context">${escapeHtml(item.context)}</div>
+      </article>
+    `).join("");
+  }
+
+  function renderTaskFocus() {
+    const target = byId("taskFocusList");
+    if (!target) return;
+
+    const focus = tasks
+      .filter((task) => !task.done)
+      .sort((a, b) => (b.priority === "Высокий") - (a.priority === "Высокий"))
+      .slice(0, 3);
+
+    if (!focus.length) {
+      target.innerHTML = `
+        <article class="attention-item">
+          <span class="status-pill blue">Готово</span>
+          <div class="attention-title">Открытых задач нет</div>
+          <div class="attention-meta">Можно принимать новые задачи или проверить закрытые.</div>
+        </article>
+      `;
+      return;
+    }
+
+    target.innerHTML = focus.map((task) => `
+      <article class="attention-item">
+        <span class="status-pill ${task.priority === "Высокий" ? "warning" : "blue"}">${escapeHtml(task.priority)}</span>
+        <div class="attention-title">${escapeHtml(task.title)}</div>
+        <div class="attention-meta">${escapeHtml(task.owner)} · ${escapeHtml(task.due)}</div>
+      </article>
+    `).join("");
+  }
+
   function renderTasks() {
     const target = byId("tasksList");
-    if (!target) return;
+    renderTaskMetrics();
+    renderTaskFocus();
 
     const open = tasks.filter((task) => !task.done).length;
     const counter = byId("openTasksCount");
     if (counter) counter.textContent = `${open} открытых`;
+    if (!target) return;
 
-    target.innerHTML = tasks.map((task, index) => `
+    const entries = getVisibleTaskEntries();
+    if (!entries.length) {
+      target.innerHTML = `
+        <article class="task-item">
+          <div class="task-title">Задач по текущему фильтру нет</div>
+          <div class="task-meta">Можно сменить фильтр или добавить новую задачу.</div>
+        </article>
+      `;
+      return;
+    }
+
+    target.innerHTML = entries.map(({ task, index }) => `
       <article class="task-item">
         <div class="panel-header">
           <div>
+            <span class="status-pill ${task.done ? "blue" : task.priority === "Высокий" ? "warning" : ""}">${task.done ? "Закрыта" : "Открыта"}</span>
             <div class="task-title">${escapeHtml(task.title)}</div>
             <div class="task-meta">Ответственный: ${escapeHtml(task.owner)}. Срок: ${escapeHtml(task.due)}. Приоритет: ${escapeHtml(task.priority)}.</div>
           </div>
@@ -2378,6 +2501,30 @@
         showToast(tasks[index].done ? "Задача закрыта" : "Задача возвращена");
       });
     });
+  }
+
+  function addTaskFromForm(event) {
+    event.preventDefault();
+    const title = getFieldText("taskTitleInput", "");
+    if (!title) {
+      showToast("Введите задачу");
+      byId("taskTitleInput")?.focus();
+      return;
+    }
+
+    tasks.unshift({
+      title,
+      owner: getFieldText("taskOwnerInput", "Продавец"),
+      due: getFieldText("taskDueInput", "Сегодня"),
+      priority: getFieldText("taskPriorityInput", "Средний"),
+      done: false,
+      createdAt: new Date().toLocaleString("ru-RU")
+    });
+    saveTasks();
+    event.target.reset();
+    renderTasks();
+    renderMetrics();
+    showToast("Задача добавлена");
   }
 
   function renderEmployees() {
@@ -2423,7 +2570,6 @@
 
   function getRoleClass(role) {
     if (role === "admin") return "blue";
-    if (role === "seller") return "warning";
     return "";
   }
 
@@ -2591,9 +2737,7 @@
     if (filter === "open") visible = questions.filter((item) => item.status !== "done");
     if (filter === "done") visible = questions.filter((item) => item.status === "done");
     if (filter === "mine") {
-      visible = can("manage-employees")
-        ? questions.filter((item) => item.answeredBy === currentUser?.name)
-        : questions.filter((item) => item.authorLogin === currentUser?.login);
+      visible = questions.filter((item) => item.authorLogin === currentUser?.login);
     }
     if (!can("manage-employees")) {
       visible = visible.filter((item) => item.authorLogin === currentUser?.login || item.status !== "done");
@@ -2602,19 +2746,14 @@
   }
 
   function renderQuestionRoleUi() {
-    const isManager = can("manage-employees");
     const sellerLayout = byId("sellerQuestionLayout");
     const ownerPanel = byId("ownerQuestionPanel");
-    if (sellerLayout) sellerLayout.hidden = isManager;
-    if (ownerPanel) ownerPanel.hidden = !isManager;
+    if (sellerLayout) sellerLayout.hidden = false;
+    if (ownerPanel) ownerPanel.hidden = true;
 
     const filter = byId("questionFilter");
     const mineOption = filter?.querySelector('option[value="mine"]');
-    if (mineOption && isManager) {
-      mineOption.textContent = "Мои ответы";
-    } else if (mineOption) {
-      mineOption.textContent = "Мои";
-    }
+    if (mineOption) mineOption.textContent = "Мои вопросы";
   }
 
   function renderQuestionMetrics() {
@@ -2623,18 +2762,16 @@
 
     const open = questions.filter((item) => item.status !== "done").length;
     const urgent = questions.filter((item) => item.status !== "done" && item.priority === "Срочно").length;
-    const aiReady = questions.filter((item) => item.status !== "done" && getQuestionAiDecision(item).canAutoAnswer).length;
     const mine = can("manage-employees")
-      ? questions.filter((item) => item.answeredBy === currentUser?.name).length
+      ? questions.filter((item) => item.authorLogin === currentUser?.login).length
       : questions.filter((item) => item.authorLogin === currentUser?.login).length;
     const done = questions.filter((item) => item.status === "done").length;
 
     const metrics = [
-      { label: "Открытые", value: String(open), context: "Ждут решения" },
-      { label: "Срочные", value: String(urgent), context: "Разобрать первыми", attention: urgent > 0 },
-      { label: "AI может закрыть", value: String(aiReady), context: "Типовые вопросы" },
-      { label: can("manage-employees") ? "Мои ответы" : "Мои вопросы", value: String(mine), context: currentUser?.name || "Сотрудник" },
-      { label: "Закрытые", value: String(done), context: "Уже разобраны" }
+      { label: "Открытые", value: String(open), context: "AI готовит ответ" },
+      { label: "Срочные", value: String(urgent), context: "Выделены в журнале", attention: urgent > 0 },
+      { label: "Мои вопросы", value: String(mine), context: currentUser?.name || "Сотрудник" },
+      { label: "Закрытые", value: String(done), context: "Ответ сохранен" }
     ];
 
     target.innerHTML = metrics.map((item) => `
@@ -2664,12 +2801,12 @@
 
     if (hasRisk || isUrgent) {
       return {
-        canAutoAnswer: false,
-        label: "Нужен Лёня",
-        className: "danger",
+        canAutoAnswer: true,
+        label: "AI осторожно",
+        className: "warning",
         reason: isUrgent
-          ? "Срочный вопрос лучше подтвердить владельцу."
-          : "Тема может касаться денег, доступов, гарантии или спорной ситуации."
+          ? "AI даст безопасный ответ без обещаний и зафиксирует вопрос в журнале."
+          : "Тема может касаться денег, доступов, гарантии или спорной ситуации: AI отвечает осторожно."
       };
     }
 
@@ -2706,30 +2843,16 @@
     }
 
     target.innerHTML = visible.map((item) => {
-      const canClose = can("manage-employees") && item.status !== "done";
+      const canClose = (can("manage-employees") || item.authorLogin === currentUser?.login) && item.status !== "done";
       const canReopen = can("manage-employees") && item.status === "done";
-      const canReply = can("manage-employees");
-      const isReplyOpen = activeReplyQuestionId === item.id;
       const priorityClass = item.priority === "Срочно" ? "danger" : item.priority === "Важно" ? "warning" : "";
       const aiDecision = getQuestionAiDecision(item);
-      const canAskAi = !canReply && item.status !== "done" && aiDecision.canAutoAnswer && item.authorLogin === currentUser?.login;
+      const canAskAi = item.status !== "done";
       const answerText = item.answer || "";
-      const answerBlock = answerText && !isReplyOpen ? `
+      const answerBlock = answerText ? `
         <div class="question-answer">
-          <div class="question-answer-title">Ответ ${escapeHtml(item.answeredBy || "владельца")}${item.answeredAt ? ` · ${escapeHtml(item.answeredAt)}` : ""}</div>
+          <div class="question-answer-title">Ответ ${escapeHtml(item.answeredBy || "AI-продавца")}${item.answeredAt ? ` · ${escapeHtml(item.answeredAt)}` : ""}</div>
           <div class="question-answer-body">${escapeHtml(answerText)}</div>
-        </div>
-      ` : "";
-      const replyBlock = isReplyOpen ? `
-        <div class="question-reply">
-          <label for="questionReply${item.id}">Ответ для ${escapeHtml(item.authorName)}</label>
-          <textarea id="questionReply${item.id}" data-question-reply-text="${item.id}">${escapeHtml(answerText || getQuestionReplyStart(item))}</textarea>
-          <div class="content-actions">
-            <button class="ghost-btn compact-btn" type="button" data-question-ai-reply="${item.id}">AI-черновик</button>
-            <button class="primary-btn compact-btn" type="button" data-question-save-reply="${item.id}">Сохранить ответ</button>
-            <button class="ghost-btn compact-btn" type="button" data-question-copy-reply="${item.id}">Скопировать</button>
-            <button class="ghost-btn compact-btn" type="button" data-question-cancel-reply="${item.id}">Отмена</button>
-          </div>
         </div>
       ` : "";
 
@@ -2746,38 +2869,18 @@
               <div class="task-meta">Автор: ${escapeHtml(item.authorName)} · ${escapeHtml(item.createdAt)} · Статус: ${item.status === "done" ? "закрыт" : "открыт"}</div>
             </div>
             <div class="question-actions">
-              ${canAskAi ? `<button class="primary-btn compact-btn" type="button" data-question-auto-answer="${item.id}">Получить ответ AI</button>` : ""}
-              ${canReply ? `<button class="ghost-btn compact-btn" type="button" data-question-reply="${item.id}">${answerText ? "Изменить ответ" : "Ответить"}</button>` : ""}
+              ${canAskAi ? `<button class="primary-btn compact-btn" type="button" data-question-auto-answer="${item.id}">Ответ AI</button>` : ""}
               ${canClose ? `<button class="ghost-btn compact-btn" type="button" data-question-done="${item.id}">Закрыть</button>` : ""}
               ${canReopen ? `<button class="ghost-btn compact-btn" type="button" data-question-open="${item.id}">Вернуть</button>` : ""}
             </div>
           </div>
           ${answerBlock}
-          ${replyBlock}
         </article>
       `;
     }).join("");
 
-    document.querySelectorAll("[data-question-reply]").forEach((button) => {
-      button.addEventListener("click", () => openQuestionReply(Number(button.dataset.questionReply)));
-    });
-    document.querySelectorAll("[data-question-save-reply]").forEach((button) => {
-      button.addEventListener("click", () => saveQuestionReply(Number(button.dataset.questionSaveReply)));
-    });
-    document.querySelectorAll("[data-question-ai-reply]").forEach((button) => {
-      button.addEventListener("click", () => draftQuestionReply(Number(button.dataset.questionAiReply)));
-    });
     document.querySelectorAll("[data-question-auto-answer]").forEach((button) => {
       button.addEventListener("click", () => autoAnswerQuestion(Number(button.dataset.questionAutoAnswer)));
-    });
-    document.querySelectorAll("[data-question-copy-reply]").forEach((button) => {
-      button.addEventListener("click", () => copyQuestionReply(Number(button.dataset.questionCopyReply)));
-    });
-    document.querySelectorAll("[data-question-cancel-reply]").forEach((button) => {
-      button.addEventListener("click", () => {
-        activeReplyQuestionId = null;
-        renderQuestions();
-      });
     });
     document.querySelectorAll("[data-question-done]").forEach((button) => {
       button.addEventListener("click", () => updateQuestionStatus(Number(button.dataset.questionDone), "done"));
@@ -2855,12 +2958,6 @@
   async function autoAnswerQuestion(id) {
     const question = questions.find((item) => item.id === id);
     if (!question) return;
-
-    const decision = getQuestionAiDecision(question);
-    if (!decision.canAutoAnswer) {
-      showToast("Этот вопрос лучше оставить Лёне");
-      return;
-    }
 
     question.answer = `${getQuestionReplyStart(question)}AI готовит ответ...`;
     question.answeredBy = "AI-продавец";
@@ -2951,7 +3048,7 @@
       return;
     }
 
-    questions.unshift({
+    const question = {
       id: Date.now(),
       type: getFieldText("questionType", "Вопрос"),
       priority: getFieldText("questionPriority", "Обычный"),
@@ -2964,13 +3061,15 @@
       answer: "",
       answeredBy: "",
       answeredAt: ""
-    });
+    };
+    questions.unshift(question);
 
     saveQuestions();
     event.target.reset();
     renderQuestions();
     renderQuestionMetrics();
-    showToast("Вопрос отправлен");
+    showToast("Вопрос отправлен AI");
+    autoAnswerQuestion(question.id);
   }
 
   function renderSiteImport() {
@@ -3131,7 +3230,7 @@
         <td><strong>${escapeHtml(employee.name)}</strong></td>
         <td>${escapeHtml(employee.login)}</td>
         <td><code>${escapeHtml(employee.password)}</code></td>
-        <td><span class="status-pill ${employee.role === "owner" ? "" : employee.role === "admin" ? "blue" : "warning"}">${escapeHtml(employee.roleLabel)}</span></td>
+        <td><span class="status-pill ${employee.role === "admin" ? "blue" : ""}">${escapeHtml(employee.roleLabel)}</span></td>
       </tr>
     `).join("");
   }
@@ -3203,7 +3302,7 @@
             <button class="btn" type="button" data-floating-prompt="Что сегодня требует внимания?">Что важно</button>
             <button class="btn" type="button" data-floating-prompt="Какие товары залежались?">Залежалось</button>
             <button class="btn" type="button" data-floating-prompt="Сформируй задачи сотрудникам">Задачи</button>
-            <button class="btn" type="button" data-floating-prompt="Что можно подтянуть с сайта iMagnate?">Сайт</button>
+            <button class="btn" type="button" data-floating-prompt="Что проверить перед публикацией на Авито?">Авито</button>
           </div>
           <div class="floating-input">
             <input id="floatingChatInput" type="text" placeholder="Спросить ассистента">
@@ -3295,6 +3394,7 @@
     byId("inventorySearch")?.addEventListener("input", renderProducts);
     byId("addProductForm")?.addEventListener("submit", addProductFromForm);
     byId("newProductPreset")?.addEventListener("change", applyProductPreset);
+    byId("syncInventoryFromImagnate")?.addEventListener("click", syncInventoryFromImagnate);
     byId("resetInventoryProducts")?.addEventListener("click", resetInventoryProducts);
     byId("closeAvitoModal")?.addEventListener("click", closeAvitoModal);
     byId("cancelAvitoModal")?.addEventListener("click", closeAvitoModal);
@@ -3303,6 +3403,7 @@
     byId("downloadAvitoXml")?.addEventListener("click", downloadAvitoXml);
     byId("downloadAvitoJson")?.addEventListener("click", downloadAvitoJson);
     byId("copyAvitoProfile")?.addEventListener("click", copyAvitoProfileUrl);
+    byId("refreshAvitoStatus")?.addEventListener("click", refreshAvitoConnectionStatus);
     byId("avitoPhotos")?.addEventListener("change", handleAvitoPhotoUpload);
     ["avitoPrice", "avitoCategory", "avitoCondition", "avitoCity", "avitoContact", "avitoKit", "avitoDescription", "avitoPhotoUrls", "avitoPhotoSource"].forEach((id) => {
       byId(id)?.addEventListener("input", renderAvitoPayloadPreview);
@@ -3319,6 +3420,8 @@
     byId("accessControlForm")?.addEventListener("submit", applyAccessControl);
     byId("accessEmployee")?.addEventListener("change", renderAccessControl);
     byId("resetEmployees")?.addEventListener("click", resetEmployees);
+    byId("taskForm")?.addEventListener("submit", addTaskFromForm);
+    byId("taskFilter")?.addEventListener("change", renderTasks);
     byId("questionForm")?.addEventListener("submit", addQuestionFromForm);
     byId("questionFilter")?.addEventListener("change", renderQuestions);
     byId("simulateImport")?.addEventListener("click", simulateSiteImport);
@@ -3340,8 +3443,13 @@
       }
     });
 
-    ["cashStart", "cashSales", "cardSales", "transfers", "refunds", "expenses", "collection", "cashActual", "shiftComment"].forEach((id) => {
+    ["shiftEmployeePrimary", "shiftEmployeeSecondary", "cashStart", "cashSales", "cardSales", "transfers", "refunds", "expenses", "collection", "cashActual", "shiftComment"].forEach((id) => {
       byId(id)?.addEventListener("input", () => {
+        renderShift();
+        renderDigest();
+        renderMetrics();
+      });
+      byId(id)?.addEventListener("change", () => {
         renderShift();
         renderDigest();
         renderMetrics();

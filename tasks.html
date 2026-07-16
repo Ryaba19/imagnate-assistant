@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Задачи | iMagnate Assistant</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <link rel="icon" href="assets/img/imagnate-icon.svg" type="image/svg+xml">
+</head>
+<body data-page="tasks">
+  <div class="app">
+    <aside class="sidebar" aria-label="Навигация">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><img src="assets/img/imagnate-icon.svg" alt=""></div>
+        <div>
+          <div class="brand-name">iMagnate Assistant</div>
+          <div class="brand-note">Демо помощника магазина</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="nav-button" href="index.html" data-page-link="dashboard"><span class="nav-icon">01</span><span>Главная</span></a>
+        <a class="nav-button" href="tasks.html" data-page-link="tasks"><span class="nav-icon">02</span><span>Задачи</span></a>
+        <a class="nav-button" href="shift.html" data-page-link="shift"><span class="nav-icon">03</span><span>Смена</span></a>
+        <a class="nav-button" href="inventory.html" data-page-link="inventory"><span class="nav-icon">04</span><span>Товары</span></a>
+        <a class="nav-button" href="questions.html" data-page-link="questions"><span class="nav-icon">05</span><span>Вопросы</span></a>
+        <a class="nav-button" href="avito.html" data-page-link="avito"><span class="nav-icon">06</span><span>Авито</span></a>
+        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees"><span class="nav-icon">07</span><span>Сотрудники</span></a>
+      </nav>
+      <div class="sidebar-footer">
+        <span>Задачи смены</span>
+        <span>Открытые и закрытые поручения</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1>Задачи</h1>
+          <p class="subtitle">Отдельный список поручений: что открыть, что закрыть и кто отвечает.</p>
+        </div>
+        <div class="badge-row">
+          <span class="badge"><span class="dot"></span><span id="todayLabel">Сегодня</span></span>
+          <span class="badge"><span data-current-user>Пользователь</span>: <span data-current-role>роль</span></span>
+        </div>
+      </header>
+
+      <section class="view active" aria-labelledby="tasksTitle">
+        <h2 id="tasksTitle">Рабочий список</h2>
+
+        <div class="metrics" id="taskMetrics"></div>
+
+        <div class="layout-2">
+          <section class="panel" aria-labelledby="addTaskTitle">
+            <div class="panel-header">
+              <h3 id="addTaskTitle">Добавить задачу</h3>
+              <span class="status-pill blue">Для смены</span>
+            </div>
+            <form id="taskForm" class="field-grid">
+              <div class="field full">
+                <label for="taskTitleInput">Задача</label>
+                <input id="taskTitleInput" placeholder="Например: проверить фото iPhone 15 Pro" required>
+              </div>
+              <div class="field">
+                <label for="taskOwnerInput">Ответственный</label>
+                <select id="taskOwnerInput">
+                  <option>Продавец</option>
+                  <option>Контент</option>
+                  <option>Администратор</option>
+                  <option>Старший смены</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="taskDueInput">Срок</label>
+                <select id="taskDueInput">
+                  <option selected>Сегодня</option>
+                  <option>Завтра</option>
+                  <option>На неделе</option>
+                  <option>Без срока</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="taskPriorityInput">Приоритет</label>
+                <select id="taskPriorityInput">
+                  <option>Низкий</option>
+                  <option selected>Средний</option>
+                  <option>Высокий</option>
+                </select>
+              </div>
+              <div class="field task-form-action">
+                <button class="primary-btn" type="submit">Добавить</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="panel" aria-labelledby="taskFocusTitle">
+            <div class="panel-header">
+              <h3 id="taskFocusTitle">Фокус</h3>
+              <span class="status-pill warning" id="openTasksCount">0 открытых</span>
+            </div>
+            <div class="attention-list" id="taskFocusList"></div>
+          </section>
+        </div>
+
+        <section class="panel" aria-label="Журнал задач">
+          <div class="panel-header">
+            <h3>Журнал задач</h3>
+            <select id="taskFilter" aria-label="Фильтр задач">
+              <option value="open">Открытые</option>
+              <option value="all">Все</option>
+              <option value="done">Закрытые</option>
+              <option value="high">Высокий приоритет</option>
+            </select>
+          </div>
+          <div class="task-list" id="tasksList"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="assets/js/demo-data.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

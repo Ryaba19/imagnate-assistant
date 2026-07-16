@@ -23,9 +23,9 @@
           <span class="nav-icon">01</span>
           <span>Главная</span>
         </a>
-        <a class="nav-button" href="content.html" data-page-link="content">
+        <a class="nav-button" href="tasks.html" data-page-link="tasks">
           <span class="nav-icon">02</span>
-          <span>Публикации</span>
+          <span>Задачи</span>
         </a>
         <a class="nav-button" href="shift.html" data-page-link="shift">
           <span class="nav-icon">03</span>
@@ -43,12 +43,8 @@
           <span class="nav-icon">06</span>
           <span>Авито</span>
         </a>
-        <a class="nav-button" href="site-import.html" data-page-link="site-import" data-permission="site-import">
-          <span class="nav-icon">07</span>
-          <span>Сайт</span>
-        </a>
         <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees">
-          <span class="nav-icon">08</span>
+          <span class="nav-icon">07</span>
           <span>Сотрудники</span>
         </a>
       </nav>
@@ -63,46 +59,53 @@
       <header class="topbar">
         <div>
           <h1>Ассистент небольшого магазина</h1>
-          <p class="subtitle">Главная панель владельца: сводка, проблемные места, последние события и короткий отчет.</p>
+          <p class="subtitle">Короткий экран дня: статус магазина, главное действие и быстрый переход в рабочие разделы.</p>
         </div>
         <div class="badge-row">
           <span class="badge"><span class="dot"></span><span id="todayLabel">Сегодня</span></span>
-          <span class="badge">Леонид: владелец</span>
-          <span class="badge">Версия 0.2</span>
+          <span class="badge"><span data-current-user>Пользователь</span>: <span data-current-role>роль</span></span>
+          <span class="badge">Версия 0.5</span>
         </div>
       </header>
 
       <section class="view active" aria-labelledby="dashboardTitle">
-        <h2 id="dashboardTitle">Главная</h2>
+        <h2 id="dashboardTitle">Сегодня</h2>
         <div class="metrics" id="metrics"></div>
 
         <div class="layout-2">
           <section class="panel" aria-labelledby="attentionTitle">
             <div class="panel-header">
-              <h3 id="attentionTitle">Что требует внимания</h3>
+              <h3 id="attentionTitle">Что сделать сейчас</h3>
               <span class="status-pill warning" id="attentionCount">0 пунктов</span>
             </div>
             <div class="attention-list" id="attentionList"></div>
           </section>
 
-          <section class="panel" aria-labelledby="digestTitle">
+          <section class="panel" aria-labelledby="quickRouteTitle">
             <div class="panel-header">
-              <h3 id="digestTitle">Сводка для владельца</h3>
-              <button class="ghost-btn" type="button" id="copyDigest">Скопировать</button>
+              <h3 id="quickRouteTitle">Быстрые действия</h3>
+              <span class="status-pill blue">Рабочий маршрут</span>
             </div>
-            <div class="generator-result">
-              <div class="result-text" id="ownerDigest"></div>
+            <div class="quick-action-list">
+              <a class="quick-action" href="tasks.html">
+                <strong>Открыть задачи</strong>
+                <span>Что поручено, что закрыто и что горит.</span>
+              </a>
+              <a class="quick-action" href="shift.html">
+                <strong>Закрыть смену</strong>
+                <span>Два сотрудника, касса, расхождения, готовый отчет.</span>
+              </a>
+              <a class="quick-action" href="inventory.html">
+                <strong>Проверить товары</strong>
+                <span>Остатки, фото, статус и подготовка к Авито.</span>
+              </a>
+              <a class="quick-action" href="questions.html">
+                <strong>Вопросы AI</strong>
+                <span>Сотрудник пишет вопрос, ассистент готовит ответ.</span>
+              </a>
             </div>
           </section>
         </div>
-
-        <section class="panel" aria-labelledby="activityTitle">
-          <div class="panel-header">
-            <h3 id="activityTitle">Последние события</h3>
-            <span class="status-pill blue">Тестовая лента</span>
-          </div>
-          <div class="stack" id="activityList"></div>
-        </section>
       </section>
     </main>
   </div>

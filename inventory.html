@@ -19,13 +19,12 @@
       </div>
       <nav class="nav">
         <a class="nav-button" href="index.html" data-page-link="dashboard"><span class="nav-icon">01</span><span>Главная</span></a>
-        <a class="nav-button" href="content.html" data-page-link="content"><span class="nav-icon">02</span><span>Публикации</span></a>
+        <a class="nav-button" href="tasks.html" data-page-link="tasks"><span class="nav-icon">02</span><span>Задачи</span></a>
         <a class="nav-button" href="shift.html" data-page-link="shift"><span class="nav-icon">03</span><span>Смена</span></a>
         <a class="nav-button" href="inventory.html" data-page-link="inventory"><span class="nav-icon">04</span><span>Товары</span></a>
         <a class="nav-button" href="questions.html" data-page-link="questions"><span class="nav-icon">05</span><span>Вопросы</span></a>
         <a class="nav-button" href="avito.html" data-page-link="avito"><span class="nav-icon">06</span><span>Авито</span></a>
-        <a class="nav-button" href="site-import.html" data-page-link="site-import" data-permission="site-import"><span class="nav-icon">07</span><span>Сайт</span></a>
-        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees"><span class="nav-icon">08</span><span>Сотрудники</span></a>
+        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees"><span class="nav-icon">07</span><span>Сотрудники</span></a>
       </nav>
       <div class="sidebar-footer">
         <span>Остатки сохраняются в браузере</span>
@@ -37,7 +36,7 @@
       <header class="topbar">
         <div>
           <h1>Товары и остатки</h1>
-          <p class="subtitle">Все единицы товаров, стоимость остатков, низкие остатки и быстрое добавление новых позиций.</p>
+          <p class="subtitle">Склад без лишнего шума: наличие, статус, фото и подготовка товара к Авито.</p>
         </div>
         <div class="badge-row">
           <span class="badge"><span class="dot"></span><span id="todayLabel">Сегодня</span></span>
@@ -46,46 +45,14 @@
       </header>
 
       <section class="view active" aria-labelledby="inventoryTitle">
-        <h2 id="inventoryTitle">Остатки</h2>
+        <h2 id="inventoryTitle">Склад</h2>
 
         <div class="metrics inventory-metrics" id="inventoryMetrics"></div>
-
-        <section class="panel" aria-labelledby="addProductTitle">
-          <div class="panel-header">
-            <h3 id="addProductTitle">Добавить товар</h3>
-            <button class="ghost-btn" type="button" id="resetInventoryProducts">Сбросить демо-товары</button>
-          </div>
-
-          <form id="addProductForm" class="field-grid">
-            <div class="field full">
-              <label for="newProductPreset">Выбрать товар</label>
-              <select id="newProductPreset">
-                <option value="">Выбери товар — ассистент заполнит карточку</option>
-              </select>
-              <div class="catalog-assist" id="newProductAssistantPreview">
-                Сотрудник выбирает товар из списка, а ассистент сам подтягивает категорию, цену, статус, комментарий и описание.
-              </div>
-            </div>
-            <input id="newProductName" type="hidden">
-            <input id="newProductSku" type="hidden">
-            <input id="newProductCategory" type="hidden">
-            <input id="newProductStatus" type="hidden" value="Готов к продаже">
-            <input id="newProductStock" type="hidden" value="1">
-            <input id="newProductCost" type="hidden" value="0">
-            <input id="newProductPrice" type="hidden" value="0">
-            <input id="newProductDays" type="hidden" value="0">
-            <input id="newProductComment" type="hidden">
-            <input id="newProductDescription" type="hidden">
-            <div class="field full">
-              <button class="primary-btn" type="submit">Добавить выбранный товар</button>
-            </div>
-          </form>
-        </section>
 
         <section class="panel" aria-label="Таблица остатков">
           <div class="panel-header">
             <h3>Все товары</h3>
-            <div class="inventory-toolbar">
+            <div class="inventory-toolbar wide">
               <input id="inventorySearch" type="search" placeholder="Поиск по товару, SKU, категории">
               <select id="inventoryFilter" aria-label="Фильтр товаров">
                 <option value="all">Все товары</option>
@@ -94,6 +61,8 @@
                 <option value="stock">Аксессуары</option>
                 <option value="empty">Нулевой остаток</option>
               </select>
+              <button class="ghost-btn compact-btn" type="button" id="syncInventoryFromImagnate">Обновить остатки</button>
+              <button class="ghost-btn compact-btn" type="button" id="resetInventoryProducts">Сбросить демо</button>
             </div>
           </div>
 
@@ -102,12 +71,9 @@
               <thead>
                 <tr>
                   <th>Товар</th>
-                  <th>Категория</th>
                   <th>Статус</th>
                   <th>Остаток</th>
-                  <th>Дней в продаже</th>
-                  <th>Остаток в закупке</th>
-                  <th>Маржа за единицу</th>
+                  <th>Фото</th>
                   <th>Авито</th>
                   <th>Комментарий</th>
                 </tr>
@@ -115,14 +81,6 @@
               <tbody id="productsTable"></tbody>
             </table>
           </div>
-        </section>
-
-        <section class="panel" aria-labelledby="tasksTitle">
-          <div class="panel-header">
-            <h3 id="tasksTitle">Задачи</h3>
-            <span class="status-pill" id="openTasksCount">0 открытых</span>
-          </div>
-          <div class="task-list" id="tasksList"></div>
         </section>
       </section>
     </main>

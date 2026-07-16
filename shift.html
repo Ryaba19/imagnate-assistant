@@ -19,13 +19,12 @@
       </div>
       <nav class="nav">
         <a class="nav-button" href="index.html" data-page-link="dashboard"><span class="nav-icon">01</span><span>Главная</span></a>
-        <a class="nav-button" href="content.html" data-page-link="content"><span class="nav-icon">02</span><span>Публикации</span></a>
+        <a class="nav-button" href="tasks.html" data-page-link="tasks"><span class="nav-icon">02</span><span>Задачи</span></a>
         <a class="nav-button" href="shift.html" data-page-link="shift"><span class="nav-icon">03</span><span>Смена</span></a>
         <a class="nav-button" href="inventory.html" data-page-link="inventory"><span class="nav-icon">04</span><span>Товары</span></a>
         <a class="nav-button" href="questions.html" data-page-link="questions"><span class="nav-icon">05</span><span>Вопросы</span></a>
         <a class="nav-button" href="avito.html" data-page-link="avito"><span class="nav-icon">06</span><span>Авито</span></a>
-        <a class="nav-button" href="site-import.html" data-page-link="site-import" data-permission="site-import"><span class="nav-icon">07</span><span>Сайт</span></a>
-        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees"><span class="nav-icon">08</span><span>Сотрудники</span></a>
+        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees"><span class="nav-icon">07</span><span>Сотрудники</span></a>
       </nav>
       <div class="sidebar-footer">
         <span>Формула: начало + наличные - возвраты - расходы - инкассация</span>
@@ -37,7 +36,7 @@
       <header class="topbar">
         <div>
           <h1>Закрытие смены</h1>
-          <p class="subtitle">Тестовый модуль для замены бумажного листа: ввод сумм, автоматический расчет и готовый отчет.</p>
+          <p class="subtitle">Закрытие смены для двух сотрудников: суммы, расхождение и готовый отчет без бумажного листа.</p>
         </div>
         <div class="badge-row">
           <span class="badge"><span class="dot"></span><span id="todayLabel">Сегодня</span></span>
@@ -50,6 +49,26 @@
         <div class="layout-2">
           <section class="panel" aria-label="Данные смены">
             <div class="field-grid">
+              <div class="field">
+                <label for="shiftEmployeePrimary">Сотрудник 1</label>
+                <select id="shiftEmployeePrimary">
+                  <option>Иван</option>
+                  <option selected>Вячеслав</option>
+                  <option>Дарья</option>
+                  <option>Владислав</option>
+                  <option>Алексей</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="shiftEmployeeSecondary">Сотрудник 2</label>
+                <select id="shiftEmployeeSecondary">
+                  <option>Иван</option>
+                  <option>Вячеслав</option>
+                  <option selected>Дарья</option>
+                  <option>Владислав</option>
+                  <option>Алексей</option>
+                </select>
+              </div>
               <div class="field">
                 <label for="cashStart">Наличные на начало</label>
                 <input id="cashStart" type="number" value="12500">
