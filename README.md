@@ -27,6 +27,7 @@
 - `database/schema.sql` — схема будущей базы.
 - `database/store_assistant_demo.sqlite` — готовая тестовая SQLite-база.
 - `scripts/build_demo_db.py` — пересборка SQLite из JSON.
+- `docs/feature-audit.md` — ревизия функций: что оставить ядром, что сократить и что нужно для внедрения.
 
 ## Как открыть
 
@@ -36,20 +37,32 @@
 
 Статический режим через `login.html` продолжает работать без сервера. В нем ассистент отвечает демо-логикой.
 
-Для реального AI-режима нужен Node.js 18+ и API-ключ OpenAI:
+Для реального AI-режима нужен Node.js 18+ и API-ключ OpenAI или Claude.
+
+OpenAI:
 
 Windows PowerShell:
 
 ```powershell
+$env:AI_PROVIDER="openai"
 $env:OPENAI_API_KEY="sk-your-key-here"
-npm start
+npm.cmd start
 ```
 
 macOS Terminal:
 
 ```bash
+export AI_PROVIDER="openai"
 export OPENAI_API_KEY="sk-your-key-here"
 npm start
+```
+
+Claude:
+
+```powershell
+$env:AI_PROVIDER="claude"
+$env:ANTHROPIC_API_KEY="sk-ant-your-key-here"
+npm.cmd start
 ```
 
 После запуска открой:
@@ -64,6 +77,7 @@ http://127.0.0.1:8787/login.html
 
 ```powershell
 $env:OPENAI_MODEL="gpt-5.6"
+$env:CLAUDE_MODEL="claude-3-5-sonnet-latest"
 ```
 
 ## Демо-доступы
@@ -172,7 +186,7 @@ python scripts/build_demo_db.py
 В проекте есть два режима:
 
 - **Демо-режим** — работает без интернета, сервера и API-ключа.
-- **Реальный AI-режим** — `server.js` отправляет запрос в OpenAI Responses API и возвращает готовый ответ в интерфейс.
+- **Реальный AI-режим** — `server.js` отправляет запрос в OpenAI Responses API или Claude Messages API и возвращает готовый ответ в интерфейс.
 
 Плавающая кнопка `?` работает как AI-продавец iMagnate: помогает клиенту выбрать товар, подсказывает сотруднику порядок действий и умеет отвечать по текущему контексту магазина. Ассистент не должен выдумывать наличие, скидки, гарантию или внутренние финансовые данные.
 

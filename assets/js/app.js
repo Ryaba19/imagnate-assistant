@@ -758,7 +758,8 @@
       throw new Error(data.error || "AI недоступен");
     }
 
-    setAiStatus(`Реальный AI: ${data.model || "включен"}`, true);
+    const providerLabel = data.provider === "claude" ? "Claude" : data.provider === "openai" ? "OpenAI" : "AI";
+    setAiStatus(`${providerLabel}: ${data.model || "включен"}`, true);
     return data.answer;
   }
 
@@ -795,6 +796,31 @@
         `Потенциальная выручка по остаткам: ${money(getStockSaleValue())}.`,
         lowStock.length ? `Низкий остаток: ${lowStock.map((item) => `${item.name} — ${item.stock} шт.`).join("; ")}.` : "Критичных остатков нет."
       ].join("\n");
+    }
+
+    if (q.includes("iphone") || q.includes("айфон") || q.includes("смартфон") || q.includes("телефон") || q.includes("подбер")) {
+      const inStockPhones = products
+        .filter((product) => /смартфон|телефон/i.test(product.category) && product.stock > 0)
+        .slice(0, 4);
+      const catalogPhones = imagnateCatalogFallback
+        .filter((product) => /смартфон|телефон/i.test(product.category))
+        .slice(0, 4);
+      const addOns = products
+        .filter((product) => /аксессуар/i.test(product.category) && product.stock > 0)
+        .slice(0, 2);
+      const candidates = inStockPhones.length ? inStockPhones : catalogPhones;
+
+      return [
+        "Для клиента я бы начал с трех уточнений: бюджет, нужная память и формат SIM/eSIM.",
+        "",
+        candidates.length
+          ? `Что можно предложить сейчас:\n${candidates.map((item) => `- ${item.name} — ${money(item.price)}${item.stock ? `, остаток ${item.stock} шт.` : ""}`).join("\n")}`
+          : "В демо-остатках сейчас нет подходящих iPhone, лучше проверить актуальный каталог/CRM.",
+        "",
+        addOns.length ? `Допродажа к смартфону:\n${addOns.map((item) => `- ${item.name} — ${money(item.price)}, остаток ${item.stock} шт.`).join("\n")}` : "",
+        "",
+        "Если клиенту нужен вариант подешевле — предложи базовый iPhone или б/у устройство после диагностики. Если важны камера и запас на несколько лет — смотри Pro/Pro Max. Если клиент сомневается, предложи сравнить 2-3 модели по бюджету и памяти."
+      ].filter(Boolean).join("\n");
     }
 
     if (q.includes("отчет") || q.includes("лёни") || q.includes("лёне") || q.includes("лене") || q.includes("леонид")) {

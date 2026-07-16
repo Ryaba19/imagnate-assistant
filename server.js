@@ -4,8 +4,11 @@ const path = require("node:path");
 
 const rootDir = __dirname;
 const port = Number(process.env.PORT || 8787);
-const model = process.env.OPENAI_MODEL || "gpt-5.6";
-const apiBase = process.env.OPENAI_API_BASE || "https://api.openai.com/v1";
+const aiProvider = (process.env.AI_PROVIDER || (process.env.ANTHROPIC_API_KEY ? "claude" : "openai")).toLowerCase();
+const openaiModel = process.env.OPENAI_MODEL || "gpt-5.6";
+const openaiApiBase = process.env.OPENAI_API_BASE || "https://api.openai.com/v1";
+const claudeModel = process.env.CLAUDE_MODEL || "claude-3-5-sonnet-latest";
+const claudeApiBase = process.env.CLAUDE_API_BASE || "https://api.anthropic.com/v1";
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -46,7 +49,7 @@ function readBody(request) {
   });
 }
 
-function extractResponseText(payload) {
+function extractOpenAiResponseText(payload) {
   if (typeof payload.output_text === "string" && payload.output_text.trim()) {
     return payload.output_text.trim();
   }
@@ -60,6 +63,14 @@ function extractResponseText(payload) {
   }
 
   return chunks.join("\n").trim();
+}
+
+function extractClaudeResponseText(payload) {
+  return (payload.content || [])
+    .filter((item) => item.type === "text" && item.text)
+    .map((item) => item.text)
+    .join("\n")
+    .trim();
 }
 
 function buildInstructions(mode) {
@@ -88,33 +99,123 @@ function buildInstructions(mode) {
   return base.join("\n");
 }
 
-function buildInput(prompt, context, question) {
+function buildUserPrompt(prompt, context, question) {
+  return [
+    "Контекст магазина:",
+    JSON.stringify(context || {}, null, 2),
+    question ? "\nВопрос сотрудника:" : "",
+    question ? JSON.stringify(question, null, 2) : "",
+    "\nЗапрос пользователя:",
+    prompt
+  ].filter(Boolean).join("\n");
+}
+
+function buildOpenAiInput(prompt, context, question) {
   return [
     {
       role: "user",
       content: [
         {
           type: "input_text",
-          text: [
-            "Контекст магазина:",
-            JSON.stringify(context || {}, null, 2),
-            question ? "\nВопрос сотрудника:" : "",
-            question ? JSON.stringify(question, null, 2) : "",
-            "\nЗапрос пользователя:",
-            prompt
-          ].filter(Boolean).join("\n")
+          text: buildUserPrompt(prompt, context, question)
         }
       ]
     }
   ];
 }
 
+function getProviderConfig() {
+  if (aiProvider === "claude" || aiProvider === "anthropic") {
+    return {
+      provider: "claude",
+      model: claudeModel,
+      configured: Boolean(process.env.ANTHROPIC_API_KEY),
+      missingKey: "ANTHROPIC_API_KEY is not set"
+    };
+  }
+
+  return {
+    provider: "openai",
+    model: openaiModel,
+    configured: Boolean(process.env.OPENAI_API_KEY),
+    missingKey: "OPENAI_API_KEY is not set"
+  };
+}
+
+async function callOpenAi(body, prompt) {
+  const apiResponse = await fetch(`${openaiApiBase}/responses`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: openaiModel,
+      instructions: buildInstructions(body.mode || "store_assistant"),
+      input: buildOpenAiInput(prompt, body.context, body.question),
+      max_output_tokens: 700,
+      store: false
+    })
+  });
+
+  const payload = await apiResponse.json();
+  if (!apiResponse.ok) {
+    throw new Error(payload.error?.message || "OpenAI API error");
+  }
+
+  return {
+    answer: extractOpenAiResponseText(payload),
+    model: openaiModel,
+    provider: "openai"
+  };
+}
+
+async function callClaude(body, prompt) {
+  const apiResponse = await fetch(`${claudeApiBase}/messages`, {
+    method: "POST",
+    headers: {
+      "x-api-key": process.env.ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: claudeModel,
+      max_tokens: 700,
+      system: buildInstructions(body.mode || "store_assistant"),
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: buildUserPrompt(prompt, body.context, body.question)
+            }
+          ]
+        }
+      ]
+    })
+  });
+
+  const payload = await apiResponse.json();
+  if (!apiResponse.ok) {
+    throw new Error(payload.error?.message || "Claude API error");
+  }
+
+  return {
+    answer: extractClaudeResponseText(payload),
+    model: claudeModel,
+    provider: "claude"
+  };
+}
+
 async function handleAssistant(request, response) {
-  if (!process.env.OPENAI_API_KEY) {
+  const providerConfig = getProviderConfig();
+  if (!providerConfig.configured) {
     sendJson(response, 200, {
       ok: false,
       configured: false,
-      error: "OPENAI_API_KEY is not set"
+      provider: providerConfig.provider,
+      error: providerConfig.missingKey
     });
     return;
   }
@@ -134,36 +235,16 @@ async function handleAssistant(request, response) {
   }
 
   try {
-    const apiResponse = await fetch(`${apiBase}/responses`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model,
-        instructions: buildInstructions(body.mode || "store_assistant"),
-        input: buildInput(prompt, body.context, body.question),
-        max_output_tokens: 700,
-        store: false
-      })
-    });
+    const result = providerConfig.provider === "claude"
+      ? await callClaude(body, prompt)
+      : await callOpenAi(body, prompt);
 
-    const payload = await apiResponse.json();
-    if (!apiResponse.ok) {
-      sendJson(response, apiResponse.status, {
-        ok: false,
-        error: payload.error?.message || "OpenAI API error"
-      });
-      return;
-    }
-
-    const answer = extractResponseText(payload);
     sendJson(response, 200, {
       ok: true,
       configured: true,
-      model,
-      answer: answer || "Не получилось сформировать ответ. Попробуй переформулировать вопрос."
+      provider: result.provider,
+      model: result.model,
+      answer: result.answer || "Не получилось сформировать ответ. Попробуй переформулировать вопрос."
     });
   } catch (error) {
     sendJson(response, 500, {
@@ -229,6 +310,9 @@ const server = http.createServer((request, response) => {
 });
 
 server.listen(port, "127.0.0.1", () => {
+  const providerConfig = getProviderConfig();
   console.log(`iMagnate Assistant: http://127.0.0.1:${port}/login.html`);
-  console.log(process.env.OPENAI_API_KEY ? `AI model: ${model}` : "AI: demo fallback, OPENAI_API_KEY is not set");
+  console.log(providerConfig.configured
+    ? `AI provider: ${providerConfig.provider}, model: ${providerConfig.model}`
+    : `AI: demo fallback, ${providerConfig.missingKey}`);
 });

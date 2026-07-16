@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" width="65" height="64"><svg width="65" height="64" viewBox="0 0 65 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g clip-path="url(#clip0_903_18021)">
+<rect x="0.851074" y="9.69116" width="64" height="44.6177" rx="9" fill="#15161A"></rect>
+<path d="M20.5129 44.2654V20.3412H25.5709L26.0882 22.051C29.0142 20.3412 31.2864 19.7343 34.22 19.7343C37.1536 19.7343 39.4297 20.3623 40.5931 22.7395C43.4761 20.3117 46.5109 19.7343 49.1916 19.7343C53.3897 19.7343 57.1326 22.061 57.1326 28.3834V44.2654H51.1136V30.0525C51.1136 27.2201 50.5573 24.9946 47.4719 24.9946C45.5499 24.9946 43.5267 25.9556 41.807 27.3718C41.8576 27.6247 41.8576 27.9282 41.8576 28.2823V44.2654H35.788V30.1031C35.788 27.3212 35.3328 24.9946 32.2474 24.9946C30.3254 24.9946 28.3022 25.9556 26.5319 27.3718V44.2654H20.5129Z" fill="white"></path>
+<path d="M14.832 26.1974L26.2607 22.1086C22.5449 23.5721 18.4581 26.6981 14.8223 29.8322L13.5312 31.1134L10.0146 34.631L14.832 33.1457V44.2648H8.56934V20.1798H14.832V26.1974Z" fill="white"></path>
+</g>
+<defs>
+<clipPath id="SvgjsClipPath1001">
+<rect width="64" height="64" fill="white" transform="translate(0.851074)"></rect>
+</clipPath>
+</defs>
+</svg><style>@media (prefers-color-scheme: light) { :root { filter: none; } }
+@media (prefers-color-scheme: dark) { :root { filter: none; } }
+</style></svg>
