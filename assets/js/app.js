@@ -846,6 +846,28 @@
     }
   }
 
+  function getAiErrorStatus(error) {
+    const message = String(error?.message || "");
+
+    if (/country, region, or territory not supported/i.test(message)) {
+      return "OpenAI: регион недоступен";
+    }
+
+    if (/incorrect api key|invalid api key|unauthorized|401/i.test(message)) {
+      return "AI: ключ не принят";
+    }
+
+    if (/quota|billing|insufficient_quota|429/i.test(message)) {
+      return "AI: лимит или оплата";
+    }
+
+    if (/model/i.test(message) && /not|does not|missing|unknown/i.test(message)) {
+      return "AI: модель недоступна";
+    }
+
+    return "Демо после ошибки API";
+  }
+
   function getAiContext() {
     const canSeeFinance = can("finance");
     const shift = getShiftValues();
@@ -1133,7 +1155,7 @@
     try {
       return await requestRealAssistant(prompt, options);
     } catch (error) {
-      setAiStatus("Демо без API", false);
+      setAiStatus(getAiErrorStatus(error), false);
       return typeof options.fallback === "function" ? options.fallback() : assistantAnswer(prompt);
     }
   }
