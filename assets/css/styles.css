@@ -105,6 +105,10 @@
       gap: 8px;
     }
 
+    .nav-flyout-group {
+      position: relative;
+    }
+
     .nav-button {
       width: 100%;
       border: 0;
@@ -124,6 +128,54 @@
       background: linear-gradient(135deg, rgba(43, 196, 189, 0.18), rgba(130, 173, 255, 0.08));
       color: #ffffff;
       box-shadow: inset 0 0 0 1px rgba(43, 196, 189, 0.22);
+    }
+
+    .nav-button-parent::after {
+      content: "›";
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .nav-flyout {
+      display: none;
+      position: absolute;
+      z-index: 30;
+      top: 0;
+      left: calc(100% + 10px);
+      min-width: 220px;
+      padding: 8px;
+      border: 1px solid rgba(43, 196, 189, 0.22);
+      border-radius: var(--radius);
+      background: rgba(11, 17, 31, 0.98);
+      box-shadow: var(--shadow);
+    }
+
+    .nav-flyout-group:hover .nav-flyout,
+    .nav-flyout-group:focus-within .nav-flyout {
+      display: grid;
+      gap: 6px;
+    }
+
+    .nav-subbutton {
+      display: grid;
+      gap: 3px;
+      padding: 10px;
+      border-radius: var(--radius);
+      color: #d9e5f5;
+      text-decoration: none;
+    }
+
+    .nav-subbutton:hover,
+    .nav-subbutton.active {
+      color: #ffffff;
+      background: rgba(43, 196, 189, 0.14);
+    }
+
+    .nav-subbutton span {
+      color: var(--muted);
+      font-size: 12px;
     }
 
     .nav-icon {
@@ -981,6 +1033,43 @@
       overflow: hidden;
     }
 
+    .product-photo-placeholder.warning-placeholder {
+      border-color: rgba(243, 181, 76, 0.42);
+      background: rgba(51, 39, 24, 0.24);
+    }
+
+    .placeholder-shot {
+      aspect-ratio: 1 / 1;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background:
+        linear-gradient(135deg, rgba(43, 196, 189, 0.16), rgba(130, 173, 255, 0.08)),
+        repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.06) 0 8px, transparent 8px 16px);
+      color: var(--muted);
+      font-weight: 700;
+      text-align: center;
+      padding: 10px;
+    }
+
+    .placeholder-shot.variant-1 {
+      background:
+        linear-gradient(135deg, rgba(130, 173, 255, 0.18), rgba(43, 196, 189, 0.08)),
+        repeating-linear-gradient(-35deg, rgba(255, 255, 255, 0.06) 0 7px, transparent 7px 15px);
+    }
+
+    .placeholder-shot.variant-2 {
+      background:
+        linear-gradient(135deg, rgba(243, 181, 76, 0.18), rgba(43, 196, 189, 0.08)),
+        radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.14), transparent 24%);
+    }
+
+    .placeholder-shot.variant-3 {
+      background:
+        linear-gradient(135deg, rgba(255, 111, 123, 0.15), rgba(130, 173, 255, 0.09)),
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0 6px, transparent 6px 14px);
+    }
+
     .demo-product-photo {
       aspect-ratio: 1 / 1;
       display: grid;
@@ -1331,7 +1420,18 @@
       }
 
       .nav {
-        grid-template-columns: repeat(10, minmax(0, 1fr));
+        grid-template-columns: repeat(9, minmax(0, 1fr));
+      }
+
+      .nav-flyout-group {
+        position: static;
+      }
+
+      .nav-flyout {
+        position: static;
+        min-width: 180px;
+        margin-top: 6px;
+        box-shadow: none;
       }
 
       .nav-button {

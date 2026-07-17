@@ -9,6 +9,7 @@
   let avitoDrafts = loadAvitoDrafts();
   let avitoPhotosBySku = loadAvitoPhotos();
   let activeAvitoProductIndex = null;
+  const questionAnswerVersion = "content-center-v2";
   let questions = loadQuestions();
   let activeReplyQuestionId = null;
   let shiftClosures = loadShiftClosures();
@@ -312,13 +313,15 @@
 
   function normalizeQuestionAutoAnswers(items) {
     return items.map((item) => {
-      if (item.answer) return item;
+      const demoAnswer = String(item.answeredBy || "").includes("AI-продавец (демо)");
+      if (item.answer && (!demoAnswer || item.answerVersion === questionAnswerVersion)) return item;
       return {
         ...item,
         status: "done",
         answer: createLocalQuestionReplyDraft(item),
         answeredBy: "AI-продавец (демо)",
-        answeredAt: item.answeredAt || item.createdAt || new Date().toLocaleString("ru-RU")
+        answeredAt: item.answeredAt || item.createdAt || new Date().toLocaleString("ru-RU"),
+        answerVersion: questionAnswerVersion
       };
     });
   }
@@ -451,7 +454,86 @@
     ].filter(Boolean).join(" ");
   }
 
+  function getCatalogKitSuggestion(item) {
+    const name = `${item.name || ""} ${item.category || ""}`.toLowerCase();
+    if (name.includes("iphone") || name.includes("смартфон")) {
+      return "телефон, коробка, кабель USB-C, гарантия магазина; если товар б/у, отдельно указать состояние корпуса, экрана, аккумулятора и Face ID.";
+    }
+    if (name.includes("playstation") || name.includes("ps5") || name.includes("пристав")) {
+      return "консоль, геймпад DualSense, кабель питания, HDMI; перед выдачей проверить запуск, Wi-Fi, привод при наличии и работу геймпада.";
+    }
+    if (name.includes("airpods") || name.includes("науш")) {
+      return "наушники, кейс, амбушюры при наличии, коробка; перед продажей проверить звук, микрофоны, шумоподавление и заряд кейса.";
+    }
+    if (name.includes("watch") || name.includes("часы")) {
+      return "часы, ремешок, зарядный кабель, коробка при наличии; проверить экран, аккумулятор, привязку и состояние корпуса.";
+    }
+    if (name.includes("dyson") || name.includes("стайлер")) {
+      return "устройство, насадки, кейс или коробка при наличии; проверить нагрев, режимы, комплект насадок и внешний вид.";
+    }
+    return "товар, упаковка и гарантия магазина; перед публикацией проверить комплект, состояние и реальные фото.";
+  }
+
+  function getCatalogSellingAngles(item) {
+    const name = `${item.name || ""} ${item.category || ""}`.toLowerCase();
+    if (name.includes("iphone") || name.includes("смартфон")) {
+      return [
+        "подходит как основной телефон на каждый день",
+        "можно проверить при покупке в магазине",
+        "важно отдельно показать состояние корпуса, экрана и комплекта"
+      ];
+    }
+    if (name.includes("playstation") || name.includes("ps5")) {
+      return [
+        "хороший вариант для дома, подарка и игр на большом экране",
+        "в карточке важно показать консоль, геймпад, порты и комплект",
+        "перед продажей стоит указать состояние и результат проверки запуска"
+      ];
+    }
+    if (name.includes("airpods") || name.includes("науш")) {
+      return [
+        "удобны для iPhone, звонков, музыки и повседневного использования",
+        "в карточке важно отдельно написать про микрофоны, звук и заряд",
+        "лучше добавить крупные фото кейса и наушников"
+      ];
+    }
+    if (name.includes("dyson") || name.includes("стайлер")) {
+      return [
+        "подходит для ухода и подарка",
+        "покупателю важно видеть полный комплект насадок",
+        "нужно явно указать состояние и гарантию магазина"
+      ];
+    }
+    return [
+      "карточка должна быстро объяснять, кому подходит товар",
+      "нужно показать реальные фото и комплект",
+      "важно оставить понятный следующий шаг для продавца"
+    ];
+  }
+
+  function buildDetailedCatalogDescription(item) {
+    const kit = getCatalogKitSuggestion(item);
+    const angles = getCatalogSellingAngles(item);
+    return [
+      `${item.name}.`,
+      "",
+      `AI-описание для карточки iMagnate: это позиция из категории “${item.category || "без категории"}” с ориентиром цены ${money(item.price)}. Текст можно использовать как черновик для сайта, Авито и сообщения клиенту, но перед публикацией сотрудник должен сверить фактическое наличие, состояние и комплект.`,
+      "",
+      `Для клиента: ${item.name} подойдет покупателю, которому нужен понятный и проверенный товар из магазина, а не случайное объявление без истории. В карточке стоит сделать акцент на проверке перед продажей, возможности посмотреть товар вживую и нормальной гарантии магазина.`,
+      "",
+      `Что указать в карточке: комплектация — ${kit} Если товар новый, подчеркнуть целостность упаковки и гарантию. Если товар с витрины или б/у, честно описать следы использования, состояние экрана/корпуса и результат проверки.`,
+      "",
+      `Сильные акценты для публикации: ${angles.map((angle) => `• ${angle}`).join(" ")}`,
+      "",
+      "Перед отправкой на сайт или Авито: добавить 3-5 реальных фото конкретной единицы, проверить цену, убрать лишние контакты из описания и убедиться, что заголовок не выглядит как шаблон поставщика.",
+      "",
+      "Внутренний комментарий для сотрудника: ассистент подготовил основу, но финальное решение по цене, комплекту, гарантии и состоянию нужно подтвердить по факту товара."
+    ].join("\n");
+  }
+
   function buildCatalogDescription(item) {
+    return buildDetailedCatalogDescription(item);
+
     const categoryText = {
       "Смартфоны": "Смартфон готов к продаже: укажи состояние корпуса, аккумулятора, комплект и гарантию магазина. Для Авито лучше добавить живые фото именно этого экземпляра.",
       "Игровые приставки": "Игровая система для дома и подарка. Перед публикацией проверь комплектацию, состояние корпуса, геймпад и кабели.",
@@ -1620,7 +1702,8 @@
     const photos = getAvitoPhotos(product);
     const photoUrls = byId("avitoPhotoUrls") ? getAvitoPhotoUrls(product) : [];
     const assetPhotos = getProductPhotoAssets(product);
-    const existingPhotosCount = Math.max(Number(product.photosCount || 0), assetPhotos.length);
+    const counterOnlyPhotosCount = !photos.length && !photoUrls.length && !assetPhotos.length ? Number(product.photosCount || 0) : 0;
+    const existingPhotosCount = assetPhotos.length;
     return {
       product,
       title: shortenAvitoTitle(product.name),
@@ -1631,11 +1714,12 @@
       contact: getFieldText("avitoContact", store.phone || ""),
       kit: getFieldText("avitoKit", product.kit || ""),
       description: getFieldText("avitoDescription", product.description || product.comment || ""),
-      photoSource: photos.length ? "own" : assetPhotos.length ? "database" : existingPhotosCount ? "database" : "own",
+      photoSource: photos.length ? "own" : photoUrls.length ? (product.photoSource || "site") : assetPhotos.length ? "database" : existingPhotosCount ? "database" : "own",
       photos,
       photoUrls,
       assetPhotos,
-      existingPhotosCount
+      existingPhotosCount,
+      counterOnlyPhotosCount
     };
   }
 
@@ -1730,8 +1814,8 @@
       add("warn", "Нет публичных ссылок для XML", "Для ручной загрузки фото подходят, но для XML/API нужны публичные ссылки на изображения.", 8);
     }
 
-    if (!payload.photos.length && !payload.photoUrls.length && !assetPhotoCount && payload.existingPhotosCount) {
-      add("warn", "Фото есть только как счетчик", "В товаре указано количество фото, но сами файлы или ссылки не прикреплены к выгрузке. Для реальной отправки нужны файлы или публичные URL.", 10);
+    if (!payload.photos.length && !payload.photoUrls.length && !assetPhotoCount && payload.counterOnlyPhotosCount) {
+      add("danger", "Фото есть только как счетчик", `В товаре указано ${payload.counterOnlyPhotosCount} фото, но сами файлы или ссылки не прикреплены к выгрузке. Для реальной отправки нужны файлы или публичные URL.`, 25);
     }
 
     if (!payload.price || payload.price <= 0) {
@@ -1780,7 +1864,7 @@
       `Город: ${payload.city}`,
       `Контакт: ${payload.contact}`,
       `Комплектация: ${payload.kit || "не указана"}`,
-      `Фото: ${payload.photos.length ? payload.photos.map((photo) => photo.name).join(", ") : `из базы товара: ${payload.existingPhotosCount || 0}`}`,
+      `Фото: ${payload.photos.length ? payload.photos.map((photo) => photo.name).join(", ") : payload.assetPhotos.length ? `из базы товара: ${payload.assetPhotos.length}` : payload.counterOnlyPhotosCount ? `указано счетчиком: ${payload.counterOnlyPhotosCount}, файлов нет` : "нет фото"}`,
       `Предпроверка: ${report.status} (${report.score}/100)`,
       "",
       "Описание:",
@@ -1887,18 +1971,17 @@
       }
       const existing = Number(product.photosCount || 0);
       if (existing > 0) {
-        target.innerHTML = Array.from({ length: Math.min(existing, 4) }).map((_, index) => `
-          <article class="photo-preview product-photo-placeholder">
-            <div class="demo-product-photo">
-              <strong>${escapeHtml(getProductShortName(product))}</strong>
-              <span>Фото ${index + 1}</span>
+        target.innerHTML = `
+          <article class="photo-preview product-photo-placeholder warning-placeholder">
+            <div class="placeholder-shot variant-${existing % 4}">
+              ${escapeHtml(getProductShortName(product))}
             </div>
             <div class="photo-meta">
-              <strong>Фото из базы</strong>
-              <span>${escapeHtml(product.name)}</span>
+              <strong>Фото указаны только счетчиком</strong>
+              <span>В карточке стоит ${existing} фото, но файлов или URL для Авито нет. Нужно прикрепить реальные фото.</span>
             </div>
           </article>
-        `).join("");
+        `;
         return;
       }
       target.innerHTML = `
@@ -2061,7 +2144,7 @@
   }
 
   function getProductPhotoCount(product) {
-    return Math.max(Number(product.photosCount || 0), getAvitoPhotos(product).length, product.photoUrls?.length || 0, getProductPhotoAssets(product).length);
+    return Math.max(getAvitoPhotos(product).length, product.photoUrls?.length || 0, getProductPhotoAssets(product).length);
   }
 
   function getProductPhotoSetKey(product) {
@@ -2343,7 +2426,7 @@
     if (!order) return;
 
     tasks.unshift({
-      title: `Связаться по заказу ${order.id}: ${order.product}`,
+      title: `AI-задача по заказу ${order.id}: ${order.product}`,
       owner: order.owner || "Продавец",
       due: "Сегодня",
       priority: order.status === "Новый" ? "Высокий" : "Средний",
@@ -2369,8 +2452,8 @@
         <td><strong>${escapeHtml(order.customer)}</strong><div class="activity-meta">${escapeHtml(order.phone)}</div></td>
         <td>${escapeHtml(order.product)}<div class="activity-meta">${escapeHtml(order.source || "Сайт")}</div></td>
         <td><span class="status-pill ${order.status === "Новый" ? "warning" : order.status === "Готов к выдаче" ? "blue" : ""}">${escapeHtml(order.status)}</span></td>
-        <td>${escapeHtml(order.nextAction || "Проверить заказ")}</td>
-        <td><button class="ghost-btn compact-btn" type="button" data-order-task="${index}">Создать задачу</button></td>
+        <td><strong>AI:</strong> ${escapeHtml(order.nextAction || "Проверить заказ и предложить действие продавцу")}</td>
+        <td><button class="ghost-btn compact-btn" type="button" data-order-task="${index}">AI-задача</button></td>
       </tr>
     `).join("");
 
@@ -2419,12 +2502,33 @@
     showToast("Задача на комплектующие добавлена");
   }
 
+  function getComponentAiSuggestion(component) {
+    const low = component.stock <= component.minStock;
+    const gap = Math.max(0, Number(component.minStock || 0) - Number(component.stock || 0));
+    const type = String(component.type || "").toLowerCase();
+    const compatibility = component.compatibility || "уточнить совместимость";
+
+    if (low) {
+      return `Докупить минимум ${gap || 1} шт. Совместимость: ${compatibility}. При продаже подходящего устройства предложить сразу как допродажу.`;
+    }
+    if (type.includes("стекло")) {
+      return `Предлагать вместе с iPhone как защиту экрана. Совместимость: ${compatibility}.`;
+    }
+    if (type.includes("аккумулятор")) {
+      return `Держать для сервиса и trade-in. Проверять спрос по моделям: ${compatibility}.`;
+    }
+    if (type.includes("дисплей")) {
+      return `Не смешивать с обычным складом: важно хранить по модели и качеству. Совместимость: ${compatibility}.`;
+    }
+    return `Использовать как допродажу или сервисную позицию. Совместимость: ${compatibility}.`;
+  }
+
   function renderComponents() {
     const target = byId("componentsTable");
     if (!target) return;
 
     if (!components.length) {
-      target.innerHTML = `<tr><td colspan="6">Комплектующих пока нет.</td></tr>`;
+      target.innerHTML = `<tr><td colspan="7">Комплектующих пока нет.</td></tr>`;
       return;
     }
 
@@ -2436,7 +2540,8 @@
           <td>${escapeHtml(component.type)}</td>
           <td>${escapeHtml(component.compatibility)}</td>
           <td><span class="status-pill ${low ? "warning" : "blue"}">${component.stock} шт.</span><div class="activity-meta">Минимум: ${component.minStock} шт.</div></td>
-          <td>${escapeHtml(low ? "Заказать" : component.nextAction || "Остаток нормальный")}</td>
+          <td>${escapeHtml(low ? `Докупить ${Math.max(1, component.minStock - component.stock)} шт.` : component.nextAction || "Остаток нормальный")}</td>
+          <td>${escapeHtml(getComponentAiSuggestion(component))}</td>
           <td><button class="ghost-btn compact-btn" type="button" data-component-task="${index}">В задачу</button></td>
         </tr>
       `;
@@ -3275,6 +3380,18 @@
       return `${intro}По Авито сначала проверь, что в карточке есть живые фото, цена, состояние, комплектация и понятное описание без лишних контактов в тексте. Если фото взяты с сайта, лучше заменить их на реальные фото товара: так меньше риск модерации.\n\nЕсли карточка уже готова, открой раздел “Товары”, нажми “Загрузить” в колонке Авито и проверь предупреждения ассистента.`;
     }
 
+    if (text.includes("заказ") || text.includes("заявк") || text.includes("клиент")) {
+      return `${intro}По заказу сначала открой раздел “Заказы” и проверь три вещи: товар, телефон клиента и следующий шаг от AI. Если заявка новая, лучше сразу создать AI-задачу продавцу: связаться с клиентом, подтвердить наличие и подготовить товар к выдаче.\n\nЕсли товар не найден или остаток не сходится, не обещай клиенту выдачу сразу. Зафиксируй это в задаче и проверь карточку товара в разделе “Товары”.`;
+    }
+
+    if (text.includes("комплект") || text.includes("стекл") || text.includes("акб") || text.includes("аккумулятор") || text.includes("дисплей") || text.includes("кабель")) {
+      return `${intro}По комплектующим открой “Товары” и в выпадающем меню выбери “Комплектующие”. Там смотри остаток, минимальный запас и AI-подбор: ассистент подскажет, что докупить и к каким устройствам это относится.\n\nЕсли позиция ниже минимума, создай задачу на закупку. Если комплектующая нужна под конкретный ремонт или продажу, в комментарии укажи модель устройства, чтобы потом не искать по памяти.`;
+    }
+
+    if (text.includes("смен") || text.includes("касс") || text.includes("расход") || text.includes("инкассац")) {
+      return `${intro}По смене работаем строго через раздел “Смена”: указываем двух сотрудников, наличные на начало, продажи, расходы, инкассацию и фактический остаток. Ассистент считает ожидаемый остаток и показывает расхождение.\n\nЕсли есть расход, его лучше расписать в калькуляции, а не одной суммой. Если остаток не сходится, смену можно закрыть, но с комментарием: что проверили и где может быть причина.`;
+    }
+
     if (text.includes("доступ") || text.includes("логин") || text.includes("парол")) {
       return `${intro}Понял. Доступ лучше не передавать в чатах. Я проверю роль сотрудника в разделе “Сотрудники” и выдам только те права, которые нужны для работы.\n\nЕсли нужно срочно, напиши, к какой странице нужен доступ и зачем.`;
     }
@@ -3341,6 +3458,7 @@
     question.answer = answer;
     question.answeredBy = realAiAvailable ? "AI-продавец" : "AI-продавец (демо)";
     question.answeredAt = new Date().toLocaleString("ru-RU");
+    question.answerVersion = realAiAvailable ? "live" : questionAnswerVersion;
     question.status = "done";
     saveQuestions();
     renderQuestions();
@@ -3845,10 +3963,43 @@
     });
   }
 
+  function setupProductNavFlyout() {
+    const nav = document.querySelector(".nav");
+    const productLink = nav?.querySelector('[data-page-link="inventory"]');
+    const componentsLink = nav?.querySelector('[data-page-link="components"]');
+    if (!nav || !productLink || productLink.closest(".nav-flyout-group")) return;
+
+    const group = document.createElement("div");
+    group.className = "nav-flyout-group";
+    productLink.before(group);
+    group.appendChild(productLink);
+    productLink.classList.add("nav-button-parent");
+
+    if (componentsLink) componentsLink.remove();
+
+    const flyout = document.createElement("div");
+    flyout.className = "nav-flyout";
+    flyout.innerHTML = `
+      <a class="nav-subbutton" href="inventory.html" data-sub-page="inventory">
+        Остатки и карточки
+        <span>Товары, фото, описание, Авито</span>
+      </a>
+      <a class="nav-subbutton" href="components.html" data-sub-page="components">
+        Комплектующие
+        <span>Стекла, дисплеи, АКБ, кабели</span>
+      </a>
+    `;
+    group.appendChild(flyout);
+  }
+
   function markActivePage() {
     const page = document.body.dataset.page || "dashboard";
     document.querySelectorAll("[data-page-link]").forEach((link) => {
-      link.classList.toggle("active", link.dataset.pageLink === page);
+      const isProductPage = page === "inventory" || page === "components";
+      link.classList.toggle("active", link.dataset.pageLink === page || (isProductPage && link.dataset.pageLink === "inventory"));
+    });
+    document.querySelectorAll("[data-sub-page]").forEach((link) => {
+      link.classList.toggle("active", link.dataset.subPage === page);
     });
   }
 
@@ -3900,6 +4051,7 @@
 
     ensureFloatingAssistant();
     renderUserPanel();
+    setupProductNavFlyout();
     markActivePage();
     applyRoleUi();
     renderToday();

@@ -52,57 +52,47 @@
 
         <div class="metrics" id="taskMetrics"></div>
 
-        <div class="layout-2">
-          <section class="panel" aria-labelledby="addTaskTitle">
-            <div class="panel-header">
-              <h3 id="addTaskTitle">Добавить задачу</h3>
-              <span class="status-pill blue">Для смены</span>
+        <section class="panel" aria-labelledby="addTaskTitle">
+          <div class="panel-header">
+            <h3 id="addTaskTitle">Добавить задачу</h3>
+            <span class="status-pill blue">Для смены</span>
+          </div>
+          <form id="taskForm" class="field-grid">
+            <div class="field full">
+              <label for="taskTitleInput">Задача</label>
+              <input id="taskTitleInput" placeholder="Например: проверить фото iPhone 15 Pro" required>
             </div>
-            <form id="taskForm" class="field-grid">
-              <div class="field full">
-                <label for="taskTitleInput">Задача</label>
-                <input id="taskTitleInput" placeholder="Например: проверить фото iPhone 15 Pro" required>
-              </div>
-              <div class="field">
-                <label for="taskOwnerInput">Ответственный</label>
-                <select id="taskOwnerInput">
-                  <option>Продавец</option>
-                  <option>Контент</option>
-                  <option>Администратор</option>
-                  <option>Старший смены</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="taskDueInput">Срок</label>
-                <select id="taskDueInput">
-                  <option selected>Сегодня</option>
-                  <option>Завтра</option>
-                  <option>На неделе</option>
-                  <option>Без срока</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="taskPriorityInput">Приоритет</label>
-                <select id="taskPriorityInput">
-                  <option>Низкий</option>
-                  <option selected>Средний</option>
-                  <option>Высокий</option>
-                </select>
-              </div>
-              <div class="field task-form-action">
-                <button class="primary-btn" type="submit">Добавить</button>
-              </div>
-            </form>
-          </section>
-
-          <section class="panel" aria-labelledby="taskFocusTitle">
-            <div class="panel-header">
-              <h3 id="taskFocusTitle">Фокус</h3>
-              <span class="status-pill warning" id="openTasksCount">0 открытых</span>
+            <div class="field">
+              <label for="taskOwnerInput">Ответственный</label>
+              <select id="taskOwnerInput">
+                <option>Продавец</option>
+                <option>Контент</option>
+                <option>Администратор</option>
+                <option>Старший смены</option>
+              </select>
             </div>
-            <div class="attention-list" id="taskFocusList"></div>
-          </section>
-        </div>
+            <div class="field">
+              <label for="taskDueInput">Срок</label>
+              <select id="taskDueInput">
+                <option selected>Сегодня</option>
+                <option>Завтра</option>
+                <option>На неделе</option>
+                <option>Без срока</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="taskPriorityInput">Приоритет</label>
+              <select id="taskPriorityInput">
+                <option>Низкий</option>
+                <option selected>Средний</option>
+                <option>Высокий</option>
+              </select>
+            </div>
+            <div class="field task-form-action">
+              <button class="primary-btn" type="submit">Добавить</button>
+            </div>
+          </form>
+        </section>
 
         <section class="panel" aria-label="Журнал задач">
           <div class="panel-header">
