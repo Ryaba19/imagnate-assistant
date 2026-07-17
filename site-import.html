@@ -1,9 +1,9 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Импорт сайта | iMagnate Assistant</title>
+  <title>План контент-центра | iMagnate Assistant</title>
   <link rel="stylesheet" href="assets/css/styles.css">
   <link rel="icon" href="assets/img/imagnate-icon.svg" type="image/svg+xml">
 </head>
@@ -14,90 +14,204 @@
         <div class="brand-mark" aria-hidden="true"><img src="assets/img/imagnate-icon.svg" alt=""></div>
         <div>
           <div class="brand-name">iMagnate Assistant</div>
-          <div class="brand-note">Демо помощника магазина</div>
+          <div class="brand-note">Контент-центр и AI-агенты</div>
         </div>
       </div>
       <nav class="nav">
         <a class="nav-button" href="index.html" data-page-link="dashboard"><span class="nav-icon">01</span><span>Главная</span></a>
-        <a class="nav-button" href="tasks.html" data-page-link="tasks"><span class="nav-icon">02</span><span>Задачи</span></a>
-        <a class="nav-button" href="shift.html" data-page-link="shift"><span class="nav-icon">03</span><span>Смена</span></a>
-        <a class="nav-button" href="inventory.html" data-page-link="inventory"><span class="nav-icon">04</span><span>Товары</span></a>
-        <a class="nav-button" href="questions.html" data-page-link="questions"><span class="nav-icon">05</span><span>Вопросы</span></a>
-        <a class="nav-button" href="avito.html" data-page-link="avito"><span class="nav-icon">06</span><span>Авито</span></a>
-        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees"><span class="nav-icon">07</span><span>Сотрудники</span></a>
+        <a class="nav-button" href="orders.html" data-page-link="orders"><span class="nav-icon">02</span><span>Заказы</span></a>
+        <a class="nav-button" href="inventory.html" data-page-link="inventory"><span class="nav-icon">03</span><span>Товары</span></a>
+        <a class="nav-button" href="components.html" data-page-link="components"><span class="nav-icon">04</span><span>Комплектующие</span></a>
+        <a class="nav-button" href="avito.html" data-page-link="avito"><span class="nav-icon">05</span><span>Авито</span></a>
+        <a class="nav-button" href="tasks.html" data-page-link="tasks"><span class="nav-icon">06</span><span>Задачи</span></a>
+        <a class="nav-button" href="questions.html" data-page-link="questions"><span class="nav-icon">07</span><span>Вопросы</span></a>
+        <a class="nav-button" href="shift.html" data-page-link="shift"><span class="nav-icon">08</span><span>Смена</span></a>
+        <a class="nav-button" href="site-import.html" data-page-link="site-import" data-permission="site-import"><span class="nav-icon">09</span><span>Интеграция</span></a>
+        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees"><span class="nav-icon">10</span><span>Сотрудники</span></a>
       </nav>
       <div class="sidebar-footer">
-        <span>Цель: понять, как подтянуть сайт</span>
-        <span>Лучший путь: CRM/API или CSV</span>
+        <span>Фокус: убрать хаос в content manager</span>
+        <span>Заказы, товары, фото, сайт, Авито и комплектующие</span>
       </div>
     </aside>
 
     <main class="main">
       <header class="topbar">
         <div>
-          <h1>Подключение сайта iMagnate</h1>
-          <p class="subtitle">Черновой модуль импорта: публичные разделы, категории каталога и варианты подключения реальных данных.</p>
+          <h1>План нового content manager</h1>
+          <p class="subtitle">Страница для разговора с Лёней: как заменить бардак в текущем менеджере понятным рабочим центром с заказами, товарами, фото, комплектующими и AI-агентами.</p>
         </div>
         <div class="badge-row">
           <span class="badge"><span class="dot"></span><span id="todayLabel">Сегодня</span></span>
-          <span class="badge">Источник: публичная главная</span>
+          <span class="badge">Статус: план внедрения</span>
         </div>
       </header>
 
-      <section class="view active" aria-labelledby="siteImportTitle">
-        <h2 id="siteImportTitle">Возможность подтяжки</h2>
+      <section class="view active" aria-labelledby="integrationTitle">
+        <h2 id="integrationTitle">Фундамент контент-центра</h2>
 
-        <div class="metrics">
-          <article class="metric-card">
-            <div class="metric-label">Что можно брать с сайта</div>
-            <div class="metric-value">Структуру</div>
-            <div class="metric-context">Разделы, категории, акции, статьи</div>
-          </article>
-          <article class="metric-card attention">
-            <div class="metric-label">Что лучше брать не парсингом</div>
-            <div class="metric-value">Цены</div>
-            <div class="metric-context">Остатки, заказы, реальные карточки</div>
-          </article>
-          <article class="metric-card">
-            <div class="metric-label">Лучший старт</div>
-            <div class="metric-value">CSV/API</div>
-            <div class="metric-context">Выгрузка из CRM или доступ к API</div>
-          </article>
-          <article class="metric-card">
-            <div class="metric-label">Статус</div>
-            <div class="metric-value">Демо</div>
-            <div class="metric-context">Без нагрузки на сайт</div>
-          </article>
-        </div>
+        <section class="panel" aria-labelledby="architectureTitle">
+          <div class="panel-header">
+            <div>
+              <h3 id="architectureTitle">Главная идея</h3>
+              <p class="panel-note">Если текущий content manager перегружен, мы можем собрать чистую панель: заказы приходят с сайта, товары и фото подтягиваются из базы, AI готовит описание, а сотрудник подтверждает публикацию.</p>
+            </div>
+            <span class="status-pill blue">Content manager 2.0</span>
+          </div>
+          <div class="process-grid">
+            <article class="attention-item">
+              <span class="status-pill">Источник</span>
+              <div class="attention-title">Сайт iMagnate</div>
+              <div class="attention-meta">Заказы, формы, товары, фото, карточки и публикации.</div>
+            </article>
+            <article class="attention-item">
+              <span class="status-pill">Шлюз</span>
+              <div class="attention-title">Единая база</div>
+              <div class="attention-meta">Товары, комплектующие, остатки, фото, статусы и задачи в понятной структуре.</div>
+            </article>
+            <article class="attention-item">
+              <span class="status-pill blue">Мозг</span>
+              <div class="attention-title">AI-агенты</div>
+              <div class="attention-meta">Описание, Авито, сайт, ответы клиентам, задачи и контроль ошибок.</div>
+            </article>
+            <article class="attention-item">
+              <span class="status-pill warning">Контроль</span>
+              <div class="attention-title">Подтверждение</div>
+              <div class="attention-meta">AI предлагает, сотрудник подтверждает цену, фото, публикацию и ответ клиенту.</div>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="agentsTitle">
+          <div class="panel-header">
+            <h3 id="agentsTitle">Агенты первой версии</h3>
+            <span class="status-pill blue">MVP</span>
+          </div>
+          <div class="agent-grid">
+            <article class="attention-item">
+              <div class="attention-title">AI-заказы</div>
+              <div class="attention-meta">Принимает заявки с сайта, находит товар, показывает следующее действие и ставит задачу продавцу.</div>
+            </article>
+            <article class="attention-item">
+              <div class="attention-title">AI-комплектующие</div>
+              <div class="attention-meta">Следит за стеклами, дисплеями, АКБ, кабелями, совместимостью и минимальными остатками.</div>
+            </article>
+            <article class="attention-item">
+              <div class="attention-title">AI-продавец</div>
+              <div class="attention-meta">Отвечает клиентам по наличию, цене, состоянию, trade-in, гарантии и подбору техники.</div>
+            </article>
+            <article class="attention-item">
+              <div class="attention-title">AI-помощник сотрудников</div>
+              <div class="attention-meta">Отвечает продавцам по правилам магазина и сохраняет ответы как базу знаний.</div>
+            </article>
+            <article class="attention-item">
+              <div class="attention-title">AI-Авито</div>
+              <div class="attention-meta">Готовит карточку, описание, комплектацию, фото и проверяет риски модерации.</div>
+            </article>
+            <article class="attention-item">
+              <div class="attention-title">AI-контентщик</div>
+              <div class="attention-meta">Пишет тексты для сайта, Telegram, объявлений и карточек товаров в стиле iMagnate.</div>
+            </article>
+            <article class="attention-item">
+              <div class="attention-title">AI-контролер смены</div>
+              <div class="attention-meta">Проверяет кассу, расходы, расхождения, закрытие смены и журнал для Лёни.</div>
+            </article>
+            <article class="attention-item">
+              <div class="attention-title">AI-аналитик</div>
+              <div class="attention-meta">Показывает залежавшиеся товары, низкие остатки, спорные цены и точки роста.</div>
+            </article>
+          </div>
+        </section>
 
         <div class="layout-2">
-          <section class="panel" aria-labelledby="routesTitle">
+          <section class="panel" aria-labelledby="questionsForLeonidTitle">
             <div class="panel-header">
-              <h3 id="routesTitle">Публичные разделы</h3>
-              <a class="ghost-btn" href="https://imagnate.ru/" target="_blank" rel="noreferrer">Открыть сайт</a>
+              <h3 id="questionsForLeonidTitle">Что спросить у Лёни</h3>
+              <span class="status-pill warning">Встреча</span>
             </div>
-            <div class="stack" id="siteRoutesList"></div>
+            <div class="attention-list">
+              <article class="attention-item">
+                <div class="attention-title">Что уже закрыто системой?</div>
+                <div class="attention-meta">Какие процессы не трогаем: склад, публикации, касса, сайт, CRM, учет.</div>
+              </article>
+              <article class="attention-item">
+                <div class="attention-title">Где система не помогает думать?</div>
+                <div class="attention-meta">Какие решения Лёня принимает руками: цены, ответы, закупки, проблемные товары.</div>
+              </article>
+              <article class="attention-item">
+                <div class="attention-title">Какие данные можно выгружать?</div>
+                <div class="attention-meta">Товары, остатки, фото, цены, статусы, заказы, Авито, сайт, база знаний.</div>
+              </article>
+              <article class="attention-item">
+                <div class="attention-title">Какой один AI-агент нужен первым?</div>
+                <div class="attention-meta">Клиентский бот, помощник продавца, Авито, контент или аналитика.</div>
+              </article>
+            </div>
           </section>
 
-          <section class="panel" aria-labelledby="categoriesTitle">
-            <h3 id="categoriesTitle">Категории каталога</h3>
-            <div class="stack" id="siteCategoriesList"></div>
+          <section class="panel" aria-labelledby="safeAccessTitle">
+            <div class="panel-header">
+              <h3 id="safeAccessTitle">Безопасный доступ</h3>
+              <span class="status-pill blue">Важно</span>
+            </div>
+            <div class="attention-list">
+              <article class="attention-item">
+                <div class="attention-title">Не давать боевые пароли</div>
+                <div class="attention-meta">API-ключи, токены, пароли от CRM и личные данные клиентов не отправляем в чат.</div>
+              </article>
+              <article class="attention-item">
+                <div class="attention-title">Работать на копии</div>
+                <div class="attention-meta">Для разработки нужна копия проекта, тестовая база или выгрузка без чувствительных данных.</div>
+              </article>
+              <article class="attention-item">
+                <div class="attention-title">Сначала только чтение</div>
+                <div class="attention-meta">Первый этап: AI читает данные и предлагает действия, но ничего не меняет без подтверждения.</div>
+              </article>
+              <article class="attention-item">
+                <div class="attention-title">Фиксировать правила</div>
+                <div class="attention-meta">Ответы Лёни превращаем в базу знаний, чтобы AI отвечал в стиле магазина.</div>
+              </article>
+            </div>
           </section>
         </div>
 
-        <section class="panel" aria-labelledby="siteMetaTitle">
+        <section class="panel" aria-labelledby="firstSprintTitle">
           <div class="panel-header">
-            <h3 id="siteMetaTitle">Мета-данные страниц</h3>
-            <span class="status-pill blue">Для понимания структуры</span>
+            <div>
+              <h3 id="firstSprintTitle">Первый реальный спринт</h3>
+              <p class="panel-note">Цель - за короткое время получить не красивую оболочку, а AI-функцию, которая использует реальные данные iMagnate.</p>
+            </div>
+            <span class="status-pill blue">1-2 недели</span>
           </div>
-          <div class="stack" id="sitePageMetaList"></div>
+          <div class="process-grid">
+            <article class="attention-item">
+              <span class="status-pill">День 1</span>
+              <div class="attention-title">Получить выгрузку</div>
+              <div class="attention-meta">Минимум: товары, цены, остатки, фото, категории, статусы.</div>
+            </article>
+            <article class="attention-item">
+              <span class="status-pill">День 2-3</span>
+              <div class="attention-title">Подключить к демке</div>
+              <div class="attention-meta">Заменить тестовые данные на реальные, без изменения основной системы.</div>
+            </article>
+            <article class="attention-item">
+              <span class="status-pill">День 4-7</span>
+              <div class="attention-title">Запустить одного агента</div>
+              <div class="attention-meta">Например AI-Авито или AI-помощник продавца на реальных товарах.</div>
+            </article>
+            <article class="attention-item">
+              <span class="status-pill warning">Финал</span>
+              <div class="attention-title">Показать пользу</div>
+              <div class="attention-meta">Сколько времени сэкономили, какие ошибки нашли, какие ответы автоматизировали.</div>
+            </article>
+          </div>
         </section>
 
         <section class="panel" aria-labelledby="realDataTitle">
           <div class="panel-header">
             <div>
-              <h3 id="realDataTitle">Реальные данные</h3>
-              <p class="panel-note">Когда появятся настоящие остатки из CRM или Excel, их можно загрузить сюда без переписывания ассистента.</p>
+              <h3 id="realDataTitle">Тестовая загрузка реальных данных</h3>
+              <p class="panel-note">Если Лёня даст CSV/JSON с товарами, можно загрузить его в демку и сразу показать, как AI работает уже не на придуманных позициях.</p>
             </div>
             <span class="status-pill blue">Готово к импорту</span>
           </div>
@@ -119,48 +233,6 @@
             </section>
           </div>
         </section>
-
-        <section class="panel" aria-labelledby="siteProductsTitle">
-          <div class="panel-header">
-            <h3 id="siteProductsTitle">Пример карточек с сайта</h3>
-            <span class="status-pill warning">Не полный каталог</span>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Товар</th>
-                  <th>Категория</th>
-                  <th>Зачем импортировать</th>
-                </tr>
-              </thead>
-              <tbody id="siteProductsTable"></tbody>
-            </table>
-          </div>
-        </section>
-
-        <div class="layout-2">
-          <section class="panel" aria-labelledby="promotionsTitle">
-            <h3 id="promotionsTitle">Акции</h3>
-            <div class="stack" id="sitePromotionsList"></div>
-          </section>
-
-          <section class="panel" aria-labelledby="articlesTitle">
-            <h3 id="articlesTitle">Статьи</h3>
-            <div class="stack" id="siteArticlesList"></div>
-          </section>
-        </div>
-
-        <section class="panel" aria-labelledby="optionsTitle">
-          <div class="panel-header">
-            <h3 id="optionsTitle">Варианты подключения</h3>
-            <button class="primary-btn" type="button" id="simulateImport">Смоделировать импорт</button>
-          </div>
-          <div class="attention-list" id="importOptionsList"></div>
-          <div class="generator-result">
-            <div class="result-text" id="siteImportResult">Нажми “Смоделировать импорт”, чтобы увидеть, что ассистент сможет получить в первой версии.</div>
-          </div>
-        </section>
       </section>
     </main>
   </div>
@@ -169,5 +241,3 @@
   <script src="assets/js/app.js"></script>
 </body>
 </html>
-
-

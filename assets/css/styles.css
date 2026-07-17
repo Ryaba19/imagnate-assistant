@@ -389,6 +389,17 @@
       gap: 10px;
     }
 
+    .process-grid,
+    .agent-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .agent-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
     .attention-item,
     .task-item,
     .activity-item {
@@ -1320,7 +1331,7 @@
       }
 
       .nav {
-        grid-template-columns: repeat(7, minmax(0, 1fr));
+        grid-template-columns: repeat(10, minmax(0, 1fr));
       }
 
       .nav-button {
@@ -1335,6 +1346,8 @@
       .layout-2,
       .metrics,
       .inventory-metrics,
+      .process-grid,
+      .agent-grid,
       .avito-modal-grid,
       .access-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1366,6 +1379,8 @@
       .field-grid,
       .access-grid,
       .avito-modal-grid,
+      .process-grid,
+      .agent-grid,
       .shift-result,
       .quick-grid,
       .nav {

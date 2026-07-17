@@ -75,6 +75,79 @@ window.StoreAssistantSeed = {
     "cashActual": 27500,
     "comment": "Расход: доставка клиенту. Проверить разницу по наличным."
   },
+  "orders": [
+    {
+      "id": "WEB-1048",
+      "createdAt": "Сегодня, 10:18",
+      "customer": "Мария",
+      "phone": "+7 999 120-44-18",
+      "product": "iPhone 16 128 GB Ultramarine",
+      "source": "Сайт iMagnate",
+      "status": "Новый",
+      "owner": "Продавец",
+      "nextAction": "Связаться с клиентом, подтвердить наличие и подготовить выдачу"
+    },
+    {
+      "id": "WEB-1047",
+      "createdAt": "Сегодня, 09:42",
+      "customer": "Андрей",
+      "phone": "+7 926 410-22-77",
+      "product": "PlayStation 5 Slim",
+      "source": "Сайт iMagnate",
+      "status": "В работе",
+      "owner": "Вячеслав",
+      "nextAction": "Проверить комплект, фото и согласовать время самовывоза"
+    },
+    {
+      "id": "WEB-1046",
+      "createdAt": "Вчера, 19:10",
+      "customer": "Олег",
+      "phone": "+7 985 700-16-55",
+      "product": "Замена стекла iPhone 15",
+      "source": "Форма сервиса",
+      "status": "Готов к выдаче",
+      "owner": "Иван",
+      "nextAction": "Сообщить клиенту, что работа готова"
+    }
+  ],
+  "components": [
+    {
+      "sku": "PART-GLASS-IP15",
+      "name": "Стекло iPhone 15",
+      "type": "Стекло",
+      "compatibility": "iPhone 15 / 15 Plus",
+      "stock": 4,
+      "minStock": 5,
+      "nextAction": "Пополнить запас"
+    },
+    {
+      "sku": "PART-BAT-IP11",
+      "name": "Аккумулятор iPhone 11",
+      "type": "Аккумулятор",
+      "compatibility": "iPhone 11",
+      "stock": 2,
+      "minStock": 3,
+      "nextAction": "Заказать на неделю"
+    },
+    {
+      "sku": "PART-DISP-IP13",
+      "name": "Дисплей iPhone 13",
+      "type": "Дисплей",
+      "compatibility": "iPhone 13",
+      "stock": 1,
+      "minStock": 1,
+      "nextAction": "Держать резерв"
+    },
+    {
+      "sku": "PART-CABLE-USBC",
+      "name": "Кабель USB-C 1m",
+      "type": "Кабель",
+      "compatibility": "iPhone 15/16/17, Android, аксессуары",
+      "stock": 2,
+      "minStock": 6,
+      "nextAction": "Срочно заказать"
+    }
+  ],
   "products": [
     {
       "sku": "IPH15P-256-NT",

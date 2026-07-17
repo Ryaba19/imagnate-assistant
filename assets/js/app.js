@@ -13,6 +13,8 @@
   let activeReplyQuestionId = null;
   let shiftClosures = loadShiftClosures();
   const tasks = loadTasks();
+  const orders = seed.orders || [];
+  const components = seed.components || [];
   const activity = seed.activity || [];
   const productPhotoSets = seed.productPhotoSets || {};
   const imagnateCatalogFallback = [
@@ -600,15 +602,15 @@
     const target = byId("metrics");
     if (!target) return;
 
-    const shiftPeople = getShiftPeople();
+    const newOrders = orders.filter((order) => order.status === "Новый").length;
     const openTasks = tasks.filter((task) => !task.done).length;
-    const openQuestions = questions.filter((item) => item.status !== "done").length;
-    const preparedAvito = products.filter((product) => product.avitoStatus).length;
+    const readyProducts = products.filter((product) => product.stock > 0 && getProductPhotoCount(product) > 0).length;
+    const lowComponents = components.filter((component) => component.stock <= component.minStock).length;
     const metrics = [
-      { label: "Смена", value: "Открыта", context: shiftPeople.label },
-      { label: "Открытые задачи", value: String(openTasks), context: "Перейти в задачи", attention: openTasks > 3 },
-      { label: "Открытые вопросы", value: String(openQuestions), context: "Ответит ассистент" },
-      { label: "Авито", value: String(preparedAvito), context: "Подготовлено карточек" }
+      { label: "Заказы сайта", value: String(newOrders), context: "Новые заявки", attention: newOrders > 0 },
+      { label: "Готово к публикации", value: String(readyProducts), context: "Товар + фото" },
+      { label: "Комплектующие", value: String(lowComponents), context: "Ниже минимума", attention: lowComponents > 0 },
+      { label: "Открытые задачи", value: String(openTasks), context: "Рабочий контроль", attention: openTasks > 3 }
     ];
 
     target.innerHTML = metrics.map((item) => `
@@ -646,6 +648,16 @@
     if (!list) return;
 
     const items = [
+      ...orders.filter((order) => order.status === "Новый").map((order) => ({
+        title: `Новый заказ с сайта: ${order.product}`,
+        meta: `${order.customer} · ${order.phone}. Ассистент уже может создать задачу продавцу.`,
+        type: "danger"
+      })),
+      ...components.filter((component) => component.stock <= component.minStock).map((component) => ({
+        title: `Комплектующие ниже минимума: ${component.name}`,
+        meta: `Осталось ${component.stock} шт. Минимум: ${component.minStock} шт. Совместимость: ${component.compatibility}.`,
+        type: "warning"
+      })),
       ...products.filter((product) => product.days >= 30).map((product) => ({
         title: `${product.name} давно в продаже`,
         meta: `${product.days} дней. Проверь цену, фото и площадки.`,
@@ -788,6 +800,8 @@
       })),
       tasks: tasks.filter((task) => !task.done).slice(0, 10),
       questions: questions.filter((item) => item.status !== "done").slice(0, 10),
+      orders: orders.slice(0, 10),
+      components: components.slice(0, 20),
       knowledgeBase: {
         answeredQuestions,
         rule: "Используй закрытые вопросы как примеры стиля и правил iMagnate. Не придумывай новые условия, если их нет в этих ответах или данных магазина."
@@ -849,6 +863,32 @@
       return stale.length
         ? `Давно в продаже:\n\n${stale.map((item) => `- ${item.name}: ${item.days} дней, цена ${money(item.price)}. ${item.comment}`).join("\n")}`
         : "По тестовым данным залежавшихся товаров нет.";
+    }
+
+    if (q.includes("заказ") || q.includes("заявк") || q.includes("клиент")) {
+      const openOrders = orders.filter((order) => order.status !== "Готов к выдаче");
+      return [
+        "По заказам сейчас так:",
+        "",
+        openOrders.length
+          ? openOrders.map((order) => `- ${order.id}: ${order.customer}, ${order.product}. Статус: ${order.status}. Действие: ${order.nextAction}.`).join("\n")
+          : "Открытых заказов нет.",
+        "",
+        "Идея для реальной версии: заказ с сайта сразу создает уведомление, карточку клиента и задачу продавцу."
+      ].join("\n");
+    }
+
+    if (q.includes("комплект") || q.includes("запчаст") || q.includes("стекл") || q.includes("аккумулятор") || q.includes("диспле")) {
+      const lowComponents = components.filter((component) => component.stock <= component.minStock);
+      return [
+        "По комплектующим:",
+        "",
+        lowComponents.length
+          ? lowComponents.map((component) => `- ${component.name}: ${component.stock} шт., минимум ${component.minStock}. Совместимость: ${component.compatibility}.`).join("\n")
+          : "Критичных комплектующих нет.",
+        "",
+        "В нормальном content manager комплектующие должны жить отдельно от товаров: так проще контролировать ремонт, допродажи и закупку."
+      ].join("\n");
     }
 
     if (q.includes("склад") || q.includes("остат") || q.includes("налич")) {
@@ -2274,6 +2314,139 @@
     return "Карточка готова к работе";
   }
 
+  function renderOrdersMetrics() {
+    const target = byId("ordersMetrics");
+    if (!target) return;
+
+    const newOrders = orders.filter((order) => order.status === "Новый").length;
+    const inWork = orders.filter((order) => order.status === "В работе").length;
+    const ready = orders.filter((order) => order.status === "Готов к выдаче").length;
+    const needsContact = orders.filter((order) => order.nextAction?.toLowerCase().includes("клиент")).length;
+    const metrics = [
+      { label: "Новые", value: String(newOrders), context: "С сайта", attention: newOrders > 0 },
+      { label: "В работе", value: String(inWork), context: "Нужно довести" },
+      { label: "К выдаче", value: String(ready), context: "Можно закрывать" },
+      { label: "Связаться", value: String(needsContact), context: "Клиент ждет", attention: needsContact > 0 }
+    ];
+
+    target.innerHTML = metrics.map((item) => `
+      <article class="metric-card ${item.attention ? "attention" : ""}">
+        <div class="metric-label">${item.label}</div>
+        <div class="metric-value">${item.value}</div>
+        <div class="metric-context">${item.context}</div>
+      </article>
+    `).join("");
+  }
+
+  function createOrderTask(index) {
+    const order = orders[index];
+    if (!order) return;
+
+    tasks.unshift({
+      title: `Связаться по заказу ${order.id}: ${order.product}`,
+      owner: order.owner || "Продавец",
+      due: "Сегодня",
+      priority: order.status === "Новый" ? "Высокий" : "Средний",
+      done: false
+    });
+    saveTasks();
+    renderTasks();
+    showToast("Задача по заказу добавлена");
+  }
+
+  function renderOrders() {
+    const target = byId("ordersTable");
+    if (!target) return;
+
+    if (!orders.length) {
+      target.innerHTML = `<tr><td colspan="6">Заказов пока нет.</td></tr>`;
+      return;
+    }
+
+    target.innerHTML = orders.map((order, index) => `
+      <tr>
+        <td><strong>${escapeHtml(order.id)}</strong><div class="activity-meta">${escapeHtml(order.createdAt)}</div></td>
+        <td><strong>${escapeHtml(order.customer)}</strong><div class="activity-meta">${escapeHtml(order.phone)}</div></td>
+        <td>${escapeHtml(order.product)}<div class="activity-meta">${escapeHtml(order.source || "Сайт")}</div></td>
+        <td><span class="status-pill ${order.status === "Новый" ? "warning" : order.status === "Готов к выдаче" ? "blue" : ""}">${escapeHtml(order.status)}</span></td>
+        <td>${escapeHtml(order.nextAction || "Проверить заказ")}</td>
+        <td><button class="ghost-btn compact-btn" type="button" data-order-task="${index}">Создать задачу</button></td>
+      </tr>
+    `).join("");
+
+    document.querySelectorAll("[data-order-task]").forEach((button) => {
+      button.addEventListener("click", () => createOrderTask(Number(button.dataset.orderTask)));
+    });
+  }
+
+  function renderComponentsMetrics() {
+    const target = byId("componentsMetrics");
+    if (!target) return;
+
+    const low = components.filter((component) => component.stock <= component.minStock).length;
+    const screens = components.filter((component) => component.type === "Дисплей").length;
+    const batteries = components.filter((component) => component.type === "Аккумулятор").length;
+    const glass = components.filter((component) => component.type === "Стекло").length;
+    const metrics = [
+      { label: "Позиций", value: String(components.length), context: "Комплектующие" },
+      { label: "Ниже минимума", value: String(low), context: "Нужна закупка", attention: low > 0 },
+      { label: "Дисплеи", value: String(screens), context: "Ремонт" },
+      { label: "АКБ/стекла", value: String(batteries + glass), context: "Быстрые работы" }
+    ];
+
+    target.innerHTML = metrics.map((item) => `
+      <article class="metric-card ${item.attention ? "attention" : ""}">
+        <div class="metric-label">${item.label}</div>
+        <div class="metric-value">${item.value}</div>
+        <div class="metric-context">${item.context}</div>
+      </article>
+    `).join("");
+  }
+
+  function createComponentTask(index) {
+    const component = components[index];
+    if (!component) return;
+
+    tasks.unshift({
+      title: `Пополнить комплектующие: ${component.name}`,
+      owner: "Администратор",
+      due: component.stock <= component.minStock ? "Сегодня" : "На неделе",
+      priority: component.stock <= component.minStock ? "Высокий" : "Средний",
+      done: false
+    });
+    saveTasks();
+    renderTasks();
+    showToast("Задача на комплектующие добавлена");
+  }
+
+  function renderComponents() {
+    const target = byId("componentsTable");
+    if (!target) return;
+
+    if (!components.length) {
+      target.innerHTML = `<tr><td colspan="6">Комплектующих пока нет.</td></tr>`;
+      return;
+    }
+
+    target.innerHTML = components.map((component, index) => {
+      const low = component.stock <= component.minStock;
+      return `
+        <tr>
+          <td><strong>${escapeHtml(component.name)}</strong><div class="activity-meta">${escapeHtml(component.sku)}</div></td>
+          <td>${escapeHtml(component.type)}</td>
+          <td>${escapeHtml(component.compatibility)}</td>
+          <td><span class="status-pill ${low ? "warning" : "blue"}">${component.stock} шт.</span><div class="activity-meta">Минимум: ${component.minStock} шт.</div></td>
+          <td>${escapeHtml(low ? "Заказать" : component.nextAction || "Остаток нормальный")}</td>
+          <td><button class="ghost-btn compact-btn" type="button" data-component-task="${index}">В задачу</button></td>
+        </tr>
+      `;
+    }).join("");
+
+    document.querySelectorAll("[data-component-task]").forEach((button) => {
+      button.addEventListener("click", () => createComponentTask(Number(button.dataset.componentTask)));
+    });
+  }
+
   function renderProducts() {
     const target = byId("productsTable");
     if (!target) return;
@@ -3502,8 +3675,8 @@
         <div class="floating-chat" id="floatingChatBox"></div>
         <div class="floating-controls">
           <div class="floating-prompts">
-            <button class="btn" type="button" data-floating-prompt="Что сегодня требует внимания?">Что важно</button>
-            <button class="btn" type="button" data-floating-prompt="Какие товары залежались?">Залежалось</button>
+            <button class="btn" type="button" data-floating-prompt="Что по заказам с сайта?">Заказы</button>
+            <button class="btn" type="button" data-floating-prompt="Что по комплектующим?">Комплектующие</button>
             <button class="btn" type="button" data-floating-prompt="Сформируй задачи сотрудникам">Задачи</button>
             <button class="btn" type="button" data-floating-prompt="Что проверить перед публикацией на Авито?">Авито</button>
           </div>
@@ -3701,6 +3874,10 @@
     renderProductPresetOptions();
     renderProducts();
     renderInventoryMetrics();
+    renderOrdersMetrics();
+    renderOrders();
+    renderComponentsMetrics();
+    renderComponents();
     renderAvitoOverview();
     renderTasks();
     renderEmployees();

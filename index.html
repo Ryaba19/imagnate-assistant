@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8">
@@ -14,63 +14,77 @@
         <div class="brand-mark" aria-hidden="true"><img src="assets/img/imagnate-icon.svg" alt=""></div>
         <div>
           <div class="brand-name">iMagnate Assistant</div>
-          <div class="brand-note">Демо помощника магазина</div>
+          <div class="brand-note">Контент-центр и AI-агенты</div>
         </div>
       </div>
 
       <nav class="nav">
-        <a class="nav-button" href="index.html" data-page-link="dashboard">
-          <span class="nav-icon">01</span>
-          <span>Главная</span>
-        </a>
-        <a class="nav-button" href="tasks.html" data-page-link="tasks">
-          <span class="nav-icon">02</span>
-          <span>Задачи</span>
-        </a>
-        <a class="nav-button" href="shift.html" data-page-link="shift">
-          <span class="nav-icon">03</span>
-          <span>Смена</span>
-        </a>
-        <a class="nav-button" href="inventory.html" data-page-link="inventory">
-          <span class="nav-icon">04</span>
-          <span>Товары</span>
-        </a>
-        <a class="nav-button" href="questions.html" data-page-link="questions">
-          <span class="nav-icon">05</span>
-          <span>Вопросы</span>
-        </a>
-        <a class="nav-button" href="avito.html" data-page-link="avito">
-          <span class="nav-icon">06</span>
-          <span>Авито</span>
-        </a>
-        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees">
-          <span class="nav-icon">07</span>
-          <span>Сотрудники</span>
-        </a>
+        <a class="nav-button" href="index.html" data-page-link="dashboard"><span class="nav-icon">01</span><span>Главная</span></a>
+        <a class="nav-button" href="orders.html" data-page-link="orders"><span class="nav-icon">02</span><span>Заказы</span></a>
+        <a class="nav-button" href="inventory.html" data-page-link="inventory"><span class="nav-icon">03</span><span>Товары</span></a>
+        <a class="nav-button" href="components.html" data-page-link="components"><span class="nav-icon">04</span><span>Комплектующие</span></a>
+        <a class="nav-button" href="avito.html" data-page-link="avito"><span class="nav-icon">05</span><span>Авито</span></a>
+        <a class="nav-button" href="tasks.html" data-page-link="tasks"><span class="nav-icon">06</span><span>Задачи</span></a>
+        <a class="nav-button" href="questions.html" data-page-link="questions"><span class="nav-icon">07</span><span>Вопросы</span></a>
+        <a class="nav-button" href="shift.html" data-page-link="shift"><span class="nav-icon">08</span><span>Смена</span></a>
+        <a class="nav-button" href="site-import.html" data-page-link="site-import" data-permission="site-import"><span class="nav-icon">09</span><span>Интеграция</span></a>
+        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees"><span class="nav-icon">10</span><span>Сотрудники</span></a>
       </nav>
 
       <div class="sidebar-footer">
-        <span>Статус: демонстрационный прототип</span>
-        <span>Данные: тестовые, без подключения к CRM</span>
+        <span>Концепция: порядок вместо хаоса</span>
+        <span>Заказы, товары, фото, комплектующие и AI</span>
       </div>
     </aside>
 
     <main class="main">
       <header class="topbar">
         <div>
-          <h1>Ассистент небольшого магазина</h1>
-          <p class="subtitle">Короткий экран дня: статус магазина, главное действие и быстрый переход в рабочие разделы.</p>
+          <h1>Контент-центр iMagnate</h1>
+          <p class="subtitle">Упорядоченная панель вместо хаотичного content manager: заказы с сайта, товары, фото, комплектующие, Авито и AI-агенты в одном рабочем маршруте.</p>
         </div>
         <div class="badge-row">
           <span class="badge"><span class="dot"></span><span id="todayLabel">Сегодня</span></span>
           <span class="badge"><span data-current-user>Пользователь</span>: <span data-current-role>роль</span></span>
-          <span class="badge">Версия 0.5</span>
+          <span class="badge">Концепция 0.6</span>
         </div>
       </header>
 
       <section class="view active" aria-labelledby="dashboardTitle">
-        <h2 id="dashboardTitle">Сегодня</h2>
+        <h2 id="dashboardTitle">AI-центр магазина</h2>
         <div class="metrics" id="metrics"></div>
+
+        <section class="panel" aria-labelledby="foundationTitle">
+          <div class="panel-header">
+            <div>
+              <h3 id="foundationTitle">Что мы строим дальше</h3>
+              <p class="panel-note">Сначала ассистент может работать рядом с текущей системой. Если content manager мешает, этот каркас можно развить в новый чистый рабочий центр для заказов, товаров, фото и публикаций.</p>
+            </div>
+            <span class="status-pill blue">Content manager 2.0</span>
+          </div>
+          <div class="process-grid">
+            <article class="attention-item">
+              <span class="status-pill">1</span>
+              <div class="attention-title">Сайт и текущая система</div>
+              <div class="attention-meta">Отсюда приходят заказы, товары, цены, остатки, фото и публикации.</div>
+            </article>
+            <article class="attention-item">
+              <span class="status-pill">2</span>
+              <div class="attention-title">Новый порядок</div>
+              <div class="attention-meta">Заказы, карточки товаров, комплектующие, фото и задачи разложены по понятным потокам.</div>
+            </article>
+            <article class="attention-item">
+              <span class="status-pill blue">3</span>
+              <div class="attention-title">AI-агенты</div>
+              <div class="attention-meta">Описание товара, ответы клиентам, Авито, задачи, контроль остатков и подсказки сотрудникам.</div>
+            </article>
+            <article class="attention-item">
+              <span class="status-pill warning">4</span>
+              <div class="attention-title">Публикация и контроль</div>
+              <div class="attention-meta">Сотрудник подтверждает цены, фото, выгрузку на сайт/Авито и работу с заказом.</div>
+            </article>
+          </div>
+        </section>
 
         <div class="layout-2">
           <section class="panel" aria-labelledby="attentionTitle">
@@ -87,6 +101,14 @@
               <span class="status-pill blue">Рабочий маршрут</span>
             </div>
             <div class="quick-action-list">
+              <a class="quick-action" href="orders.html">
+                <strong>Новые заказы</strong>
+                <span>Заявки с сайта, клиент, товар, статус и задача продавцу.</span>
+              </a>
+              <a class="quick-action" href="components.html">
+                <strong>Комплектующие</strong>
+                <span>Стекла, дисплеи, АКБ, кабели, совместимость и закупка.</span>
+              </a>
               <a class="quick-action" href="tasks.html">
                 <strong>Открыть задачи</strong>
                 <span>Что поручено, что закрыто и что горит.</span>
@@ -103,6 +125,10 @@
                 <strong>Вопросы</strong>
                 <span>Открытые вопросы сотрудников и сохраненные ответы ассистента.</span>
               </a>
+              <a class="quick-action" href="site-import.html" data-permission="site-import">
+                <strong>План интеграции</strong>
+                <span>Что спросить у Лёни, какие данные нужны и как безопасно подключаться.</span>
+              </a>
             </div>
           </section>
         </div>
@@ -114,5 +140,3 @@
   <script src="assets/js/app.js"></script>
 </body>
 </html>
-
-

@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Комплектующие | iMagnate Assistant</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <link rel="icon" href="assets/img/imagnate-icon.svg" type="image/svg+xml">
+</head>
+<body data-page="components">
+  <div class="app">
+    <aside class="sidebar" aria-label="Навигация">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><img src="assets/img/imagnate-icon.svg" alt=""></div>
+        <div>
+          <div class="brand-name">iMagnate Assistant</div>
+          <div class="brand-note">Контент-центр магазина</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="nav-button" href="index.html" data-page-link="dashboard"><span class="nav-icon">01</span><span>Главная</span></a>
+        <a class="nav-button" href="orders.html" data-page-link="orders"><span class="nav-icon">02</span><span>Заказы</span></a>
+        <a class="nav-button" href="inventory.html" data-page-link="inventory"><span class="nav-icon">03</span><span>Товары</span></a>
+        <a class="nav-button" href="components.html" data-page-link="components"><span class="nav-icon">04</span><span>Комплектующие</span></a>
+        <a class="nav-button" href="avito.html" data-page-link="avito"><span class="nav-icon">05</span><span>Авито</span></a>
+        <a class="nav-button" href="tasks.html" data-page-link="tasks"><span class="nav-icon">06</span><span>Задачи</span></a>
+        <a class="nav-button" href="questions.html" data-page-link="questions"><span class="nav-icon">07</span><span>Вопросы</span></a>
+        <a class="nav-button" href="shift.html" data-page-link="shift"><span class="nav-icon">08</span><span>Смена</span></a>
+        <a class="nav-button" href="site-import.html" data-page-link="site-import" data-permission="site-import"><span class="nav-icon">09</span><span>Интеграция</span></a>
+        <a class="nav-button" href="employees.html" data-page-link="employees" data-permission="manage-employees"><span class="nav-icon">10</span><span>Сотрудники</span></a>
+      </nav>
+      <div class="sidebar-footer">
+        <span>Комплектующие и совместимость</span>
+        <span>Стекла, дисплеи, АКБ, кабели и расходники</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1>Комплектующие</h1>
+          <p class="subtitle">Отдельная вкладка для расходников и ремонта: совместимость, остаток, минимальный запас и задача на закупку.</p>
+        </div>
+        <div class="badge-row">
+          <span class="badge"><span class="dot"></span><span id="todayLabel">Сегодня</span></span>
+          <span class="badge">Склад сервиса</span>
+        </div>
+      </header>
+
+      <section class="view active" aria-labelledby="componentsTitle">
+        <h2 id="componentsTitle">Склад комплектующих</h2>
+        <div class="metrics" id="componentsMetrics"></div>
+
+        <section class="panel" aria-labelledby="componentsWhyTitle">
+          <div class="panel-header">
+            <div>
+              <h3 id="componentsWhyTitle">Зачем отдельная вкладка</h3>
+              <p class="panel-note">В обычном товарном складе комплектующие теряются. Здесь они живут отдельно: по совместимости, минимальному остатку и задачам на закупку.</p>
+            </div>
+            <span class="status-pill blue">Оптимизация</span>
+          </div>
+          <div class="process-grid">
+            <article class="attention-item">
+              <span class="status-pill">1</span>
+              <div class="attention-title">Совместимость</div>
+              <div class="attention-meta">Продавец быстро понимает, что подходит к iPhone, PS, аксессуарам или ремонту.</div>
+            </article>
+            <article class="attention-item">
+              <span class="status-pill">2</span>
+              <div class="attention-title">Минимальный остаток</div>
+              <div class="attention-meta">Ассистент подсвечивает, что скоро закончится.</div>
+            </article>
+            <article class="attention-item">
+              <span class="status-pill warning">3</span>
+              <div class="attention-title">Закупка</div>
+              <div class="attention-meta">Одной кнопкой создается задача на пополнение.</div>
+            </article>
+            <article class="attention-item">
+              <span class="status-pill blue">4</span>
+              <div class="attention-title">AI-подбор</div>
+              <div class="attention-meta">Позже агент сам предложит стекло, кабель или АКБ к выбранному товару.</div>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel" aria-label="Таблица комплектующих">
+          <div class="panel-header">
+            <h3>Все комплектующие</h3>
+            <span class="status-pill warning">Контроль остатков</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Позиция</th>
+                  <th>Тип</th>
+                  <th>Совместимость</th>
+                  <th>Остаток</th>
+                  <th>Действие</th>
+                  <th>Задача</th>
+                </tr>
+              </thead>
+              <tbody id="componentsTable"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="assets/js/demo-data.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
