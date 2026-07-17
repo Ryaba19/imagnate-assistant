@@ -87,6 +87,7 @@
   let chatHistory = loadChat();
   let realAiAvailable = false;
   let aiStatusText = "Демо без API";
+  let aiStatusChecked = false;
 
   function byId(id) {
     return document.getElementById(id);
@@ -813,6 +814,10 @@
     return "api/assistant";
   }
 
+  function getAiStatusUrl() {
+    return getAiApiUrl().replace(/\/assistant$/, "/assistant/status");
+  }
+
   function setAiStatus(text, isReal = false) {
     aiStatusText = text;
     realAiAvailable = isReal;
@@ -820,6 +825,24 @@
     if (target) {
       target.textContent = text;
       target.classList.toggle("live", isReal);
+    }
+  }
+
+  async function checkAssistantStatus() {
+    if (aiStatusChecked) return;
+    aiStatusChecked = true;
+    try {
+      const response = await fetch(getAiStatusUrl(), { method: "GET" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok || !data.configured) {
+        setAiStatus("Демо без API", false);
+        return;
+      }
+
+      const providerLabel = data.provider === "claude" ? "Claude" : data.provider === "openai" ? "OpenAI" : "AI";
+      setAiStatus(`${providerLabel}: ${data.model || "включен"}`, true);
+    } catch {
+      setAiStatus("Демо без API", false);
     }
   }
 
@@ -4056,6 +4079,7 @@
     applyRoleUi();
     renderToday();
     refreshAll();
+    checkAssistantStatus();
     bindEvents();
   }
 

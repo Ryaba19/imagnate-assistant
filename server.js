@@ -3,6 +3,43 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const rootDir = __dirname;
+
+const shellEnvKeys = new Set(Object.keys(process.env));
+
+function parseEnvValue(value) {
+  const trimmed = String(value || "").trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function loadEnvFile(filename) {
+  const filePath = path.join(rootDir, filename);
+  if (!fs.existsSync(filePath)) return;
+
+  const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+
+    const separator = trimmed.indexOf("=");
+    if (separator === -1) continue;
+
+    const key = trimmed.slice(0, separator).trim();
+    const value = parseEnvValue(trimmed.slice(separator + 1));
+    if (!key || shellEnvKeys.has(key)) continue;
+
+    process.env[key] = value;
+  }
+}
+
+loadEnvFile(".env");
+loadEnvFile(".env.local");
+
 const port = Number(process.env.PORT || 8787);
 const aiProvider = (process.env.AI_PROVIDER || (process.env.ANTHROPIC_API_KEY ? "claude" : "openai")).toLowerCase();
 const openaiModel = process.env.OPENAI_MODEL || "gpt-5.6";
@@ -141,6 +178,17 @@ function getProviderConfig() {
     configured: Boolean(process.env.OPENAI_API_KEY),
     missingKey: "OPENAI_API_KEY is not set"
   };
+}
+
+function handleAssistantStatus(response) {
+  const providerConfig = getProviderConfig();
+  sendJson(response, 200, {
+    ok: true,
+    configured: providerConfig.configured,
+    provider: providerConfig.provider,
+    model: providerConfig.model,
+    missingKey: providerConfig.configured ? "" : providerConfig.missingKey
+  });
 }
 
 async function callOpenAi(body, prompt) {
@@ -304,6 +352,11 @@ const server = http.createServer((request, response) => {
 
   if (request.url?.startsWith("/api/assistant") && request.method === "POST") {
     handleAssistant(request, response);
+    return;
+  }
+
+  if (request.url?.startsWith("/api/assistant/status") && request.method === "GET") {
+    handleAssistantStatus(response);
     return;
   }
 
