@@ -3,12 +3,14 @@ services:
     name: imagnate-store-control
     runtime: node
     plan: free
-    buildCommand: npm install
-    startCommand: npm start
+    buildCommand: echo "No build step"
+    startCommand: node storecontrolapi.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: 20.19.0
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_MODEL
