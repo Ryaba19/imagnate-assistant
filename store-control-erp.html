@@ -1764,6 +1764,9 @@ function createEmptyStoreData(storeName){
        resaleFee:300},
     ],
     warehouse:{tech:[],tradein:[],accessories:[],parts:[]},
+    warehouseLedger:{tech:[],tradein:[],accessories:[],parts:[]},
+    scannerStock:{tech:[],tradein:[],accessories:[],parts:[]},
+    scanLog:[],
     purchaseRequests:[], customers:[], leads:[], integrations:[], tasks:[], taskPayouts:[],
     employees:[], deliveries:[], messages:{channels:[],conversations:[]},
     financeOps:[], expenseRequests:[], notifications:[], taskIdeas:[],
@@ -4871,11 +4874,19 @@ function scannerEnsureBarcodes(){
 function scannerEntries(){
   scannerEnsureBarcodes();
   const entries=[];
+  const seen=new Set();
+  const addEntry=(tab,item)=>{
+    const aliases=[item.imei,item.sku,item.barcode,item.labelCode].filter(Boolean).map(scannerNormalize);
+    const key=aliases[0]||scannerNormalize(scannerCodeForItem(item));
+    if(!key || seen.has(key)) return;
+    seen.add(key);
+    entries.push({tab,item,aliases,primary:scannerPrimaryCode(item),barcode:scannerCodeForItem(item)});
+  };
   Object.keys(SCANNER_TAB_LABELS).forEach(tab=>{
-    (DATA.scannerStock[tab]||[]).forEach(item=>{
-      const aliases=[item.imei,item.sku,item.barcode,item.labelCode].filter(Boolean).map(scannerNormalize);
-      entries.push({tab,item,aliases,primary:scannerPrimaryCode(item),barcode:scannerCodeForItem(item)});
-    });
+    (DATA.scannerStock[tab]||[]).forEach(item=>addEntry(tab,item));
+  });
+  Object.keys(SCANNER_TAB_LABELS).forEach(tab=>{
+    (DATA.warehouse?.[tab]||[]).filter(item=>item.scannerTracked).forEach(item=>addEntry(tab,item));
   });
   return entries;
 }
@@ -4947,7 +4958,7 @@ function scannerStatus(entry){
 }
 function scannerAgentHintHtml(entry, raw){
   if(!entry){
-    return '<div class="kpi-delta down" style="margin:12px 0;">'+ic('alert')+' AI-агент сканера: кода нет в базе. Внесите товар один раз, и дальше эта коробка будет открываться по этому же коду.</div>';
+    return '<div class="kpi-delta down" style="margin:12px 0;">'+ic('alert')+' Проверка сканера: кода нет в базе. Внесите товар один раз, и дальше эта коробка будет открываться по этому же коду.</div>';
   }
   const it=entry.item;
   const st=it.status||'';
@@ -4959,7 +4970,7 @@ function scannerAgentHintHtml(entry, raw){
   else if(st==='out'){ text='позиция есть в базе, но остаток нулевой. Нужна закупка или проверка склада.'; cls='down'; }
   else if(st==='check'){ text='товар найден, но находится на проверке. Выдавать только после смены статуса.'; cls=''; }
   else if(isQty && (it.qty||0)<=2){ text='товар найден, но остаток низкий. После продажи стоит добавить задачу на закупку.'; cls=''; }
-  return '<div class="kpi-delta '+cls+'" style="margin:12px 0;">'+ic('scan')+' AI-агент сканера: '+escHtml(text)+'</div>';
+  return '<div class="kpi-delta '+cls+'" style="margin:12px 0;">'+ic('scan')+' Проверка сканера: '+escHtml(text)+'</div>';
 }
 function scannerResultHtml(entry, raw){
   if(!entry){
@@ -5008,12 +5019,18 @@ function scannerPushLog(raw, entry, action){
     at:DATA.today+' '+nowTime()
   });
   DATA.scanLog=DATA.scanLog.slice(0,12);
+  if(typeof lsSave==='function') lsSave();
 }
-function scannerRenderResult(raw, host){
+function scannerRenderResult(raw, host, options={}){
   const result=host.querySelector('#scannerResult');
-  const entry=scannerFind(raw);
-  if(raw) scannerPushLog(raw, entry, entry?'Скан найден':'Код не найден');
-  result.innerHTML=scannerResultHtml(entry, raw);
+  const code=scannerNormalize(raw);
+  if(!code){
+    result.innerHTML='<div class="empty"><b>Ожидаю скан</b><span>Поставьте курсор в поле и пикните код с коробки. Сканер сам введёт код и нажмёт Enter.</span></div>';
+    return;
+  }
+  const entry=scannerFind(code);
+  if(!options.skipLog) scannerPushLog(code, entry, entry?'Скан найден':'Код не найден');
+  result.innerHTML=scannerResultHtml(entry, code);
   scannerRefreshLog(host);
   scannerWireResult(host);
 }
@@ -5039,8 +5056,8 @@ function openScannerCreateModal(raw=''){
     '<div class="field"><label>Цена продажи</label><input class="input-mini" id="scanNewPrice" type="number" value="0" style="width:100%;"></div>'+
     '<div class="field"><label>Количество</label><input class="input-mini" id="scanNewQty" type="number" value="1" min="1" style="width:100%;"></div>'+
     '<div class="field"><label>Место</label><input class="input-mini" id="scanNewLocation" value="Склад" style="width:100%;"></div>'+
-  '</div><p class="tsub">Основной сценарий: пикнули реальный код с коробки, внесли его в базу и дальше эта единица находится по этому же коду. Внутренние коды нужны только для позиций без своего штрих-кода и создаются вручную.</p>';
-  openModal('Внести товар в базу', 'Код уже считан с коробки или введён вручную', body, [
+  '</div><p class="tsub">Основной сценарий: пикнули реальный код с коробки, внесли товар в базу и дальше эта единица находится по этому же коду. Для аксессуаров без заводского кода позже можно напечатать свою этикетку.</p>';
+  openModal('Добавить товар по скану', 'Сначала реальный код, потом карточка товара', body, [
     {label:'Сохранить', cls:'btn-primary', action:saveScannerCreatedItem}
   ]);
 }
@@ -5056,9 +5073,9 @@ function saveScannerCreatedItem(){
   if(scannerFind(code)){ toast('Такой код уже есть в базе', 'error'); return; }
   let item;
   if(tab==='tech'||tab==='tradein'){
-    item={imei:code, model, purchase, price, status:'instock', location, lastPriceUpdateAt:DATA.today, hiddenFromSite:false};
+    item={imei:code, model, purchase, price, status:(tab==='tradein'?'check':'instock'), location, lastPriceUpdateAt:DATA.today, hiddenFromSite:false, scannerTracked:true, scannedAt:DATA.today+' '+nowTime(), scannedBy:currentEmployeeName()};
   } else {
-    item={sku:code, model, purchase, price, status:'instock', location, qty};
+    item={sku:code, model, purchase, price, status:'instock', location, qty, scannerTracked:true, scannedAt:DATA.today+' '+nowTime(), scannedBy:currentEmployeeName()};
   }
   DATA.scannerStock[tab].push(item);
   const warehouseExists=(DATA.warehouse[tab]||[]).some(existing=>{
@@ -5068,10 +5085,12 @@ function saveScannerCreatedItem(){
   if(!warehouseExists) DATA.warehouse[tab].push({...item});
   DATA.warehouseLedger=DATA.warehouseLedger||{};
   DATA.warehouseLedger[tab]=DATA.warehouseLedger[tab]||[];
-  DATA.warehouseLedger[tab].unshift({date:DATA.today, main:'Маркировка: '+model, val:purchase*(item.qty||1)});
+  DATA.warehouseLedger[tab].unshift({date:DATA.today, main:'Скан-приёмка: '+model, val:purchase*(item.qty||1), by:currentEmployeeName()});
   const entry={tab,item,primary:scannerPrimaryCode(item),barcode:scannerCodeForItem(item)};
-  scannerPushLog(code, entry, 'Создана маркировка');
+  scannerPushLog(code, entry, 'Товар внесён в базу');
+  if(typeof lsSave==='function') lsSave();
   closeModal();
+  STATE.scannerLastCode=code;
   if(STATE.page==='scanner') renderPage();
   toast('Товар внесён в базу по коду: '+code, 'success');
 }
@@ -5097,12 +5116,12 @@ function renderScanner(c){
     kpiPlain('Кодов в базе', num(entries.length), 'scan')+
     kpiPlain('Сканов сегодня', num((DATA.scanLog||[]).length), 'analytics')+
   '</div>';
-  html+='<div class="section"><div class="section-head"><div><div class="section-eyebrow">Склад без AI</div><div class="section-title">Сканирование товара с коробки</div><p class="tsub">Поставьте курсор в поле и пикните сканером код с коробки. Если код уже есть в базе, откроется товар. Если нет — система предложит внести новую единицу.</p></div><button class="btn btn-primary" id="scanCreateBtn">'+ic('plus')+' Внести товар</button></div>'+
+  html+='<div class="section"><div class="section-head"><div><div class="section-eyebrow">Рабочий учет склада</div><div class="section-title">Сканирование товара с коробки</div><p class="tsub">Поставьте курсор в поле и пикните сканером код с коробки. Если код уже есть в базе, откроется товар. Если нет — система предложит внести новую единицу.</p></div><button class="btn btn-primary" id="scanCreateBtn">'+ic('plus')+' Добавить по скану</button></div>'+
     '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">'+
       '<input class="input-mini mono" id="scannerInput" placeholder="Пикните код с коробки: IMEI, серийник или SKU" style="flex:1;min-width:320px;font-size:18px;padding:14px;">'+
       '<button class="btn btn-primary" id="scannerRunBtn">'+ic('scan')+' Найти</button>'+
     '</div>'+
-    (entries.length?'<p class="tsub" style="margin-top:12px;">В базе сканера сейчас '+num(entries.length)+' код(ов), внесённых вручную через этот модуль.</p>':'')+
+    (entries.length?'<p class="tsub" style="margin-top:12px;">В базе сканера сейчас '+num(entries.length)+' код(ов), которые были внесены через сканирование.</p>':'')+
   '</div>';
   html+='<div id="scannerResult" style="margin-top:18px;"></div>';
   html+='<div class="section" style="margin-top:18px;"><div class="section-head"><div><div class="section-title">Последние сканы</div><p class="tsub">История нужна, чтобы видеть, кто что пикал и какой результат получила система.</p></div></div><div id="scannerLog">'+scannerLogHtml()+'</div></div>';
@@ -5112,6 +5131,11 @@ function renderScanner(c){
   input.addEventListener('keydown', e=>{ if(e.key==='Enter') run(); });
   c.querySelector('#scannerRunBtn').addEventListener('click', run);
   c.querySelector('#scanCreateBtn').addEventListener('click', ()=>openScannerCreateModal(input.value));
+  if(STATE.scannerLastCode){
+    input.value=STATE.scannerLastCode;
+    scannerRenderResult(STATE.scannerLastCode, c, {skipLog:true});
+    STATE.scannerLastCode='';
+  }
   setTimeout(()=>input.focus(),60);
 }
 
@@ -11853,6 +11877,10 @@ function lsSave(){
       priceUpdateLog: DATA.priceUpdateLog.slice(0,200),
       pricingAuditLog: DATA.pricingAuditLog.slice(0,200),
       learningQueue: DATA.learningQueue,
+      warehouse: DATA.warehouse,
+      warehouseLedger: DATA.warehouseLedger,
+      scannerStock: DATA.scannerStock,
+      scanLog: (DATA.scanLog||[]).slice(0,50),
       savedAt: new Date().toISOString(),
     };
     localStorage.setItem(LS_KEY, JSON.stringify(payload));
@@ -11882,6 +11910,10 @@ function lsLoad(){
     if(payload.priceUpdateLog?.length) DATA.priceUpdateLog=payload.priceUpdateLog;
     if(payload.pricingAuditLog?.length) DATA.pricingAuditLog=payload.pricingAuditLog;
     if(payload.learningQueue?.length) DATA.learningQueue=payload.learningQueue;
+    if(payload.warehouse) DATA.warehouse=payload.warehouse;
+    if(payload.warehouseLedger) DATA.warehouseLedger=payload.warehouseLedger;
+    if(payload.scannerStock) DATA.scannerStock=payload.scannerStock;
+    if(payload.scanLog) DATA.scanLog=payload.scanLog;
     return true;
   }catch(e){ console.warn('localStorage load error:', e); return false; }
 }
