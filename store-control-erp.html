@@ -5037,6 +5037,58 @@ function scannerExportCoreDb(){
   });
   toast('Структурированная БД скачана JSON-файлом', 'success');
 }
+const SCANNER_DB_API_LOCAL='http://127.0.0.1:3000/api/scan/receive';
+function scannerDbEndpoint(){
+  const saved=(()=>{ try{return localStorage.getItem('store_control_scan_api')||'';}catch(e){return '';} })();
+  if(saved) return saved;
+  const host=location.hostname;
+  const local=host==='127.0.0.1'||host==='localhost'||location.protocol==='file:';
+  return local?SCANNER_DB_API_LOCAL:(location.origin.replace(/\/+$/,'')+'/api/scan/receive');
+}
+function scannerDbToken(){
+  try{return localStorage.getItem('store_control_api_token')||'';}catch(e){return '';}
+}
+window._erp_setApiToken=function(token){
+  try{
+    localStorage.setItem('store_control_api_token', String(token||''));
+    toast('Токен для серверной БД сохранён на этом компьютере', 'success');
+  }catch(e){
+    toast('Не удалось сохранить токен', 'error');
+  }
+};
+async function scannerSyncPostgres(tab, item, code){
+  const token=scannerDbToken();
+  if(!token) return {skipped:true, reason:'no_token'};
+  const payload={
+    code,
+    category:tab,
+    model:item.model,
+    purchase:item.purchase||0,
+    price:item.price||0,
+    qty:item.qty||1,
+    status:item.status||'instock',
+    location:item.location||'Склад',
+    actor:currentEmployeeName()
+  };
+  try{
+    const res=await fetch(scannerDbEndpoint(), {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+      body:JSON.stringify(payload)
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok || !data.ok) throw new Error(data.error||('HTTP '+res.status));
+    item.postgresSyncedAt=DATA.today+' '+nowTime();
+    item.postgresSyncError='';
+    if(typeof lsSave==='function') lsSave();
+    return {ok:true, data};
+  }catch(e){
+    item.postgresSyncError=e.message||'PostgreSQL sync failed';
+    if(typeof lsSave==='function') lsSave();
+    console.warn('PostgreSQL scan sync skipped:', e.message||e);
+    return {ok:false, error:e.message||String(e)};
+  }
+}
 function scannerEnsureBarcodes(){
   DATA.scanLog=DATA.scanLog||[];
   DATA.scannerStock=DATA.scannerStock||scannerEmptyStock();
@@ -5264,6 +5316,9 @@ function saveScannerCreatedItem(){
   const entry={tab,item,primary:scannerPrimaryCode(item),barcode:scannerCodeForItem(item)};
   scannerPushLog(code, entry, 'Товар внесён в базу');
   if(typeof lsSave==='function') lsSave();
+  scannerSyncPostgres(tab, item, code).then(result=>{
+    if(result?.ok) toast('Товар также сохранён в PostgreSQL', 'success');
+  });
   closeModal();
   STATE.scannerLastCode=code;
   if(STATE.page==='scanner') renderPage();

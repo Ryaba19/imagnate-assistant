@@ -3,7 +3,7 @@ services:
     name: imagnate-store-control
     runtime: node
     plan: free
-    buildCommand: echo "No build step"
+    buildCommand: corepack enable && yarn install --production=false || npm install --omit=dev || echo "Dependency install skipped"
     startCommand: node storecontrolapi.js
     healthCheckPath: /api/health
     envVars:
@@ -17,3 +17,7 @@ services:
         value: gpt-4o-mini
       - key: STORE_TOKEN
         generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: PG_SSL_MODE
+        value: require

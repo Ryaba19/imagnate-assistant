@@ -46,7 +46,25 @@ const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const OPENAI_API_BASE = (process.env.OPENAI_API_BASE || 'https://api.openai.com/v1').replace(/\/+$/, '');
 const OPENAI_MAX_OUTPUT_TOKENS = parseInt(process.env.OPENAI_MAX_OUTPUT_TOKENS || '260', 10);
 const OPENAI_TIMEOUT_MS = parseInt(process.env.OPENAI_TIMEOUT_MS || '15000', 10);
+const DATABASE_URL = process.env.DATABASE_URL || '';
+const PG_SSL_MODE = process.env.PG_SSL_MODE || 'require';
+const PG_POOL_MAX = parseInt(process.env.PG_POOL_MAX || '5', 10);
 /* ===================== */
+
+let PgPool = null;
+try {
+  PgPool = require('pg').Pool;
+} catch (e) {
+  PgPool = null;
+}
+
+const POSTGRES_DRIVER_INSTALLED = Boolean(PgPool);
+const POSTGRES_CONFIGURED = Boolean(DATABASE_URL && POSTGRES_DRIVER_INSTALLED);
+const pgPool = POSTGRES_CONFIGURED ? new PgPool({
+  connectionString: DATABASE_URL,
+  max: PG_POOL_MAX,
+  ssl: PG_SSL_MODE === 'disable' ? false : { rejectUnauthorized: false }
+}) : null;
 
 function readDb() {
   try { return JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); }
@@ -54,6 +72,133 @@ function readDb() {
 }
 function writeDb(db) {
   fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+}
+
+function dbReadyMessage() {
+  if (!DATABASE_URL) return 'DATABASE_URL не задан';
+  if (!POSTGRES_DRIVER_INSTALLED) return 'Драйвер pg не установлен';
+  return 'PostgreSQL подключен';
+}
+
+function requireStoreAuth(req, url) {
+  const token = url.searchParams.get('token') || '';
+  const auth = req.headers.authorization || (token ? 'Bearer ' + token : '');
+  return auth === 'Bearer ' + STORE_TOKEN;
+}
+
+async function pgQuery(sql, params = []) {
+  if (!pgPool) throw new Error(dbReadyMessage());
+  return pgPool.query(sql, params);
+}
+
+function normalizeCode(value) {
+  return clean(value, 120).replace(/\s+/g, '').toUpperCase();
+}
+
+function normalizeCategory(value) {
+  const category = clean(value, 40).toLowerCase();
+  return ['tech', 'tradein', 'accessories', 'parts'].includes(category) ? category : 'tech';
+}
+
+function categoryLabel(category) {
+  return { tech: 'Техника', tradein: 'Trade-in', accessories: 'Аксессуары', parts: 'Запчасти' }[category] || category;
+}
+
+function productKey(name, category) {
+  return (category + '|' + String(name || '').toLowerCase()).replace(/\s+/g, ' ').trim();
+}
+
+async function receiveScanInPostgres(body) {
+  const category = normalizeCategory(body.category || body.tab);
+  const code = normalizeCode(body.code || body.imei || body.sku || body.barcode);
+  const model = clean(body.model || body.name, 180);
+  if (!code || !model) throw new Error('Нужны код и название товара');
+
+  const stockMode = category === 'tech' || category === 'tradein' ? 'unit' : 'batch';
+  const qty = stockMode === 'unit' ? 1 : Math.max(1, parseInt(body.qty || '1', 10) || 1);
+  const purchase = Math.max(0, Number(body.purchase || body.purchasePrice || 0) || 0);
+  const price = Math.max(0, Number(body.price || body.salePrice || 0) || 0);
+  const status = clean(body.status || (category === 'tradein' ? 'check' : 'instock'), 40);
+  const location = clean(body.location || 'Склад', 120);
+  const actor = clean(body.actor || body.scannedBy || 'system', 120);
+  const now = new Date();
+  const key = productKey(model, category);
+
+  const client = await pgPool.connect();
+  try {
+    await client.query('BEGIN');
+    const productResult = await client.query(`
+      INSERT INTO products
+        (product_key, name, category, category_label, stock_mode, default_purchase_price, default_sale_price, min_stock, source, updated_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'scanner',now())
+      ON CONFLICT (product_key) DO UPDATE SET
+        name=EXCLUDED.name,
+        default_purchase_price=EXCLUDED.default_purchase_price,
+        default_sale_price=EXCLUDED.default_sale_price,
+        updated_at=now()
+      RETURNING id
+    `, [key, model, category, categoryLabel(category), stockMode, purchase, price, stockMode === 'batch' ? 2 : 1]);
+    const productId = productResult.rows[0].id;
+
+    let unitId = null;
+    let batchId = null;
+    if (stockMode === 'unit') {
+      const unitResult = await client.query(`
+        INSERT INTO stock_units
+          (product_id, unit_code, imei, category, status, purchase_price, sale_price, location, scanned_at, scanned_by, source, updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'scanner',now())
+        ON CONFLICT (unit_code) DO UPDATE SET
+          product_id=EXCLUDED.product_id,
+          status=EXCLUDED.status,
+          purchase_price=EXCLUDED.purchase_price,
+          sale_price=EXCLUDED.sale_price,
+          location=EXCLUDED.location,
+          scanned_by=EXCLUDED.scanned_by,
+          updated_at=now()
+        RETURNING id
+      `, [productId, code, code, category, status, purchase, price, location, now, actor]);
+      unitId = unitResult.rows[0].id;
+    } else {
+      const batchResult = await client.query(`
+        INSERT INTO stock_batches
+          (product_id, sku, barcode, category, qty, status, purchase_price, sale_price, location, scanned_at, scanned_by, source, updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'scanner',now())
+        ON CONFLICT (barcode) DO UPDATE SET
+          product_id=EXCLUDED.product_id,
+          sku=EXCLUDED.sku,
+          qty=GREATEST(stock_batches.qty, EXCLUDED.qty),
+          status=EXCLUDED.status,
+          purchase_price=EXCLUDED.purchase_price,
+          sale_price=EXCLUDED.sale_price,
+          location=EXCLUDED.location,
+          scanned_by=EXCLUDED.scanned_by,
+          updated_at=now()
+        RETURNING id
+      `, [productId, code, code, category, qty, status, purchase, price, location, now, actor]);
+      batchId = batchResult.rows[0].id;
+    }
+
+    const dedupeKey = `scan_receive:${code}`;
+    await client.query(`
+      INSERT INTO stock_movements
+        (dedupe_key, movement_type, product_id, unit_id, batch_id, code, model, category, qty, amount, location, actor, note, happened_at)
+      VALUES ($1,'scan_receive',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      ON CONFLICT (dedupe_key) DO NOTHING
+    `, [dedupeKey, productId, unitId, batchId, code, model, category, qty, purchase * qty, location, actor, 'Добавление товара через сканер', now]);
+
+    await client.query(`
+      INSERT INTO audit_log (entity_type, entity_id, action, actor, after_data)
+      VALUES ('stock', $1, 'scan_receive', $2, $3::jsonb)
+    `, [unitId || batchId || productId, actor, JSON.stringify({ code, model, category, qty, purchase, price, status, location })]);
+
+    await client.query('COMMIT');
+    return { productId, unitId, batchId, code, category, qty };
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 /* Простейшая защита от флуда: не больше 5 заявок в минуту с одного IP */
@@ -234,8 +379,72 @@ const server = http.createServer((req, res) => {
       ok: true,
       app: 'Store Control ERP',
       aiConfigured: OPENAI_CONFIGURED,
+      postgresConfigured: POSTGRES_CONFIGURED,
       at: new Date().toISOString()
     });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/db/status') {
+    if (!POSTGRES_CONFIGURED) {
+      return send(res, 200, {
+        ok: true,
+        configured: false,
+        driverInstalled: POSTGRES_DRIVER_INSTALLED,
+        hasDatabaseUrl: Boolean(DATABASE_URL),
+        message: dbReadyMessage()
+      });
+    }
+    pgQuery('select now() as server_time')
+      .then(result => send(res, 200, {
+        ok: true,
+        configured: true,
+        driverInstalled: true,
+        hasDatabaseUrl: true,
+        serverTime: result.rows[0].server_time
+      }))
+      .catch(e => send(res, 503, {
+        ok: false,
+        configured: false,
+        driverInstalled: true,
+        hasDatabaseUrl: true,
+        error: clean(e.message, 500)
+      }));
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/db/init') {
+    if (!requireStoreAuth(req, url)) return send(res, 401, { ok: false, error: 'Неверный токен' });
+    if (!POSTGRES_CONFIGURED) return send(res, 503, { ok: false, error: dbReadyMessage() });
+    const schemaPath = path.join(__dirname, 'database', 'schema.sql');
+    fs.readFile(schemaPath, 'utf8', async (err, sql) => {
+      if (err) return send(res, 500, { ok: false, error: 'Не найден database/schema.sql' });
+      try {
+        await pgQuery(sql);
+        return send(res, 200, { ok: true, message: 'Схема PostgreSQL готова' });
+      } catch (e) {
+        return send(res, 500, { ok: false, error: clean(e.message, 800) });
+      }
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/scan/receive') {
+    if (!requireStoreAuth(req, url)) return send(res, 401, { ok: false, error: 'Неверный токен' });
+    if (!POSTGRES_CONFIGURED) return send(res, 503, { ok: false, error: dbReadyMessage() });
+    readJsonBody(req, 80000).then(async body => {
+      try {
+        const saved = await receiveScanInPostgres(body);
+        return send(res, 200, { ok: true, saved });
+      } catch (e) {
+        return send(res, 400, { ok: false, error: clean(e.message, 800) });
+      }
+    }).catch(e => {
+      send(res, e.message === 'body_too_large' ? 413 : 400, {
+        ok: false,
+        error: e.message === 'bad_json' ? 'Неверный JSON' : 'Слишком большой запрос'
+      });
+    });
+    return;
   }
 
   if (req.method === 'GET' && url.pathname === '/api/ai/status') {
