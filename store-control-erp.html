@@ -1206,6 +1206,7 @@ let DATA = {
       {sku:'PRT-1180', model:'Разъём USB-C (универс.)', purchase:340, price:0, status:'instock', location:'Сервис-центр', qty:11},
     ]
   },
+  coreDb:{version:1, products:[], stockUnits:[], stockBatches:[], stockMovements:[], updatedAt:null},
   // Запросы на передачу ответственности за ремонт другому мастеру.
   // Передача происходит только после согласия принимающего мастера (через ЛК).
   serviceHandoffs:[],
@@ -1767,6 +1768,7 @@ function createEmptyStoreData(storeName){
     warehouseLedger:{tech:[],tradein:[],accessories:[],parts:[]},
     scannerStock:{tech:[],tradein:[],accessories:[],parts:[]},
     scanLog:[],
+    coreDb:{version:1, products:[], stockUnits:[], stockBatches:[], stockMovements:[], updatedAt:null},
     purchaseRequests:[], customers:[], leads:[], integrations:[], tasks:[], taskPayouts:[],
     employees:[], deliveries:[], messages:{channels:[],conversations:[]},
     financeOps:[], expenseRequests:[], notifications:[], taskIdeas:[],
@@ -4864,12 +4866,184 @@ function scannerCodeForItem(item){
 }
 function scannerPrimaryCode(item){return item.imei || item.sku || scannerCodeForItem(item);}
 function scannerEmptyStock(){return {tech:[], tradein:[], accessories:[], parts:[]};}
+function coreDbEmpty(){return {version:1, products:[], stockUnits:[], stockBatches:[], stockMovements:[], updatedAt:null};}
+function coreDbEnsure(){
+  DATA.coreDb=DATA.coreDb||coreDbEmpty();
+  DATA.coreDb.version=DATA.coreDb.version||1;
+  ['products','stockUnits','stockBatches','stockMovements'].forEach(k=>{ DATA.coreDb[k]=DATA.coreDb[k]||[]; });
+  return DATA.coreDb;
+}
+function coreDbId(prefix){
+  return prefix+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7);
+}
+function coreDbProductKind(tab){
+  if(tab==='tech'||tab==='tradein') return 'unit';
+  return 'batch';
+}
+function coreDbProductKey(model, tab){
+  return scannerNormalize(tab+'|'+String(model||'').toLowerCase());
+}
+function coreDbEnsureProduct({model, tab, purchase, price}){
+  const db=coreDbEnsure();
+  const key=coreDbProductKey(model, tab);
+  let product=db.products.find(p=>p.key===key);
+  const now=DATA.today+' '+nowTime();
+  if(!product){
+    product={
+      id:coreDbId('prd'),
+      key,
+      name:model,
+      category:tab,
+      categoryLabel:SCANNER_TAB_LABELS[tab]||tab,
+      stockMode:coreDbProductKind(tab),
+      defaultPurchasePrice:purchase||0,
+      defaultSalePrice:price||0,
+      minStock:(tab==='accessories'||tab==='parts')?2:1,
+      source:'scanner',
+      createdAt:now,
+      updatedAt:now
+    };
+    db.products.push(product);
+  } else {
+    product.defaultPurchasePrice=purchase||product.defaultPurchasePrice||0;
+    product.defaultSalePrice=price||product.defaultSalePrice||0;
+    product.updatedAt=now;
+  }
+  return product;
+}
+function coreDbReceiveFromScan(tab, item, code, options={}){
+  const db=coreDbEnsure();
+  const normalizedCode=scannerNormalize(code);
+  const now=DATA.today+' '+nowTime();
+  const qty=(tab==='tech'||tab==='tradein')?1:Math.max(1, item.qty||1);
+  const product=coreDbEnsureProduct({model:item.model, tab, purchase:item.purchase, price:item.price});
+  let row, rowType;
+  if(product.stockMode==='unit'){
+    row=db.stockUnits.find(u=>scannerNormalize(u.unitCode)===normalizedCode || scannerNormalize(u.imei)===normalizedCode || scannerNormalize(u.serialNumber)===normalizedCode);
+    if(!row){
+      row={
+        id:coreDbId('unit'),
+        productId:product.id,
+        unitCode:normalizedCode,
+        imei:normalizedCode,
+        serialNumber:'',
+        category:tab,
+        status:item.status||'instock',
+        purchasePrice:item.purchase||0,
+        salePrice:item.price||0,
+        location:item.location||'Склад',
+        scannedAt:now,
+        scannedBy:currentEmployeeName(),
+        source:'scanner'
+      };
+      db.stockUnits.push(row);
+    } else {
+      row.productId=product.id;
+      row.status=item.status||row.status;
+      row.purchasePrice=item.purchase||row.purchasePrice||0;
+      row.salePrice=item.price||row.salePrice||0;
+      row.location=item.location||row.location||'Склад';
+      row.updatedAt=now;
+    }
+    item.dbUnitId=row.id;
+    rowType='unit';
+  } else {
+    row=db.stockBatches.find(b=>scannerNormalize(b.barcode)===normalizedCode || scannerNormalize(b.sku)===normalizedCode);
+    if(!row){
+      row={
+        id:coreDbId('batch'),
+        productId:product.id,
+        sku:normalizedCode,
+        barcode:normalizedCode,
+        category:tab,
+        qty,
+        status:item.status||'instock',
+        purchasePrice:item.purchase||0,
+        salePrice:item.price||0,
+        location:item.location||'Склад',
+        scannedAt:now,
+        scannedBy:currentEmployeeName(),
+        source:'scanner'
+      };
+      db.stockBatches.push(row);
+    } else {
+      row.productId=product.id;
+      row.qty=Math.max(row.qty||0, qty);
+      row.status=item.status||row.status;
+      row.purchasePrice=item.purchase||row.purchasePrice||0;
+      row.salePrice=item.price||row.salePrice||0;
+      row.location=item.location||row.location||'Склад';
+      row.updatedAt=now;
+    }
+    item.dbBatchId=row.id;
+    rowType='batch';
+  }
+  item.dbProductId=product.id;
+  const movementExists=db.stockMovements.some(m=>m.code===normalizedCode && m.type==='scan_receive' && (m.unitId===item.dbUnitId || m.batchId===item.dbBatchId));
+  if(!movementExists){
+    db.stockMovements.unshift({
+      id:coreDbId('mov'),
+      type:options.type||'scan_receive',
+      productId:product.id,
+      unitId:item.dbUnitId||null,
+      batchId:item.dbBatchId||null,
+      code:normalizedCode,
+      model:item.model,
+      category:tab,
+      qty,
+      amount:(item.purchase||0)*qty,
+      location:item.location||'Склад',
+      by:currentEmployeeName(),
+      at:now,
+      note:options.note||'Добавление товара через сканер'
+    });
+  }
+  db.updatedAt=now;
+  return {product,row,rowType};
+}
+function coreDbSyncScannerStock(){
+  scannerEnsureBarcodes();
+  coreDbEnsure();
+  let changed=false;
+  Object.keys(SCANNER_TAB_LABELS).forEach(tab=>{
+    (DATA.scannerStock[tab]||[]).forEach(item=>{
+      const code=scannerCodeForItem(item);
+      if(code && !item.dbProductId){
+        coreDbReceiveFromScan(tab, item, code, {type:'scanner_backfill', note:'Синхронизация старой записи сканера'});
+        changed=true;
+      }
+    });
+  });
+  if(changed && typeof lsSave==='function') lsSave();
+}
+function coreDbStats(){
+  const db=coreDbEnsure();
+  return {
+    products:db.products.length,
+    units:db.stockUnits.length,
+    batchQty:db.stockBatches.reduce((s,b)=>s+(b.qty||0),0),
+    movements:db.stockMovements.length
+  };
+}
+function scannerExportCoreDb(){
+  coreDbSyncScannerStock();
+  const store=getCurrentStore();
+  const safeDate=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  jsonDownload('imagnate-core-db-'+safeDate+'.json', {
+    schema:'imagnate_store_core_v1',
+    exportedAt:new Date().toISOString(),
+    store:{id:store.id, name:store.name, type:store.type},
+    db:DATA.coreDb
+  });
+  toast('Структурированная БД скачана JSON-файлом', 'success');
+}
 function scannerEnsureBarcodes(){
   DATA.scanLog=DATA.scanLog||[];
   DATA.scannerStock=DATA.scannerStock||scannerEmptyStock();
   Object.keys(SCANNER_TAB_LABELS).forEach(tab=>{
     DATA.scannerStock[tab]=DATA.scannerStock[tab]||[];
   });
+  coreDbEnsure();
 }
 function scannerEntries(){
   scannerEnsureBarcodes();
@@ -5077,6 +5251,7 @@ function saveScannerCreatedItem(){
   } else {
     item={sku:code, model, purchase, price, status:'instock', location, qty, scannerTracked:true, scannedAt:DATA.today+' '+nowTime(), scannedBy:currentEmployeeName()};
   }
+  coreDbReceiveFromScan(tab, item, code);
   DATA.scannerStock[tab].push(item);
   const warehouseExists=(DATA.warehouse[tab]||[]).some(existing=>{
     const aliases=[existing.imei,existing.sku,existing.barcode,existing.labelCode].filter(Boolean).map(scannerNormalize);
@@ -5107,16 +5282,16 @@ function scannerRefreshLog(host){
 }
 function renderScanner(c){
   scannerEnsureBarcodes();
+  coreDbSyncScannerStock();
   const entries=scannerEntries();
-  const serialCount=DATA.scannerStock.tech.length+DATA.scannerStock.tradein.length;
-  const qtyCount=DATA.scannerStock.accessories.reduce((s,it)=>s+(it.qty||0),0)+DATA.scannerStock.parts.reduce((s,it)=>s+(it.qty||0),0);
+  const dbStats=coreDbStats();
   let html='<div class="grid grid-4" style="margin-bottom:18px;">'+
-    kpiPlain('Единиц техники', num(serialCount), 'phone')+
-    kpiPlain('Аксессуары/запчасти', num(qtyCount)+' шт.', 'box')+
-    kpiPlain('Кодов в базе', num(entries.length), 'scan')+
-    kpiPlain('Сканов сегодня', num((DATA.scanLog||[]).length), 'analytics')+
+    kpiPlain('Товаров в БД', num(dbStats.products), 'warehouse')+
+    kpiPlain('Единиц с IMEI', num(dbStats.units), 'phone')+
+    kpiPlain('Партии / остатки', num(dbStats.batchQty)+' шт.', 'box')+
+    kpiPlain('Движений склада', num(dbStats.movements), 'analytics')+
   '</div>';
-  html+='<div class="section"><div class="section-head"><div><div class="section-eyebrow">Рабочий учет склада</div><div class="section-title">Сканирование товара с коробки</div><p class="tsub">Поставьте курсор в поле и пикните сканером код с коробки. Если код уже есть в базе, откроется товар. Если нет — система предложит внести новую единицу.</p></div><button class="btn btn-primary" id="scanCreateBtn">'+ic('plus')+' Добавить по скану</button></div>'+
+  html+='<div class="section"><div class="section-head"><div><div class="section-eyebrow">Рабочий учет склада</div><div class="section-title">Сканирование товара с коробки</div><p class="tsub">Поставьте курсор в поле и пикните сканером код с коробки. Если код уже есть в базе, откроется товар. Если нет — система предложит внести новую единицу.</p></div><div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn" id="scannerExportDbBtn">'+ic('download')+' Экспорт БД</button><button class="btn btn-primary" id="scanCreateBtn">'+ic('plus')+' Добавить по скану</button></div></div>'+
     '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">'+
       '<input class="input-mini mono" id="scannerInput" placeholder="Пикните код с коробки: IMEI, серийник или SKU" style="flex:1;min-width:320px;font-size:18px;padding:14px;">'+
       '<button class="btn btn-primary" id="scannerRunBtn">'+ic('scan')+' Найти</button>'+
@@ -5131,6 +5306,7 @@ function renderScanner(c){
   input.addEventListener('keydown', e=>{ if(e.key==='Enter') run(); });
   c.querySelector('#scannerRunBtn').addEventListener('click', run);
   c.querySelector('#scanCreateBtn').addEventListener('click', ()=>openScannerCreateModal(input.value));
+  c.querySelector('#scannerExportDbBtn').addEventListener('click', scannerExportCoreDb);
   if(STATE.scannerLastCode){
     input.value=STATE.scannerLastCode;
     scannerRenderResult(STATE.scannerLastCode, c, {skipLog:true});
@@ -11881,6 +12057,7 @@ function lsSave(){
       warehouseLedger: DATA.warehouseLedger,
       scannerStock: DATA.scannerStock,
       scanLog: (DATA.scanLog||[]).slice(0,50),
+      coreDb: DATA.coreDb,
       savedAt: new Date().toISOString(),
     };
     localStorage.setItem(LS_KEY, JSON.stringify(payload));
@@ -11914,6 +12091,7 @@ function lsLoad(){
     if(payload.warehouseLedger) DATA.warehouseLedger=payload.warehouseLedger;
     if(payload.scannerStock) DATA.scannerStock=payload.scannerStock;
     if(payload.scanLog) DATA.scanLog=payload.scanLog;
+    if(payload.coreDb) DATA.coreDb=payload.coreDb;
     return true;
   }catch(e){ console.warn('localStorage load error:', e); return false; }
 }
