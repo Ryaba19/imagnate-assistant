@@ -1,0 +1,15 @@
+{
+  "type": "crm_ai_knowledge_base",
+  "version": 1,
+  "description": "Шаблон базы знаний AI-продавца iMagnate. Ответы лучше заполнять после согласования с Леней.",
+  "items": [
+    {
+      "id": "kb_001",
+      "topic": "Наличие и цена",
+      "question": "iPhone 15 Pro 256GB есть в наличии? Какая цена?",
+      "answer": "",
+      "keywords": ["наличие", "цена", "iPhone 15 Pro", "256GB"],
+      "status": "draft"
+    }
+  ]
+}
