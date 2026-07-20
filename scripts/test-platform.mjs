@@ -161,6 +161,10 @@ await test('HTML содержит валидный основной JavaScript',
   new Function(js);
   assert(html.includes('scanCatalogOptions'), 'catalog datalist hook not found');
   assert(!html.includes('Товар из iMagnate'), 'extra catalog field returned');
+  assert(html.includes('crmQuickAiTestBtn'), 'quick AI order button not found');
+  assert(html.includes('openCrmQuickAiOrderModal'), 'quick AI order modal not found');
+  assert(html.includes('quickAiQuestion'), 'quick AI order question field not found');
+  assert(html.includes('Форма ничего не отправляет'), 'quick AI safety hint not found');
 });
 
 await test('Каталог iMagnate валиден', async () => {

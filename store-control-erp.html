@@ -7157,6 +7157,7 @@ function renderInbox(c, html){
   c.innerHTML=html;
 
   c.querySelectorAll('[data-crmtab]').forEach(el=>el.addEventListener('click',()=>{ STATE.crmTab=el.dataset.crmtab; renderCrm(c); }));
+  wireCrmQuickAiOrderButton(c);
   c.querySelectorAll('[data-conv]').forEach(el=>el.addEventListener('click',()=>{
     const l=(DATA.leads||[]).find(x=>x.id===parseInt(el.dataset.conv));
     if(l) l.unread=0;                 // открыли — прочитано
@@ -7225,6 +7226,135 @@ function sendMessage(lead, c){
         canDeliver?'info':'error');
 }
 
+function crmQuickAiProductNames(){
+  const known=[];
+  crmAgentStockRows().forEach(row=>{
+    if(row.name) known.push({title:row.name, hint:[row.tabLabel, row.price?rub(row.price):''].filter(Boolean).join(' · ')});
+  });
+  imagnateCatalogItems().slice(0,700).forEach(item=>{
+    if(item.title) known.push({title:item.title, hint:[item.category, item.price?rub(item.price):''].filter(Boolean).join(' · ')});
+  });
+  const seen=new Set();
+  return known.filter(item=>{
+    const key=crmAiNormalize(item.title);
+    if(!key||seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0,260);
+}
+function crmQuickAiFillProducts(query=''){
+  const list=document.getElementById('quickAiProductOptions');
+  if(!list) return;
+  const q=String(query||'').trim().toLowerCase();
+  const rows=crmQuickAiProductNames().filter(item=>!q||String(item.title+' '+item.hint).toLowerCase().includes(q)).slice(0,180);
+  list.innerHTML=rows.map(item=>'<option value="'+escAttr(item.title)+'" label="'+escAttr(item.hint)+'"></option>').join('');
+}
+function crmQuickAiLeadFromForm(){
+  const channel=document.getElementById('quickAiChannel')?.value||'avito';
+  const name=(document.getElementById('quickAiName')?.value||'Тестовый клиент').trim()||'Тестовый клиент';
+  const contact=(document.getElementById('quickAiContact')?.value||'').trim();
+  const item=(document.getElementById('quickAiItem')?.value||'').trim();
+  const question=(document.getElementById('quickAiQuestion')?.value||'').trim();
+  const comment=(document.getElementById('quickAiComment')?.value||'').trim();
+  return {
+    id:'quick_ai_preview',
+    channel,
+    externalId:'quick_ai_preview',
+    sourceUrl:'',
+    source:'ai_quick_test',
+    name,
+    contact,
+    item,
+    stage:'new',
+    owner:currentEmployeeName(),
+    createdAt:DATA.today,
+    lastTouch:DATA.today,
+    msgs:[{id:1, dir:'in', text:question, at:DATA.today+' '+nowTime(), status:'sent'}],
+    unread:1,
+    notes:comment?[{date:DATA.today, text:comment}]:[]
+  };
+}
+async function crmQuickAiGenerateAnswer(){
+  const result=document.getElementById('quickAiResult');
+  const status=document.getElementById('quickAiStatus');
+  const btn=document.getElementById('modalAction0');
+  const lead=crmQuickAiLeadFromForm();
+  const question=crmAiLastIncomingQuestion(lead);
+  if(!question||question==='Подскажите по товару'){
+    toast('Введите вопрос клиента', 'error');
+    return '';
+  }
+  const fallback=crmAgentGenerateReplyForLead(lead);
+  if(result) result.value=fallback;
+  if(status) status.textContent='Локальный черновик готов. Проверяю реальный AI...';
+  if(btn) btn.disabled=true;
+  try{
+    const real=await crmAgentFetchRealAi(lead, fallback);
+    if(real && result) result.value=real;
+    if(status) status.textContent=real?'Ответ получен от AI-сервера':'AI временно недоступен, показан локальный черновик.';
+    return real||fallback;
+  }catch(e){
+    if(status) status.textContent='AI-сервер не ответил: '+(e.message||e)+'. Показан локальный черновик.';
+    return fallback;
+  }finally{
+    if(btn) btn.disabled=false;
+  }
+}
+function crmQuickAiCreateDialog(c){
+  const lead=crmQuickAiLeadFromForm();
+  const question=crmAiLastIncomingQuestion(lead);
+  if(!question||question==='Подскажите по товару'){
+    toast('Введите вопрос клиента', 'error');
+    return;
+  }
+  const answer=(document.getElementById('quickAiResult')?.value||'').trim();
+  const nextId=Math.max(7000,...(DATA.leads||[]).map(l=>Number(l.id)||0).filter(Boolean))+1;
+  lead.id=nextId;
+  lead.externalId='quick_ai_'+Date.now();
+  lead.sourceUrl='';
+  lead.source='ai_quick_test';
+  if(answer){
+    lead.ai={
+      lastRealDraft:{question, text:answer, at:DATA.today+' '+nowTime()},
+      lastDraft:{source:'AI-проверка заказа', mode:'quick_test', text:answer, at:DATA.today+' '+nowTime()}
+    };
+  }
+  DATA.leads=DATA.leads||[];
+  DATA.leads.unshift(lead);
+  if(typeof lsSave==='function') lsSave();
+  closeModal();
+  STATE.crmTab='inbox';
+  STATE.inboxLead=lead.id;
+  STATE.inboxUnreadOnly=false;
+  renderCrm(c);
+  toast('Тестовый диалог создан в CRM', 'success');
+}
+function openCrmQuickAiOrderModal(c){
+  const body='<div class="field-grid">'+
+    '<div class="field"><label>Канал</label><select class="input-mini" id="quickAiChannel" style="width:100%;">'+
+      Object.entries(CHANNELS).map(([k,v])=>'<option value="'+k+'" '+(k==='avito'?'selected':'')+'>'+v.label+'</option>').join('')+
+    '</select></div>'+
+    '<div class="field"><label>Клиент</label><input class="input-mini" id="quickAiName" value="Тестовый клиент" style="width:100%;"></div>'+
+    '<div class="field"><label>Контакт</label><input class="input-mini" id="quickAiContact" placeholder="+7..., @username или ссылка" style="width:100%;"></div>'+
+    '<div class="field"><label>Товар</label><input class="input-mini" id="quickAiItem" list="quickAiProductOptions" value="iPhone 15 Pro 256GB" style="width:100%;"><datalist id="quickAiProductOptions"></datalist></div>'+
+    '<div class="field" style="grid-column:1/-1;"><label>Вопрос клиента</label><textarea class="input-mini" id="quickAiQuestion" style="width:100%;min-height:88px;">Здравствуйте! iPhone 15 Pro 256 в наличии? Какая цена и гарантия?</textarea></div>'+
+    '<div class="field" style="grid-column:1/-1;"><label>Комментарий к заказу</label><textarea class="input-mini" id="quickAiComment" placeholder="Например: клиент хочет забрать сегодня, спрашивает про резерв или доставку" style="width:100%;min-height:62px;"></textarea></div>'+
+    '<div class="field" style="grid-column:1/-1;"><label>Ответ AI</label><textarea class="input-mini" id="quickAiResult" placeholder="Здесь появится ответ AI" style="width:100%;min-height:130px;"></textarea><div class="tsub" id="quickAiStatus">Нажмите «Проверить AI», чтобы получить ответ.</div></div>'+
+  '</div><p class="tsub">Форма ничего не отправляет клиенту. Она нужна, чтобы проверить реакцию AI и при необходимости создать тестовый диалог в CRM.</p>';
+  openModal('AI-проверка заказа', 'Быстрый тест ответа продавца перед реальной интеграцией', body, [
+    {label:'Проверить AI', cls:'btn-primary', action:crmQuickAiGenerateAnswer},
+    {label:'Создать диалог', cls:'', action:()=>crmQuickAiCreateDialog(c)}
+  ]);
+  crmQuickAiFillProducts();
+  loadImagnateCatalog().then(()=>crmQuickAiFillProducts(document.getElementById('quickAiItem')?.value||'')).catch(()=>{});
+  const item=document.getElementById('quickAiItem');
+  if(item) item.addEventListener('input',()=>crmQuickAiFillProducts(item.value));
+}
+function wireCrmQuickAiOrderButton(c){
+  const btn=document.getElementById('crmQuickAiTestBtn');
+  if(btn) btn.addEventListener('click',()=>openCrmQuickAiOrderModal(c));
+}
+
 function renderCrm(c){
   if(!STATE.crmTab) STATE.crmTab='funnel';
   if(!STATE.crmChannel) STATE.crmChannel='all';
@@ -7240,7 +7370,7 @@ function renderCrm(c){
     '<div class="chip-tab '+(STATE.crmTab==='funnel'?'active':'')+'" data-crmtab="funnel">Воронка</div>'+
     '<div class="chip-tab '+(STATE.crmTab==='integrations'?'active':'')+'" data-crmtab="integrations">Интеграции'+
       (broken?' <span style="color:var(--negative);">('+broken+')</span>':' ('+connectedChannels().length+')')+'</div>'+
-  '</div></div>';
+  '</div><div class="topbar-spacer"></div><button class="btn btn-sm" id="crmQuickAiTestBtn">'+ic('chat')+' AI-проверка заказа</button></div>';
 
   if(STATE.crmTab==='inbox'){
     renderInbox(c, html);
@@ -7251,6 +7381,7 @@ function renderCrm(c){
     html+=renderIntegrationsTab();
     c.innerHTML=html;
     c.querySelectorAll('[data-crmtab]').forEach(el=>el.addEventListener('click',()=>{ STATE.crmTab=el.dataset.crmtab; renderCrm(c); }));
+    wireCrmQuickAiOrderButton(c);
     wireIntegrations(c);
     return;
   }
@@ -7343,6 +7474,7 @@ function renderCrm(c){
 
   c.innerHTML=html;
   c.querySelectorAll('[data-crmtab]').forEach(el=>el.addEventListener('click',()=>{ STATE.crmTab=el.dataset.crmtab; renderCrm(c); }));
+  wireCrmQuickAiOrderButton(c);
   c.querySelectorAll('[data-view]').forEach(el=>el.addEventListener('click',()=>{
     STATE.crmView=el.dataset.view; STATE.crmStaleOnly=false; renderCrm(c);
   }));
