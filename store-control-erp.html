@@ -5134,7 +5134,7 @@ async function loadServerStock(options={}){
 }
 async function serverExportDb(){
   if(!can('canExportServerDb')){ toast('У этой роли нет экспорта серверной БД', 'error'); return; }
-  if(!scannerDbToken()){ toast('Сначала сохраните серверный токен', 'error'); return; }
+  if(!scannerDbToken()){ toast('Сначала нужно подключить серверную БД', 'error'); if(can('canManageServerToken')) openServerTokenModal(); return; }
   try{
     const res=await fetch(erpApi('/api/db/export'), {headers:erpAuthHeaders()});
     const data=await res.json().catch(()=>({}));
@@ -5148,7 +5148,7 @@ async function serverExportDb(){
 }
 async function serverImportLocalDb(){
   if(!can('canImportServerDb')){ toast('У этой роли нет импорта в серверную БД', 'error'); return; }
-  if(!scannerDbToken()){ toast('Сначала сохраните серверный токен', 'error'); return; }
+  if(!scannerDbToken()){ toast('Сначала нужно подключить серверную БД', 'error'); if(can('canManageServerToken')) openServerTokenModal(); return; }
   coreDbSyncScannerStock();
   const db=coreDbEnsure();
   if(!db.products.length && !db.stockUnits.length && !db.stockBatches.length){ toast('Локальная БД пустая, импортировать нечего', 'error'); return; }
@@ -5493,8 +5493,7 @@ function renderScanner(c){
   const serverButtons=[
     can('canReadServerDb')?'<button class="btn" id="scannerLoadServerBtn">'+ic('refresh')+' С сервера</button>':'',
     can('canExportServerDb')?'<button class="btn" id="scannerServerExportBtn">'+ic('download')+' Экспорт сервера</button>':'',
-    can('canImportServerDb')?'<button class="btn" id="scannerServerImportBtn">'+ic('chain')+' Импорт локального</button>':'',
-    can('canManageServerToken')?'<button class="btn" id="scannerServerTokenBtn">'+ic('lock')+' Токен</button>':''
+    can('canImportServerDb')?'<button class="btn" id="scannerServerImportBtn">'+ic('chain')+' Импорт локального</button>':''
   ].filter(Boolean).join('');
   let html='<div class="grid grid-4" style="margin-bottom:18px;">'+
     kpiPlain('Товаров в БД', num(dbStats.products), 'warehouse')+
@@ -5521,7 +5520,6 @@ function renderScanner(c){
   c.querySelector('#scannerLoadServerBtn')?.addEventListener('click', ()=>loadServerStock());
   c.querySelector('#scannerServerExportBtn')?.addEventListener('click', serverExportDb);
   c.querySelector('#scannerServerImportBtn')?.addEventListener('click', serverImportLocalDb);
-  c.querySelector('#scannerServerTokenBtn')?.addEventListener('click', openServerTokenModal);
   if(STATE.scannerLastCode){
     input.value=STATE.scannerLastCode;
     scannerRenderResult(STATE.scannerLastCode, c, {skipLog:true});
