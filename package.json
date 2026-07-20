@@ -8,7 +8,8 @@
   "scripts": {
     "start": "node storecontrolapi.js",
     "check": "node --check storecontrolapi.js",
-    "catalog:imagnate": "node scripts/build-imagnate-catalog.mjs"
+    "catalog:imagnate": "node scripts/build-imagnate-catalog.mjs",
+    "test": "node scripts/test-platform.mjs"
   },
   "dependencies": {
     "pg": "^8.16.3"

@@ -1,0 +1,262 @@
+import { spawn } from 'node:child_process';
+import { readFile, mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = new URL('../', import.meta.url);
+const rootPath = fileURLToPath(root);
+const port = Number(process.env.TEST_PORT || 3417);
+const baseUrl = `http://127.0.0.1:${port}`;
+const token = 'test-token';
+const results = [];
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+async function test(name, fn) {
+  const started = Date.now();
+  try {
+    await fn();
+    results.push({ name, ok: true, ms: Date.now() - started });
+  } catch (error) {
+    results.push({ name, ok: false, ms: Date.now() - started, error: error.message });
+  }
+}
+
+function scannerNormalize(code) {
+  return String(code || '').trim().replace(/\s+/g, '').toUpperCase();
+}
+
+function scannerGuessTab(raw) {
+  const code = scannerNormalize(raw);
+  if (/^\d{14,17}$/.test(code)) return 'tech';
+  if (/^(PRT|PART|BAT|DISPLAY|MOD)/.test(code)) return 'parts';
+  if (/^(ACC|CASE|GLASS|CABLE|CHG)/.test(code)) return 'accessories';
+  if (/^TRD/.test(code)) return 'tradein';
+  return 'accessories';
+}
+
+function catalogSearchText(item) {
+  return String([item.title, item.brand, item.category, item.memory, item.color, item.slug].filter(Boolean).join(' ')).toLowerCase();
+}
+
+function findCatalogItem(items, value) {
+  const needle = String(value || '').trim().toLowerCase();
+  if (!needle) return null;
+  return items.find(item => String(item.title || '').trim().toLowerCase() === needle) ||
+    items.find(item => String(item.slug || '').trim().toLowerCase() === needle);
+}
+
+function createMemoryDb() {
+  return { products: [], stockUnits: [], stockBatches: [], stockMovements: [] };
+}
+
+function receiveScanInMemory(db, tab, item, code) {
+  const normalizedCode = scannerNormalize(code);
+  const stockMode = (tab === 'tech' || tab === 'tradein') ? 'unit' : 'batch';
+  const productKey = `${tab}|${String(item.model || '').toLowerCase().replace(/\s+/g, ' ').trim()}`;
+  let product = db.products.find(row => row.key === productKey);
+  if (!product) {
+    product = {
+      id: `prd_${db.products.length + 1}`,
+      key: productKey,
+      name: item.model,
+      category: tab,
+      stockMode,
+      defaultSalePrice: item.price || 0,
+      minStock: item.minStock || (stockMode === 'batch' ? 2 : 1),
+    };
+    db.products.push(product);
+  }
+
+  if (stockMode === 'unit') {
+    let unit = db.stockUnits.find(row => row.unitCode === normalizedCode);
+    if (!unit) {
+      unit = { id: `unit_${db.stockUnits.length + 1}`, productId: product.id, unitCode: normalizedCode, imei: normalizedCode, model: item.model };
+      db.stockUnits.push(unit);
+    }
+  } else {
+    let batch = db.stockBatches.find(row => row.barcode === normalizedCode);
+    if (!batch) {
+      batch = { id: `batch_${db.stockBatches.length + 1}`, productId: product.id, barcode: normalizedCode, qty: Math.max(1, item.qty || 1), model: item.model };
+      db.stockBatches.push(batch);
+    } else {
+      batch.qty = Math.max(batch.qty, Math.max(1, item.qty || 1));
+    }
+  }
+
+  if (!db.stockMovements.some(row => row.code === normalizedCode)) {
+    db.stockMovements.push({ code: normalizedCode, model: item.model, category: tab, qty: stockMode === 'unit' ? 1 : Math.max(1, item.qty || 1) });
+  }
+}
+
+async function waitForServer() {
+  const deadline = Date.now() + 12000;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`${baseUrl}/api/health`);
+      if (response.ok) return;
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  throw lastError || new Error('server did not start');
+}
+
+async function jsonFetch(path, options = {}) {
+  const response = await fetch(`${baseUrl}${path}`, options);
+  const text = await response.text();
+  let body = {};
+  try { body = text ? JSON.parse(text) : {}; } catch {}
+  return { response, body, text };
+}
+
+async function startServer() {
+  const tempDir = await mkdtemp(join(tmpdir(), 'store-control-test-'));
+  const envPath = join(tempDir, '.env');
+  await writeFile(envPath, [
+    `PORT=${port}`,
+    `STORE_TOKEN=${token}`,
+    'DATABASE_URL=',
+    'OPENAI_API_KEY=',
+    'OPENAI_MODEL=gpt-4o-mini',
+  ].join('\n'));
+
+  const child = spawn(process.execPath, [join(rootPath, 'storecontrolapi.js')], {
+    cwd: rootPath,
+    env: { ...process.env, PORT: String(port), STORE_TOKEN: token, DATABASE_URL: '', OPENAI_API_KEY: '' },
+    stdio: 'ignore',
+  });
+
+  await waitForServer();
+  return {
+    child,
+    tempDir,
+    stop: async () => {
+      child.kill();
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await rm(tempDir, { recursive: true, force: true });
+    },
+  };
+}
+
+await test('Файлы приложения существуют', async () => {
+  assert(existsSync(new URL('../store-control-erp.html', import.meta.url)), 'store-control-erp.html not found');
+  assert(existsSync(new URL('../storecontrolapi.js', import.meta.url)), 'storecontrolapi.js not found');
+  assert(existsSync(new URL('../imagnate-catalog.json', import.meta.url)), 'imagnate-catalog.json not found');
+  assert(existsSync(new URL('../database/schema.sql', import.meta.url)), 'database/schema.sql not found');
+});
+
+await test('HTML содержит валидный основной JavaScript', async () => {
+  const html = await readFile(new URL('../store-control-erp.html', import.meta.url), 'utf8');
+  const start = html.indexOf('<script>');
+  const end = html.lastIndexOf('</script>');
+  assert(start > -1 && end > start, 'main script not found');
+  const js = html.slice(start + '<script>'.length, end);
+  new Function(js);
+  assert(html.includes('scanCatalogOptions'), 'catalog datalist hook not found');
+  assert(!html.includes('Товар из iMagnate'), 'extra catalog field returned');
+});
+
+await test('Каталог iMagnate валиден', async () => {
+  const catalog = JSON.parse(await readFile(new URL('../imagnate-catalog.json', import.meta.url), 'utf8'));
+  assert(catalog.count === catalog.items.length, 'catalog count mismatch');
+  assert(catalog.items.length >= 1000, 'too few catalog items');
+  assert(catalog.items.every(item => item.title && item.slug && item.url && item.imageUrl), 'catalog item misses required fields');
+  assert(catalog.items.filter(item => Number(item.price) > 0).length >= 900, 'too few priced items');
+  assert(catalog.items.some(item => /iphone/i.test(item.title) && Number(item.price) > 0), 'priced iPhone not found');
+  assert(catalog.items.some(item => /dyson/i.test(item.title)), 'Dyson not found');
+  assert(catalog.items.some(item => /playstation|ps5/i.test(item.title)), 'PlayStation not found');
+});
+
+await test('Unit: нормализация и определение категории сканера', async () => {
+  assert(scannerNormalize(' 35 123 456 ') === '35123456', 'normalize spaces failed');
+  assert(scannerGuessTab('356789012345678') === 'tech', 'IMEI should be tech');
+  assert(scannerGuessTab('BAT-IPHONE-13') === 'parts', 'BAT should be parts');
+  assert(scannerGuessTab('GLASS-IP15') === 'accessories', 'GLASS should be accessories');
+  assert(scannerGuessTab('TRD-001') === 'tradein', 'TRD should be tradein');
+});
+
+await test('Unit: поиск товара из справочника', async () => {
+  const catalog = JSON.parse(await readFile(new URL('../imagnate-catalog.json', import.meta.url), 'utf8'));
+  const iphone = catalog.items.find(item => /iphone/i.test(item.title) && Number(item.price) > 0);
+  assert(iphone, 'iPhone fixture not found');
+  assert(findCatalogItem(catalog.items, iphone.title)?.slug === iphone.slug, 'exact title lookup failed');
+  assert(catalog.items.filter(item => catalogSearchText(item).includes('iphone')).length > 50, 'iPhone search too small');
+});
+
+await test('Unit/stress: 1500 сканов в памяти без дублей', async () => {
+  const db = createMemoryDb();
+  for (let i = 0; i < 1000; i += 1) {
+    receiveScanInMemory(db, 'tech', { model: `iPhone Test ${i % 20}`, price: 100000 + i }, `35${String(1000000000000 + i).padStart(13, '0')}`);
+  }
+  for (let i = 0; i < 500; i += 1) {
+    receiveScanInMemory(db, 'accessories', { model: `Glass Test ${i % 10}`, price: 900, qty: 3 }, `GLASS-${i}`);
+  }
+  receiveScanInMemory(db, 'tech', { model: 'iPhone Test 0', price: 1 }, '351000000000000');
+  assert(db.stockUnits.length === 1000, 'unit duplicate handling failed');
+  assert(db.stockBatches.length === 500, 'batch count mismatch');
+  assert(db.stockMovements.length === 1500, 'movement dedupe failed');
+  assert(db.products.length <= 30, 'product grouping failed');
+});
+
+let serverHandle = null;
+await test('Integration: локальный сервер отвечает', async () => {
+  serverHandle = await startServer();
+  const { response, body } = await jsonFetch('/api/health');
+  assert(response.status === 200 && body.ok, 'health failed');
+  assert(body.app === 'Store Control ERP', 'wrong app name');
+});
+
+await test('Integration: статика и каталог отдаются сервером', async () => {
+  const page = await fetch(`${baseUrl}/store-control-erp.html`);
+  const catalog = await jsonFetch('/imagnate-catalog.json');
+  assert(page.status === 200, 'html status not 200');
+  assert(catalog.response.status === 200, 'catalog status not 200');
+  assert(catalog.body.count >= 1000, 'server catalog too small');
+});
+
+await test('Integration: API защищает серверную БД токеном', async () => {
+  const noToken = await jsonFetch('/api/stock');
+  const badToken = await jsonFetch('/api/stock', { headers: { Authorization: 'Bearer wrong' } });
+  assert(noToken.response.status === 401, 'stock without token should be 401');
+  assert(badToken.response.status === 401, 'stock with bad token should be 401');
+});
+
+await test('Integration: scan endpoint не пишет без PostgreSQL и не падает', async () => {
+  const result = await jsonFetch('/api/scan/receive', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ code: '359999999999999', model: 'E2E Scanner Test', category: 'tech', price: 1 }),
+  });
+  assert(result.response.status === 503, 'scan without DATABASE_URL should return 503 in dry run');
+  assert(result.body.ok === false, 'scan dry run should be explicit failure');
+});
+
+await test('Stress: 250 параллельных запросов к серверу', async () => {
+  const started = Date.now();
+  const requests = Array.from({ length: 250 }, (_, index) => {
+    const path = index % 3 === 0 ? '/api/health' : (index % 3 === 1 ? '/imagnate-catalog.json' : '/store-control-erp.html');
+    return fetch(`${baseUrl}${path}`).then(response => response.status);
+  });
+  const statuses = await Promise.all(requests);
+  const ok = statuses.filter(status => status === 200).length;
+  assert(ok === statuses.length, `stress had non-200 responses: ${statuses.join(',')}`);
+  assert(Date.now() - started < 15000, 'stress test took too long');
+});
+
+if (serverHandle) await serverHandle.stop();
+
+const failed = results.filter(result => !result.ok);
+console.log('\nStore Control ERP test report');
+for (const result of results) {
+  console.log(`${result.ok ? 'PASS' : 'FAIL'} ${result.name} (${result.ms} ms)${result.error ? ' - ' + result.error : ''}`);
+}
+console.log(`\nTotal: ${results.length}, passed: ${results.length - failed.length}, failed: ${failed.length}`);
+
+if (failed.length) process.exit(1);
