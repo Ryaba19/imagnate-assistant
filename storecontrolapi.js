@@ -52,10 +52,18 @@ const PG_POOL_MAX = parseInt(process.env.PG_POOL_MAX || '5', 10);
 /* ===================== */
 
 let PgPool = null;
+let PG_DRIVER_SOURCE = '';
 try {
   PgPool = require('pg').Pool;
+  PG_DRIVER_SOURCE = 'node_modules';
 } catch (e) {
-  PgPool = null;
+  try {
+    PgPool = require('./vendor/node_modules/pg').Pool;
+    PG_DRIVER_SOURCE = 'vendor';
+  } catch (fallbackError) {
+    PgPool = null;
+    PG_DRIVER_SOURCE = '';
+  }
 }
 
 const POSTGRES_DRIVER_INSTALLED = Boolean(PgPool);
@@ -380,6 +388,7 @@ const server = http.createServer((req, res) => {
       app: 'Store Control ERP',
       aiConfigured: OPENAI_CONFIGURED,
       postgresConfigured: POSTGRES_CONFIGURED,
+      postgresDriverSource: PG_DRIVER_SOURCE || null,
       at: new Date().toISOString()
     });
   }
@@ -390,6 +399,7 @@ const server = http.createServer((req, res) => {
         ok: true,
         configured: false,
         driverInstalled: POSTGRES_DRIVER_INSTALLED,
+        driverSource: PG_DRIVER_SOURCE || null,
         hasDatabaseUrl: Boolean(DATABASE_URL),
         message: dbReadyMessage()
       });
@@ -399,6 +409,7 @@ const server = http.createServer((req, res) => {
         ok: true,
         configured: true,
         driverInstalled: true,
+        driverSource: PG_DRIVER_SOURCE,
         hasDatabaseUrl: true,
         serverTime: result.rows[0].server_time
       }))
