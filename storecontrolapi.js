@@ -99,6 +99,14 @@ async function pgQuery(sql, params = []) {
   return pgPool.query(sql, params);
 }
 
+async function initPostgresSchema() {
+  if (!POSTGRES_CONFIGURED) return false;
+  const schemaPath = path.join(__dirname, 'database', 'schema.sql');
+  const sql = fs.readFileSync(schemaPath, 'utf8');
+  await pgQuery(sql);
+  return true;
+}
+
 function normalizeCode(value) {
   return clean(value, 120).replace(/\s+/g, '').toUpperCase();
 }
@@ -404,13 +412,18 @@ const server = http.createServer((req, res) => {
         message: dbReadyMessage()
       });
     }
-    pgQuery('select now() as server_time')
+    pgQuery(`
+      select
+        now() as server_time,
+        to_regclass('public.products') is not null as schema_ready
+    `)
       .then(result => send(res, 200, {
         ok: true,
         configured: true,
         driverInstalled: true,
         driverSource: PG_DRIVER_SOURCE,
         hasDatabaseUrl: true,
+        schemaReady: result.rows[0].schema_ready,
         serverTime: result.rows[0].server_time
       }))
       .catch(e => send(res, 503, {
@@ -581,4 +594,11 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log('Store Control API запущен: http://localhost:' + PORT + '/api');
   console.log('Не забудьте поменять STORE_TOKEN!');
+  initPostgresSchema()
+    .then(done => {
+      if (done) console.log('PostgreSQL schema is ready');
+    })
+    .catch(e => {
+      console.error('PostgreSQL schema init failed:', e.message);
+    });
 });
