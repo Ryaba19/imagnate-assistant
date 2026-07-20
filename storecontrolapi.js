@@ -124,6 +124,41 @@ function productKey(name, category) {
   return (category + '|' + String(name || '').toLowerCase()).replace(/\s+/g, ' ').trim();
 }
 
+function moneyValue(value) {
+  return Math.max(0, Number(value || 0) || 0);
+}
+
+function intValue(value, fallback = 0) {
+  const n = parseInt(value, 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function safeMetadata(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const json = JSON.stringify(value);
+  if (Buffer.byteLength(json, 'utf8') > 8000) return {};
+  return value;
+}
+
+function receiveMetadata(body) {
+  const source = safeMetadata(body.metadata);
+  const metadata = { ...source };
+  const pairs = [
+    ['memory', body.memory],
+    ['color', body.color],
+    ['condition', body.condition],
+    ['kit', body.kit || body.complectation],
+    ['warrantyDays', body.warrantyDays],
+    ['batteryPercent', body.batteryPercent || body.battery],
+    ['comment', body.comment],
+    ['minStock', body.minStock]
+  ];
+  pairs.forEach(([key, value]) => {
+    if (value !== undefined && value !== null && String(value).trim() !== '') metadata[key] = value;
+  });
+  return metadata;
+}
+
 async function receiveScanInPostgres(body) {
   const category = normalizeCategory(body.category || body.tab);
   const code = normalizeCode(body.code || body.imei || body.sku || body.barcode);
@@ -131,9 +166,11 @@ async function receiveScanInPostgres(body) {
   if (!code || !model) throw new Error('Нужны код и название товара');
 
   const stockMode = category === 'tech' || category === 'tradein' ? 'unit' : 'batch';
-  const qty = stockMode === 'unit' ? 1 : Math.max(1, parseInt(body.qty || '1', 10) || 1);
-  const purchase = Math.max(0, Number(body.purchase || body.purchasePrice || 0) || 0);
-  const price = Math.max(0, Number(body.price || body.salePrice || 0) || 0);
+  const metadata = receiveMetadata(body);
+  const qty = stockMode === 'unit' ? 1 : Math.max(1, intValue(body.qty || '1', 1));
+  const purchase = moneyValue(body.purchase || body.purchasePrice);
+  const price = moneyValue(body.price || body.salePrice);
+  const minStock = Math.max(0, intValue(body.minStock || metadata.minStock, stockMode === 'batch' ? 2 : 1));
   const status = clean(body.status || (category === 'tradein' ? 'check' : 'instock'), 40);
   const location = clean(body.location || 'Склад', 120);
   const actor = clean(body.actor || body.scannedBy || 'system', 120);
@@ -145,15 +182,17 @@ async function receiveScanInPostgres(body) {
     await client.query('BEGIN');
     const productResult = await client.query(`
       INSERT INTO products
-        (product_key, name, category, category_label, stock_mode, default_purchase_price, default_sale_price, min_stock, source, updated_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'scanner',now())
+        (product_key, name, category, category_label, stock_mode, default_purchase_price, default_sale_price, min_stock, source, metadata, updated_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'scanner',$9::jsonb,now())
       ON CONFLICT (product_key) DO UPDATE SET
         name=EXCLUDED.name,
         default_purchase_price=EXCLUDED.default_purchase_price,
         default_sale_price=EXCLUDED.default_sale_price,
+        min_stock=EXCLUDED.min_stock,
+        metadata=products.metadata || EXCLUDED.metadata,
         updated_at=now()
       RETURNING id
-    `, [key, model, category, categoryLabel(category), stockMode, purchase, price, stockMode === 'batch' ? 2 : 1]);
+    `, [key, model, category, categoryLabel(category), stockMode, purchase, price, minStock, JSON.stringify(metadata)]);
     const productId = productResult.rows[0].id;
 
     let unitId = null;
@@ -161,8 +200,8 @@ async function receiveScanInPostgres(body) {
     if (stockMode === 'unit') {
       const unitResult = await client.query(`
         INSERT INTO stock_units
-          (product_id, unit_code, imei, category, status, purchase_price, sale_price, location, scanned_at, scanned_by, source, updated_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'scanner',now())
+          (product_id, unit_code, imei, category, status, purchase_price, sale_price, location, scanned_at, scanned_by, source, metadata, updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'scanner',$11::jsonb,now())
         ON CONFLICT (unit_code) DO UPDATE SET
           product_id=EXCLUDED.product_id,
           status=EXCLUDED.status,
@@ -170,15 +209,16 @@ async function receiveScanInPostgres(body) {
           sale_price=EXCLUDED.sale_price,
           location=EXCLUDED.location,
           scanned_by=EXCLUDED.scanned_by,
+          metadata=stock_units.metadata || EXCLUDED.metadata,
           updated_at=now()
         RETURNING id
-      `, [productId, code, code, category, status, purchase, price, location, now, actor]);
+      `, [productId, code, code, category, status, purchase, price, location, now, actor, JSON.stringify(metadata)]);
       unitId = unitResult.rows[0].id;
     } else {
       const batchResult = await client.query(`
         INSERT INTO stock_batches
-          (product_id, sku, barcode, category, qty, status, purchase_price, sale_price, location, scanned_at, scanned_by, source, updated_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'scanner',now())
+          (product_id, sku, barcode, category, qty, status, purchase_price, sale_price, location, scanned_at, scanned_by, source, metadata, updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'scanner',$12::jsonb,now())
         ON CONFLICT (barcode) DO UPDATE SET
           product_id=EXCLUDED.product_id,
           sku=EXCLUDED.sku,
@@ -188,24 +228,25 @@ async function receiveScanInPostgres(body) {
           sale_price=EXCLUDED.sale_price,
           location=EXCLUDED.location,
           scanned_by=EXCLUDED.scanned_by,
+          metadata=stock_batches.metadata || EXCLUDED.metadata,
           updated_at=now()
         RETURNING id
-      `, [productId, code, code, category, qty, status, purchase, price, location, now, actor]);
+      `, [productId, code, code, category, qty, status, purchase, price, location, now, actor, JSON.stringify(metadata)]);
       batchId = batchResult.rows[0].id;
     }
 
     const dedupeKey = `scan_receive:${code}`;
     await client.query(`
       INSERT INTO stock_movements
-        (dedupe_key, movement_type, product_id, unit_id, batch_id, code, model, category, qty, amount, location, actor, note, happened_at)
-      VALUES ($1,'scan_receive',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        (dedupe_key, movement_type, product_id, unit_id, batch_id, code, model, category, qty, amount, location, actor, note, metadata, happened_at)
+      VALUES ($1,'scan_receive',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14)
       ON CONFLICT (dedupe_key) DO NOTHING
-    `, [dedupeKey, productId, unitId, batchId, code, model, category, qty, purchase * qty, location, actor, 'Добавление товара через сканер', now]);
+    `, [dedupeKey, productId, unitId, batchId, code, model, category, qty, purchase * qty, location, actor, 'Добавление товара через сканер', JSON.stringify(metadata), now]);
 
     await client.query(`
       INSERT INTO audit_log (entity_type, entity_id, action, actor, after_data)
       VALUES ('stock', $1, 'scan_receive', $2, $3::jsonb)
-    `, [unitId || batchId || productId, actor, JSON.stringify({ code, model, category, qty, purchase, price, status, location })]);
+    `, [unitId || batchId || productId, actor, JSON.stringify({ code, model, category, qty, purchase, price, status, location, metadata })]);
 
     await client.query('COMMIT');
     return { productId, unitId, batchId, code, category, qty };
@@ -215,6 +256,239 @@ async function receiveScanInPostgres(body) {
   } finally {
     client.release();
   }
+}
+
+function isoDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? String(value) : d.toISOString();
+}
+
+function localDateTime(value) {
+  const iso = isoDate(value);
+  if (!iso) return '';
+  return iso.slice(0, 19).replace('T', ' ');
+}
+
+async function stockSnapshotFromPostgres() {
+  if (!POSTGRES_CONFIGURED) throw new Error(dbReadyMessage());
+  const [productsResult, unitsResult, batchesResult, movementsResult] = await Promise.all([
+    pgQuery(`
+      SELECT id, product_key, name, category, category_label, stock_mode,
+             default_purchase_price, default_sale_price, min_stock, source,
+             metadata, created_at, updated_at
+      FROM products
+      ORDER BY updated_at DESC, name ASC
+    `),
+    pgQuery(`
+      SELECT u.*, p.name AS product_name, p.min_stock AS product_min_stock, p.metadata AS product_metadata
+      FROM stock_units u
+      JOIN products p ON p.id = u.product_id
+      ORDER BY u.updated_at DESC
+    `),
+    pgQuery(`
+      SELECT b.*, p.name AS product_name, p.min_stock AS product_min_stock, p.metadata AS product_metadata
+      FROM stock_batches b
+      JOIN products p ON p.id = b.product_id
+      ORDER BY b.updated_at DESC
+    `),
+    pgQuery(`
+      SELECT id, movement_type, product_id, unit_id, batch_id, code, model, category,
+             qty, amount, location, actor, note, metadata, happened_at
+      FROM stock_movements
+      ORDER BY happened_at DESC
+      LIMIT 300
+    `)
+  ]);
+
+  const warehouse = { tech: [], tradein: [], accessories: [], parts: [] };
+  const scannerStock = { tech: [], tradein: [], accessories: [], parts: [] };
+
+  const products = productsResult.rows.map(row => ({
+    id: String(row.id),
+    key: row.product_key,
+    name: row.name,
+    category: row.category,
+    categoryLabel: row.category_label,
+    stockMode: row.stock_mode,
+    defaultPurchasePrice: moneyValue(row.default_purchase_price),
+    defaultSalePrice: moneyValue(row.default_sale_price),
+    minStock: intValue(row.min_stock, 0),
+    source: row.source,
+    metadata: safeMetadata(row.metadata),
+    createdAt: localDateTime(row.created_at),
+    updatedAt: localDateTime(row.updated_at)
+  }));
+
+  const stockUnits = unitsResult.rows.map(row => {
+    const metadata = safeMetadata({ ...(row.product_metadata || {}), ...(row.metadata || {}) });
+    const item = {
+      imei: row.unit_code || row.imei || row.serial_number || '',
+      unitCode: row.unit_code || '',
+      serialNumber: row.serial_number || '',
+      model: row.product_name,
+      purchase: moneyValue(row.purchase_price),
+      price: moneyValue(row.sale_price),
+      status: row.status || 'instock',
+      location: row.location || 'Склад',
+      scannerTracked: true,
+      scannedAt: localDateTime(row.scanned_at),
+      scannedBy: row.scanned_by || 'system',
+      source: row.source || 'server',
+      postgresId: String(row.id),
+      dbProductId: String(row.product_id),
+      dbUnitId: String(row.id),
+      metadata,
+      ...metadata
+    };
+    const category = normalizeCategory(row.category);
+    warehouse[category].push({ ...item });
+    scannerStock[category].push({ ...item });
+    return {
+      id: String(row.id),
+      productId: String(row.product_id),
+      unitCode: row.unit_code || '',
+      imei: row.imei || row.unit_code || '',
+      serialNumber: row.serial_number || '',
+      category,
+      status: row.status || 'instock',
+      purchasePrice: moneyValue(row.purchase_price),
+      salePrice: moneyValue(row.sale_price),
+      location: row.location || 'Склад',
+      scannedAt: localDateTime(row.scanned_at),
+      scannedBy: row.scanned_by || 'system',
+      source: row.source || 'server',
+      metadata
+    };
+  });
+
+  const stockBatches = batchesResult.rows.map(row => {
+    const metadata = safeMetadata({ ...(row.product_metadata || {}), ...(row.metadata || {}) });
+    const category = normalizeCategory(row.category);
+    const item = {
+      sku: row.sku || row.barcode || '',
+      barcode: row.barcode || row.sku || '',
+      model: row.product_name,
+      purchase: moneyValue(row.purchase_price),
+      price: moneyValue(row.sale_price),
+      qty: Math.max(0, intValue(row.qty, 0)),
+      minStock: intValue(row.product_min_stock, 0),
+      status: row.status || 'instock',
+      location: row.location || 'Склад',
+      scannerTracked: true,
+      scannedAt: localDateTime(row.scanned_at),
+      scannedBy: row.scanned_by || 'system',
+      source: row.source || 'server',
+      postgresId: String(row.id),
+      dbProductId: String(row.product_id),
+      dbBatchId: String(row.id),
+      metadata,
+      ...metadata
+    };
+    warehouse[category].push({ ...item });
+    scannerStock[category].push({ ...item });
+    return {
+      id: String(row.id),
+      productId: String(row.product_id),
+      sku: row.sku || row.barcode || '',
+      barcode: row.barcode || row.sku || '',
+      category,
+      qty: Math.max(0, intValue(row.qty, 0)),
+      status: row.status || 'instock',
+      purchasePrice: moneyValue(row.purchase_price),
+      salePrice: moneyValue(row.sale_price),
+      location: row.location || 'Склад',
+      scannedAt: localDateTime(row.scanned_at),
+      scannedBy: row.scanned_by || 'system',
+      source: row.source || 'server',
+      metadata
+    };
+  });
+
+  const stockMovements = movementsResult.rows.map(row => ({
+    id: String(row.id),
+    type: row.movement_type,
+    productId: row.product_id ? String(row.product_id) : null,
+    unitId: row.unit_id ? String(row.unit_id) : null,
+    batchId: row.batch_id ? String(row.batch_id) : null,
+    code: row.code,
+    model: row.model,
+    category: normalizeCategory(row.category),
+    qty: intValue(row.qty, 0),
+    amount: moneyValue(row.amount),
+    location: row.location || 'Склад',
+    by: row.actor || 'system',
+    note: row.note || '',
+    at: localDateTime(row.happened_at),
+    metadata: safeMetadata(row.metadata)
+  }));
+
+  return {
+    ok: true,
+    source: 'postgres',
+    exportedAt: new Date().toISOString(),
+    stats: {
+      products: products.length,
+      units: stockUnits.length,
+      batches: stockBatches.length,
+      batchQty: stockBatches.reduce((sum, row) => sum + (row.qty || 0), 0),
+      movements: stockMovements.length
+    },
+    warehouse,
+    scannerStock,
+    coreDb: {
+      version: 1,
+      products,
+      stockUnits,
+      stockBatches,
+      stockMovements,
+      updatedAt: new Date().toISOString()
+    }
+  };
+}
+
+function importPayloadsFromBody(body) {
+  const items = [];
+  if (Array.isArray(body.items)) items.push(...body.items);
+  const db = body.db || body.coreDb;
+  if (db && typeof db === 'object') {
+    const productsById = new Map((Array.isArray(db.products) ? db.products : []).map(product => [String(product.id), product]));
+    (Array.isArray(db.stockUnits) ? db.stockUnits : []).forEach(unit => {
+      const product = productsById.get(String(unit.productId)) || {};
+      items.push({
+        code: unit.unitCode || unit.imei || unit.serialNumber,
+        category: unit.category || product.category || 'tech',
+        model: product.name || unit.model,
+        purchase: unit.purchasePrice,
+        price: unit.salePrice,
+        qty: 1,
+        status: unit.status,
+        location: unit.location,
+        actor: unit.scannedBy,
+        metadata: { ...(product.metadata || {}), ...(unit.metadata || {}) }
+      });
+    });
+    (Array.isArray(db.stockBatches) ? db.stockBatches : []).forEach(batch => {
+      const product = productsById.get(String(batch.productId)) || {};
+      items.push({
+        code: batch.barcode || batch.sku,
+        category: batch.category || product.category || 'accessories',
+        model: product.name || batch.model,
+        purchase: batch.purchasePrice,
+        price: batch.salePrice,
+        qty: batch.qty,
+        status: batch.status,
+        location: batch.location,
+        actor: batch.scannedBy,
+        minStock: product.minStock,
+        metadata: { ...(product.metadata || {}), ...(batch.metadata || {}) }
+      });
+    });
+  }
+  return items
+    .map(item => ({ ...item, code: normalizeCode(item.code || item.imei || item.sku || item.barcode), model: clean(item.model || item.name, 180) }))
+    .filter(item => item.code && item.model)
+    .slice(0, 1000);
 }
 
 /* Простейшая защита от флуда: не больше 5 заявок в минуту с одного IP */
@@ -448,6 +722,57 @@ const server = http.createServer((req, res) => {
       } catch (e) {
         return send(res, 500, { ok: false, error: clean(e.message, 800) });
       }
+    });
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/stock') {
+    if (!requireStoreAuth(req, url)) return send(res, 401, { ok: false, error: 'Неверный токен' });
+    if (!POSTGRES_CONFIGURED) return send(res, 503, { ok: false, error: dbReadyMessage() });
+    stockSnapshotFromPostgres()
+      .then(snapshot => send(res, 200, snapshot))
+      .catch(e => send(res, 500, { ok: false, error: clean(e.message, 800) }));
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/db/export') {
+    if (!requireStoreAuth(req, url)) return send(res, 401, { ok: false, error: 'Неверный токен' });
+    if (!POSTGRES_CONFIGURED) return send(res, 503, { ok: false, error: dbReadyMessage() });
+    stockSnapshotFromPostgres()
+      .then(snapshot => send(res, 200, {
+        schema: 'imagnate_store_postgres_v1',
+        ...snapshot
+      }))
+      .catch(e => send(res, 500, { ok: false, error: clean(e.message, 800) }));
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/db/import') {
+    if (!requireStoreAuth(req, url)) return send(res, 401, { ok: false, error: 'Неверный токен' });
+    if (!POSTGRES_CONFIGURED) return send(res, 503, { ok: false, error: dbReadyMessage() });
+    readJsonBody(req, 1600000).then(async body => {
+      const items = importPayloadsFromBody(body);
+      const failed = [];
+      let imported = 0;
+      for (const item of items) {
+        try {
+          await receiveScanInPostgres(item);
+          imported += 1;
+        } catch (e) {
+          failed.push({ code: item.code || '', model: item.model || '', error: clean(e.message, 300) });
+        }
+      }
+      return send(res, failed.length ? 207 : 200, {
+        ok: failed.length === 0,
+        imported,
+        failed,
+        total: items.length
+      });
+    }).catch(e => {
+      send(res, e.message === 'body_too_large' ? 413 : 400, {
+        ok: false,
+        error: e.message === 'bad_json' ? 'Неверный JSON' : 'Слишком большой запрос'
+      });
     });
     return;
   }
