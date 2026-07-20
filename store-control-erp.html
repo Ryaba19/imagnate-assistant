@@ -5251,6 +5251,103 @@ function scannerGuessTab(raw){
   if(/^TRD/.test(code)) return 'tradein';
   return 'accessories';
 }
+let IMAGNATE_CATALOG_CACHE=null;
+let IMAGNATE_CATALOG_PROMISE=null;
+function imagnateCatalogItems(){
+  return Array.isArray(IMAGNATE_CATALOG_CACHE?.items)?IMAGNATE_CATALOG_CACHE.items:[];
+}
+function imagnateCatalogPrice(item){
+  return item?.price?rub(item.price):'цена не указана';
+}
+function imagnateCatalogOptionText(item){
+  return [item.category||SCANNER_TAB_LABELS[item.tab]||'Товар', imagnateCatalogPrice(item)].filter(Boolean).join(' · ');
+}
+function imagnateCatalogSearchText(item){
+  return String([item.title,item.brand,item.category,item.memory,item.color,item.slug].filter(Boolean).join(' ')).toLowerCase();
+}
+async function loadImagnateCatalog(){
+  if(IMAGNATE_CATALOG_CACHE) return IMAGNATE_CATALOG_CACHE;
+  if(IMAGNATE_CATALOG_PROMISE) return IMAGNATE_CATALOG_PROMISE;
+  IMAGNATE_CATALOG_PROMISE=fetch(erpApi('/imagnate-catalog.json'), {cache:'no-store'})
+    .then(res=>{
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      return res.json();
+    })
+    .then(data=>{
+      IMAGNATE_CATALOG_CACHE={
+        generatedAt:data.generatedAt||'',
+        count:Number(data.count||data.items?.length||0),
+        items:(Array.isArray(data.items)?data.items:[]).filter(item=>item?.title)
+      };
+      return IMAGNATE_CATALOG_CACHE;
+    })
+    .catch(error=>{
+      IMAGNATE_CATALOG_PROMISE=null;
+      throw error;
+    });
+  return IMAGNATE_CATALOG_PROMISE;
+}
+function scannerFillCatalogOptions(query=''){
+  const list=document.getElementById('scanCatalogOptions');
+  const hint=document.getElementById('scanCatalogHint');
+  if(!list) return;
+  const q=String(query||'').trim().toLowerCase();
+  const items=imagnateCatalogItems();
+  const shown=(q?items.filter(item=>imagnateCatalogSearchText(item).includes(q)):items).slice(0,220);
+  list.innerHTML=shown.map(item=>'<option value="'+escAttr(item.title)+'" label="'+escAttr(imagnateCatalogOptionText(item))+'"></option>').join('');
+  if(hint){
+    if(!items.length) hint.textContent='Справочник iMagnate загружается...';
+    else hint.textContent='В справочнике '+num(items.length)+' товаров. Начните вводить название, модель, бренд или объем.';
+  }
+}
+function scannerFindCatalogItem(value){
+  const needle=String(value||'').trim().toLowerCase();
+  if(!needle) return null;
+  return imagnateCatalogItems().find(item=>String(item.title||'').trim().toLowerCase()===needle)||
+    imagnateCatalogItems().find(item=>String(item.slug||'').trim().toLowerCase()===needle);
+}
+function scannerApplyCatalogItem(item){
+  if(!item) return;
+  const tab=item.tab||'tech';
+  const set=(id,value)=>{ const el=document.getElementById(id); if(el && value!==undefined && value!==null && value!=='') el.value=value; };
+  set('scanNewTab', tab);
+  set('scanNewModel', item.title);
+  if(Number(item.price)>0) set('scanNewPrice', Number(item.price));
+  set('scanNewMemory', item.memory);
+  set('scanNewColor', item.color);
+  set('scanNewMinStock', (tab==='accessories'||tab==='parts')?2:1);
+  set('scanNewCatalogSlug', item.slug);
+  set('scanNewCatalogUrl', item.url);
+  set('scanNewCatalogImage', item.imageUrl);
+  set('scanNewCatalogBrand', item.brand);
+  const preview=document.getElementById('scanCatalogPreview');
+  if(preview){
+    preview.style.display='grid';
+    preview.innerHTML=
+      '<div style="display:flex;gap:12px;align-items:center;">'+
+        (item.imageUrl?'<img src="'+escAttr(item.imageUrl)+'" alt="" style="width:58px;height:58px;object-fit:contain;border-radius:10px;background:rgba(255,255,255,.06);border:1px solid var(--line);padding:6px;">':'')+
+        '<div><b>'+escHtml(item.title)+'</b><div class="tsub">'+escHtml([item.brand,item.category,imagnateCatalogPrice(item)].filter(Boolean).join(' · '))+'</div>'+
+        (item.url?'<a href="'+escAttr(item.url)+'" target="_blank" rel="noopener" class="link-mini">Открыть карточку iMagnate</a>':'')+
+        '</div>'+
+      '</div>';
+  }
+  const hint=document.getElementById('scanCatalogHint');
+  if(hint) hint.textContent='Данные подтянуты из справочника iMagnate. Закупку и фактический комплект указываем вручную.';
+}
+function scannerWireCatalogPicker(){
+  const input=document.getElementById('scanCatalogPicker')||document.getElementById('scanNewModel');
+  if(!input) return;
+  scannerFillCatalogOptions('');
+  loadImagnateCatalog()
+    .then(()=>scannerFillCatalogOptions(input.value))
+    .catch(()=>{ const hint=document.getElementById('scanCatalogHint'); if(hint) hint.textContent='Не удалось загрузить справочник. Можно внести товар вручную.'; });
+  input.addEventListener('input', ()=>{
+    scannerFillCatalogOptions(input.value);
+    const item=scannerFindCatalogItem(input.value);
+    if(item) scannerApplyCatalogItem(item);
+  });
+  input.addEventListener('change', ()=>scannerApplyCatalogItem(scannerFindCatalogItem(input.value)));
+}
 function scannerBarcodeSvg(value, height=62){
   const clean=String(value||'').replace(/[^\x20-\x7E]/g,'').slice(0,48);
   if(!clean) return '';
@@ -5408,7 +5505,8 @@ function openScannerCreateModal(raw=''){
       Object.keys(SCANNER_TAB_LABELS).map(t=>'<option value="'+t+'" '+(t===guessed?'selected':'')+'>'+SCANNER_TAB_LABELS[t]+'</option>').join('')+
     '</select></div>'+
     '<div class="field"><label>Код с коробки / IMEI / серийник / SKU</label><input class="input-mini mono" id="scanNewCode" value="'+escAttr(code)+'" placeholder="Сканируйте код с коробки" style="width:100%;"></div>'+
-    '<div class="field" style="grid-column:1/-1;"><label>Название товара</label><input class="input-mini" id="scanNewModel" placeholder="Например: Защитное стекло iPhone 15 Pro" style="width:100%;"></div>'+
+    '<div class="field" style="grid-column:1/-1;"><label>Название товара</label><input class="input-mini" id="scanNewModel" list="scanCatalogOptions" placeholder="Начните вводить товар или внесите вручную" style="width:100%;"><datalist id="scanCatalogOptions"></datalist></div>'+
+    '<input type="hidden" id="scanNewCatalogSlug"><input type="hidden" id="scanNewCatalogUrl"><input type="hidden" id="scanNewCatalogImage"><input type="hidden" id="scanNewCatalogBrand">'+
     '<div class="field"><label>Закупка</label><input class="input-mini" id="scanNewPurchase" type="number" value="0" style="width:100%;"></div>'+
     '<div class="field"><label>Цена продажи</label><input class="input-mini" id="scanNewPrice" type="number" value="0" style="width:100%;"></div>'+
     '<div class="field"><label>Количество</label><input class="input-mini" id="scanNewQty" type="number" value="1" min="1" style="width:100%;"></div>'+
@@ -5425,6 +5523,7 @@ function openScannerCreateModal(raw=''){
   openModal('Добавить товар по скану', 'Сначала реальный код, потом карточка товара', body, [
     {label:'Сохранить', cls:'btn-primary', action:saveScannerCreatedItem}
   ]);
+  scannerWireCatalogPicker();
 }
 function saveScannerCreatedItem(){
   const tab=document.getElementById('scanNewTab').value;
@@ -5443,15 +5542,19 @@ function saveScannerCreatedItem(){
   const batteryPercent=batteryPercentRaw===''?'':Math.max(0, Math.min(100, parseInt(batteryPercentRaw,10)||0));
   const kit=document.getElementById('scanNewKit').value.trim();
   const comment=document.getElementById('scanNewComment').value.trim();
+  const catalogSlug=document.getElementById('scanNewCatalogSlug')?.value.trim()||'';
+  const catalogUrl=document.getElementById('scanNewCatalogUrl')?.value.trim()||'';
+  const catalogImage=document.getElementById('scanNewCatalogImage')?.value.trim()||'';
+  const catalogBrand=document.getElementById('scanNewCatalogBrand')?.value.trim()||'';
   if(!code || !model){ toast('Заполните код и название товара', 'error'); return; }
   if(scannerFind(code)){ toast('Такой код уже есть в базе', 'error'); return; }
-  const metadata={memory,color,condition,kit,warrantyDays,batteryPercent,comment,minStock};
+  const metadata={memory,color,condition,kit,warrantyDays,batteryPercent,comment,minStock,catalogSlug,catalogUrl,catalogImage,catalogBrand,source:catalogSlug?'imagnate_catalog':'manual'};
   const status=(condition==='check'||condition==='defect'||tab==='tradein')?'check':'instock';
   let item;
   if(tab==='tech'||tab==='tradein'){
-    item={imei:code, model, purchase, price, status, location, lastPriceUpdateAt:DATA.today, hiddenFromSite:false, scannerTracked:true, scannedAt:DATA.today+' '+nowTime(), scannedBy:currentEmployeeName(), memory,color,condition,kit,warrantyDays,batteryPercent,comment,minStock, metadata};
+    item={imei:code, model, purchase, price, status, location, lastPriceUpdateAt:DATA.today, hiddenFromSite:false, scannerTracked:true, scannedAt:DATA.today+' '+nowTime(), scannedBy:currentEmployeeName(), memory,color,condition,kit,warrantyDays,batteryPercent,comment,minStock,catalogSlug,catalogUrl,catalogImage,catalogBrand, metadata};
   } else {
-    item={sku:code, model, purchase, price, status, location, qty, scannerTracked:true, scannedAt:DATA.today+' '+nowTime(), scannedBy:currentEmployeeName(), memory,color,condition,kit,warrantyDays,batteryPercent,comment,minStock, metadata};
+    item={sku:code, model, purchase, price, status, location, qty, scannerTracked:true, scannedAt:DATA.today+' '+nowTime(), scannedBy:currentEmployeeName(), memory,color,condition,kit,warrantyDays,batteryPercent,comment,minStock,catalogSlug,catalogUrl,catalogImage,catalogBrand, metadata};
   }
   coreDbReceiveFromScan(tab, item, code);
   DATA.scannerStock[tab].push(item);
