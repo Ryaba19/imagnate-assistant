@@ -211,6 +211,8 @@ await test('HTML содержит валидный основной JavaScript',
   const js = html.slice(start + '<script>'.length, end);
   new Function(js);
   assert(html.includes('scanCatalogOptions'), 'catalog datalist hook not found');
+  assert(html.includes('scanCatalogResults'), 'visible catalog picker not found');
+  assert(html.includes('imagnateCatalogMatches'), 'catalog matching helper not found');
   assert(!html.includes('Товар из iMagnate'), 'extra catalog field returned');
   assert(html.includes('crmQuickAiTestBtn'), 'quick AI order button not found');
   assert(html.includes('openCrmQuickAiOrderModal'), 'quick AI order modal not found');

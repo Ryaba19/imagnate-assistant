@@ -5387,6 +5387,28 @@ function imagnateCatalogOptionText(item){
 function imagnateCatalogSearchText(item){
   return String([item.title,item.brand,item.category,item.memory,item.color,item.slug].filter(Boolean).join(' ')).toLowerCase();
 }
+function imagnateCatalogMatches(query='', limit=12){
+  const items=imagnateCatalogItems();
+  const q=String(query||'').trim().toLowerCase();
+  if(!items.length) return [];
+  if(!q) return items.slice(0, limit);
+  const words=q.split(/\s+/).filter(Boolean);
+  return items.map(item=>{
+    const title=String(item.title||'').toLowerCase();
+    const text=imagnateCatalogSearchText(item);
+    let score=0;
+    if(title===q) score+=1000;
+    if(title.startsWith(q)) score+=650;
+    if(title.includes(q)) score+=350;
+    words.forEach(word=>{
+      if(title.includes(word)) score+=60;
+      else if(text.includes(word)) score+=18;
+    });
+    if(String(item.brand||'').toLowerCase()===q) score+=120;
+    if(Number(item.price)>0) score+=8;
+    return {item, score};
+  }).filter(row=>row.score>0).sort((a,b)=>b.score-a.score).slice(0, limit).map(row=>row.item);
+}
 async function loadImagnateCatalog(){
   if(IMAGNATE_CATALOG_CACHE) return IMAGNATE_CATALOG_CACHE;
   if(IMAGNATE_CATALOG_PROMISE) return IMAGNATE_CATALOG_PROMISE;
@@ -5417,6 +5439,7 @@ function scannerFillCatalogOptions(query=''){
   const items=imagnateCatalogItems();
   const shown=(q?items.filter(item=>imagnateCatalogSearchText(item).includes(q)):items).slice(0,220);
   list.innerHTML=shown.map(item=>'<option value="'+escAttr(item.title)+'" label="'+escAttr(imagnateCatalogOptionText(item))+'"></option>').join('');
+  scannerRenderCatalogResults(query);
   if(hint){
     if(!items.length) hint.textContent='Справочник iMagnate загружается...';
     else hint.textContent='В справочнике '+num(items.length)+' товаров. Начните вводить название, модель, бренд или объем.';
@@ -5455,6 +5478,35 @@ function scannerApplyCatalogItem(item){
   }
   const hint=document.getElementById('scanCatalogHint');
   if(hint) hint.textContent='Данные подтянуты из справочника iMagnate. Закупку и фактический комплект указываем вручную.';
+}
+function scannerCatalogResultsHtml(query=''){
+  const panelItems=imagnateCatalogMatches(query, 10);
+  if(!imagnateCatalogItems().length) return '<div class="tsub" style="padding:10px;">Загружаю список товаров iMagnate...</div>';
+  if(!panelItems.length) return '<div class="tsub" style="padding:10px;">Ничего не найдено. Можно оставить название вручную.</div>';
+  return panelItems.map(item=>
+    '<button type="button" class="btn" data-scan-catalog-slug="'+escAttr(item.slug||item.title)+'" style="width:100%;justify-content:flex-start;text-align:left;height:auto;min-height:48px;padding:8px 10px;margin-top:6px;">'+
+      (item.imageUrl?'<img src="'+escAttr(item.imageUrl)+'" alt="" style="width:34px;height:34px;object-fit:contain;border-radius:8px;background:rgba(255,255,255,.06);border:1px solid var(--line);padding:3px;margin-right:8px;">':'')+
+      '<span style="display:flex;flex-direction:column;gap:2px;min-width:0;">'+
+        '<b style="white-space:normal;line-height:1.25;">'+escHtml(item.title)+'</b>'+
+        '<span class="tsub">'+escHtml([item.brand,item.category,imagnateCatalogPrice(item)].filter(Boolean).join(' · '))+'</span>'+
+      '</span>'+
+    '</button>'
+  ).join('');
+}
+function scannerRenderCatalogResults(query=''){
+  const panel=document.getElementById('scanCatalogResults');
+  if(!panel) return;
+  panel.innerHTML=scannerCatalogResultsHtml(query);
+  scannerWireCatalogResults();
+}
+function scannerWireCatalogResults(){
+  const panel=document.getElementById('scanCatalogResults');
+  if(!panel) return;
+  panel.querySelectorAll('[data-scan-catalog-slug]').forEach(btn=>btn.addEventListener('click', ()=>{
+    const item=scannerFindCatalogItem(btn.dataset.scanCatalogSlug);
+    if(item) scannerApplyCatalogItem(item);
+    panel.innerHTML=scannerCatalogResultsHtml(item?.title||btn.textContent||'');
+  }));
 }
 function scannerWireCatalogPicker(){
   const input=document.getElementById('scanCatalogPicker')||document.getElementById('scanNewModel');
@@ -5741,7 +5793,7 @@ function openScannerCreateModal(raw=''){
       Object.keys(SCANNER_TAB_LABELS).map(t=>'<option value="'+t+'" '+(t===guessed?'selected':'')+'>'+SCANNER_TAB_LABELS[t]+'</option>').join('')+
     '</select></div>'+
     '<div class="field"><label>Код с коробки / IMEI / серийник / SKU</label><input class="input-mini mono" id="scanNewCode" value="'+escAttr(code)+'" placeholder="Сканируйте код с коробки" style="width:100%;"></div>'+
-    '<div class="field" style="grid-column:1/-1;"><label>Название товара</label><input class="input-mini" id="scanNewModel" list="scanCatalogOptions" placeholder="Начните вводить товар или внесите вручную" style="width:100%;"><datalist id="scanCatalogOptions"></datalist></div>'+
+    '<div class="field" style="grid-column:1/-1;"><label>Название товара</label><input class="input-mini" id="scanNewModel" list="scanCatalogOptions" autocomplete="off" placeholder="Начните вводить товар или внесите вручную" style="width:100%;"><datalist id="scanCatalogOptions"></datalist><div id="scanCatalogHint" class="tsub" style="margin-top:6px;">Загружаю список товаров iMagnate...</div><div id="scanCatalogResults" style="margin-top:6px;max-height:260px;overflow:auto;"></div><div id="scanCatalogPreview" class="card soft" style="display:none;margin-top:10px;padding:10px;"></div></div>'+
     '<input type="hidden" id="scanNewCatalogSlug"><input type="hidden" id="scanNewCatalogUrl"><input type="hidden" id="scanNewCatalogImage"><input type="hidden" id="scanNewCatalogBrand">'+
     '<div class="field"><label>Закупка</label><input class="input-mini" id="scanNewPurchase" type="number" value="0" style="width:100%;"></div>'+
     '<div class="field"><label>Цена продажи</label><input class="input-mini" id="scanNewPrice" type="number" value="0" style="width:100%;"></div>'+
@@ -5810,7 +5862,7 @@ function openScannerCreateModalV2(raw='', options={}){
         Object.entries({tech:'Техника', tradein:'Trade-in', accessories:'Аксессуары', parts:'Запчасти'}).map(([t,label])=>'<option value="'+t+'" '+(t===guessed?'selected':'')+'>'+label+'</option>').join('')+
       '</select></div>'+
       '<div class="field"><label>Код с коробки</label><input class="input-mini mono" id="scanNewCode" value="'+escAttr(code)+'" placeholder="Пикните код" style="width:100%;"></div>'+
-      '<div class="field" style="grid-column:1/-1;"><label>Название товара</label><input class="input-mini" id="scanNewModel" list="scanCatalogOptions" placeholder="Например: iPhone 15 Pro 256GB Natural Titanium" style="width:100%;"><datalist id="scanCatalogOptions"></datalist></div>'+
+      '<div class="field" style="grid-column:1/-1;"><label>Название товара</label><input class="input-mini" id="scanNewModel" list="scanCatalogOptions" autocomplete="off" placeholder="Например: iPhone 15 Pro 256GB Natural Titanium" style="width:100%;"><datalist id="scanCatalogOptions"></datalist><div id="scanCatalogHint" class="tsub" style="margin-top:6px;">Загружаю список товаров iMagnate...</div><div id="scanCatalogResults" style="margin-top:6px;max-height:260px;overflow:auto;"></div><div id="scanCatalogPreview" class="card soft" style="display:none;margin-top:10px;padding:10px;"></div></div>'+
       '<input type="hidden" id="scanNewCatalogSlug"><input type="hidden" id="scanNewCatalogUrl"><input type="hidden" id="scanNewCatalogImage"><input type="hidden" id="scanNewCatalogBrand">'+
       '<div class="field"><label>Закупка</label><input class="input-mini" id="scanNewPurchase" type="number" value="0" style="width:100%;"></div>'+
       '<div class="field"><label>Цена продажи</label><input class="input-mini" id="scanNewPrice" type="number" value="0" style="width:100%;"></div>'+
