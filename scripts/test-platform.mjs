@@ -222,6 +222,8 @@ await test('HTML содержит валидный основной JavaScript',
   assert(html.includes('scannerLookupPostgres'), 'scanner server lookup not found');
   assert(html.includes('scannerApplyLookupEntry'), 'scanner lookup merge not found');
   assert(html.includes('openScannerCreateModalV2'), 'compact scanner intake modal not found');
+  assert(html.includes('warehouseScannerPanelHtml'), 'warehouse scanner panel not found');
+  assert(!html.includes("'warehouse','scanner'"), 'scanner returned as a separate sidebar menu item');
   assert(html.includes('crmAgentCustomerSalesReply'), 'customer sales reply composer not found');
   assert(html.includes('Гарантия магазина обычно 14 дней'), 'customer warranty phrase not found');
   assert(html.includes('Цена по базе сейчас'), 'customer price phrase not found');

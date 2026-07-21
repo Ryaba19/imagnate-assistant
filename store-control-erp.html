@@ -1657,10 +1657,10 @@ let DATA = {
 
 /* --------------------------- PERMISSIONS --------------------------- */
 const ROLES = {
-  owner:{label:'Владелец', short:'ВЛ', menu:['dashboard','crm','orders','service','warehouse','scanner','purchase','collection','customers','pricing','finance','accounting','expenses','analytics','tasks','team','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:true, canConfirmPurchase:true, canPriceCollection:true, canReadServerDb:true, canImportServerDb:true, canExportServerDb:true, canManageServerToken:true, canManageEmployees:true},
-  senior:{label:'Старший продавец', short:'СП', menu:['dashboard','crm','orders','service','warehouse','scanner','purchase','collection','pricing','finance','expenses','analytics','tasks','team','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:false, canConfirmPurchase:true, canPriceCollection:true, canReadServerDb:true, canImportServerDb:true, canExportServerDb:true, canManageServerToken:false, canManageEmployees:false},
-  seller:{label:'Продавец', short:'ПР', menu:['dashboard','crm','orders','service','warehouse','scanner','expenses','tasks','team','docs'], seePurchase:false, seeProfit:false, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false, canReadServerDb:true, canImportServerDb:false, canExportServerDb:false, canManageServerToken:false, canManageEmployees:false},
-  master:{label:'Мастер', short:'МС', menu:['dashboard','service','warehouse','scanner','expenses','tasks','team','docs'], seePurchase:false, seeProfit:false, warehouseTabs:['parts'], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false, canReadServerDb:true, canImportServerDb:false, canExportServerDb:false, canManageServerToken:false, canManageEmployees:false},
+  owner:{label:'Владелец', short:'ВЛ', menu:['dashboard','crm','orders','service','warehouse','purchase','collection','customers','pricing','finance','accounting','expenses','analytics','tasks','team','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:true, canConfirmPurchase:true, canPriceCollection:true, canReadServerDb:true, canImportServerDb:true, canExportServerDb:true, canManageServerToken:true, canManageEmployees:true},
+  senior:{label:'Старший продавец', short:'СП', menu:['dashboard','crm','orders','service','warehouse','purchase','collection','pricing','finance','expenses','analytics','tasks','team','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:false, canConfirmPurchase:true, canPriceCollection:true, canReadServerDb:true, canImportServerDb:true, canExportServerDb:true, canManageServerToken:false, canManageEmployees:false},
+  seller:{label:'Продавец', short:'ПР', menu:['dashboard','crm','orders','service','warehouse','expenses','tasks','team','docs'], seePurchase:false, seeProfit:false, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false, canReadServerDb:true, canImportServerDb:false, canExportServerDb:false, canManageServerToken:false, canManageEmployees:false},
+  master:{label:'Мастер', short:'МС', menu:['dashboard','service','warehouse','expenses','tasks','team','docs'], seePurchase:false, seeProfit:false, warehouseTabs:['parts'], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false, canReadServerDb:true, canImportServerDb:false, canExportServerDb:false, canManageServerToken:false, canManageEmployees:false},
   courier:{label:'Курьер (штатный)', short:'КУ', menu:['dashboard','deliveries','docs'], seePurchase:false, seeProfit:false, warehouseTabs:[], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false, canReadServerDb:false, canImportServerDb:false, canExportServerDb:false, canManageServerToken:false, canManageEmployees:false},
   collector:{label:'Сборщик', short:'СБ', menu:['dashboard','purchase','collection','team','docs'], seePurchase:true, seeProfit:false, warehouseTabs:[], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:true, canReadServerDb:false, canImportServerDb:false, canExportServerDb:false, canManageServerToken:false, canManageEmployees:false},
 };
@@ -4769,6 +4769,32 @@ function openWarehouseCategoryDrill(tabKey){
   renderDrill(WH_TABS[tabKey], 'Последние движения по складу', body);
 }
 
+function warehouseScannerPanelHtml(){
+  const badge=scannerDbToken()?'<span class="badge b-done">сервер подключен</span>':'<span class="badge b-grey">локально</span>';
+  return '<div class="section" id="warehouseScanBox" style="margin-bottom:18px;">'+
+    '<div class="section-head"><div><div class="section-eyebrow">Сканер склада</div><div class="section-title">Быстрый поиск и внесение товара</div><p class="tsub">Пикните код с коробки. Если товар уже есть в базе, откроется карточка. Если нет, система предложит короткое добавление.</p></div><div>'+badge+'</div></div>'+
+    '<div class="toolbar" style="margin-bottom:0;">'+
+      '<input class="input-mini mono" id="warehouseScannerInput" placeholder="IMEI, серийный номер или SKU" style="flex:1;min-width:320px;font-size:17px;padding:13px;">'+
+      '<button class="btn btn-primary" id="warehouseScannerRunBtn">'+ic('scan')+' Найти</button>'+
+      '<button class="btn" id="warehouseScannerCreateBtn">'+ic('plus')+' Добавить</button>'+
+    '</div>'+
+    '<div id="scannerResult" style="margin-top:12px;"></div>'+
+  '</div>';
+}
+function wireWarehouseScannerPanel(c){
+  const input=c.querySelector('#warehouseScannerInput');
+  if(!input) return;
+  const run=()=>{ scannerRenderResult(input.value, c); input.focus(); input.select(); };
+  input.addEventListener('keydown', e=>{ if(e.key==='Enter') run(); });
+  c.querySelector('#warehouseScannerRunBtn')?.addEventListener('click', run);
+  c.querySelector('#warehouseScannerCreateBtn')?.addEventListener('click', ()=>openScannerCreateModalV2(input.value));
+  if(STATE.scannerLastCode){
+    input.value=STATE.scannerLastCode;
+    scannerRenderResult(STATE.scannerLastCode, c, {skipLog:true});
+    STATE.scannerLastCode='';
+  }
+}
+
 function renderWarehouse(c){
   const role=ROLES[STATE.role];
   const type=getCurrentStoreType();
@@ -4777,7 +4803,7 @@ function renderWarehouse(c){
   if(!tabs.length){ c.innerHTML='<div class="card" style="text-align:center;padding:30px;"><div class="tsub">Для этого типа точки склад не настроен.</div></div>'; return; }
   if(!tabs.includes(STATE.whFilters.tab)) STATE.whFilters.tab=tabs[0];
 
-  let html='<div class="grid grid-4" style="margin-bottom:18px;">'+tabs.map(t=>whCategoryCard(t)).join('')+'</div>';
+  let html=warehouseScannerPanelHtml()+'<div class="grid grid-4" style="margin-bottom:18px;">'+tabs.map(t=>whCategoryCard(t)).join('')+'</div>';
   html+='<div class="toolbar"><div class="chip-tabs">'+
     tabs.map(t=>'<div class="chip-tab '+(STATE.whFilters.tab===t?'active':'')+'" data-wt="'+t+'">'+WH_TABS[t]+'</div>').join('')+
     '</div><div class="topbar-spacer"></div>'+
@@ -4813,6 +4839,7 @@ function renderWarehouse(c){
     html+='</tbody></table></div>';
   }
   c.innerHTML=html;
+  wireWarehouseScannerPanel(c);
 
   c.querySelectorAll('[data-wh-cat]').forEach(el=>el.addEventListener('click',()=>openWarehouseCategoryDrill(el.dataset.whCat)));
   c.querySelectorAll('[data-wt]').forEach(el=>el.addEventListener('click',()=>{STATE.whFilters.tab=el.dataset.wt; renderWarehouse(c);}));
@@ -4897,7 +4924,7 @@ function scannerAnalyzeCode(raw){
   const normalized=scannerNormalize(raw);
   const digits=scannerDigits(raw);
   const imei=scannerExtractImei(raw);
-  const weird=/[^\dA-Za-zА-Яа-яЁё\-_.:/?=&+%]/.test(original);
+  const weird=/[^\dA-Za-z\u0400-\u04FF\-_.:/?=&+%]/.test(original);
   const nonAscii=/[^\x20-\x7E]/.test(original);
   const looksLikeQuery=/[?=&]/.test(original) && digits.length>8;
 
@@ -5868,7 +5895,7 @@ function saveScannerCreatedItem(){
       toast('Товар также сохранён в PostgreSQL', 'success');
     }
     if(typeof lsSave==='function') lsSave();
-    if(STATE.page==='scanner'){
+    if(STATE.page==='scanner'||STATE.page==='warehouse'){
       const host=document.getElementById('pageContent')||document;
       scannerRefreshLog(host);
       scannerRefreshServerPanel(host);
@@ -5876,7 +5903,7 @@ function saveScannerCreatedItem(){
   });
   closeModal();
   STATE.scannerLastCode=code;
-  if(STATE.page==='scanner') renderPage();
+  if(STATE.page==='scanner'||STATE.page==='warehouse') renderPage();
   toast('Товар внесён в базу по коду: '+code, 'success');
 }
 function scannerLogHtml(){
