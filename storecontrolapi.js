@@ -447,6 +447,99 @@ async function stockSnapshotFromPostgres() {
   };
 }
 
+function stockLookupEntryFromUnit(row) {
+  const metadata = safeMetadata({ ...(row.product_metadata || {}), ...(row.metadata || {}) });
+  const category = normalizeCategory(row.category);
+  const item = {
+    imei: row.unit_code || row.imei || row.serial_number || '',
+    unitCode: row.unit_code || '',
+    serialNumber: row.serial_number || '',
+    model: row.product_name,
+    purchase: moneyValue(row.purchase_price),
+    price: moneyValue(row.sale_price),
+    status: row.status || 'instock',
+    location: row.location || 'Склад',
+    scannerTracked: true,
+    scannedAt: localDateTime(row.scanned_at),
+    scannedBy: row.scanned_by || 'system',
+    source: row.source || 'server',
+    postgresId: String(row.id),
+    dbProductId: String(row.product_id),
+    dbUnitId: String(row.id),
+    metadata,
+    ...metadata
+  };
+  return {
+    tab: category,
+    item,
+    primary: item.imei || item.unitCode || item.serialNumber,
+    barcode: item.unitCode || item.imei || item.serialNumber
+  };
+}
+
+function stockLookupEntryFromBatch(row) {
+  const metadata = safeMetadata({ ...(row.product_metadata || {}), ...(row.metadata || {}) });
+  const category = normalizeCategory(row.category);
+  const item = {
+    sku: row.sku || row.barcode || '',
+    barcode: row.barcode || row.sku || '',
+    model: row.product_name,
+    purchase: moneyValue(row.purchase_price),
+    price: moneyValue(row.sale_price),
+    qty: Math.max(0, intValue(row.qty, 0)),
+    minStock: intValue(row.product_min_stock, 0),
+    status: row.status || 'instock',
+    location: row.location || 'Склад',
+    scannerTracked: true,
+    scannedAt: localDateTime(row.scanned_at),
+    scannedBy: row.scanned_by || 'system',
+    source: row.source || 'server',
+    postgresId: String(row.id),
+    dbProductId: String(row.product_id),
+    dbBatchId: String(row.id),
+    metadata,
+    ...metadata
+  };
+  return {
+    tab: category,
+    item,
+    primary: item.sku || item.barcode,
+    barcode: item.barcode || item.sku
+  };
+}
+
+async function lookupScanInPostgres(rawCode) {
+  const code = normalizeCode(rawCode);
+  if (!code) return { ok: true, found: false };
+
+  const unitResult = await pgQuery(`
+    SELECT u.*, p.name AS product_name, p.min_stock AS product_min_stock, p.metadata AS product_metadata
+    FROM stock_units u
+    JOIN products p ON p.id = u.product_id
+    WHERE upper(u.unit_code) = $1
+       OR upper(coalesce(u.imei,'')) = $1
+       OR upper(coalesce(u.serial_number,'')) = $1
+    LIMIT 1
+  `, [code]);
+  if (unitResult.rows.length) {
+    return { ok: true, found: true, source: 'stock_units', entry: stockLookupEntryFromUnit(unitResult.rows[0]) };
+  }
+
+  const batchResult = await pgQuery(`
+    SELECT b.*, p.name AS product_name, p.min_stock AS product_min_stock, p.metadata AS product_metadata
+    FROM stock_batches b
+    JOIN products p ON p.id = b.product_id
+    WHERE upper(b.barcode) = $1
+       OR upper(coalesce(b.sku,'')) = $1
+    LIMIT 1
+  `, [code]);
+  if (batchResult.rows.length) {
+    return { ok: true, found: true, source: 'stock_batches', entry: stockLookupEntryFromBatch(batchResult.rows[0]) };
+  }
+
+  return { ok: true, found: false, code };
+}
+
 function importPayloadsFromBody(body) {
   const items = [];
   if (Array.isArray(body.items)) items.push(...body.items);
@@ -785,6 +878,15 @@ const server = http.createServer((req, res) => {
     if (!POSTGRES_CONFIGURED) return send(res, 503, { ok: false, error: dbReadyMessage() });
     stockSnapshotFromPostgres()
       .then(snapshot => send(res, 200, snapshot))
+      .catch(e => send(res, 500, { ok: false, error: clean(e.message, 800) }));
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/scan/lookup') {
+    if (!requireStoreAuth(req, url)) return send(res, 401, { ok: false, error: 'Неверный токен' });
+    if (!POSTGRES_CONFIGURED) return send(res, 503, { ok: false, error: dbReadyMessage() });
+    lookupScanInPostgres(url.searchParams.get('code') || '')
+      .then(result => send(res, 200, result))
       .catch(e => send(res, 500, { ok: false, error: clean(e.message, 800) }));
     return;
   }

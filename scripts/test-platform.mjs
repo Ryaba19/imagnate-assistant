@@ -219,6 +219,9 @@ await test('HTML содержит валидный основной JavaScript',
   assert(html.includes('scannerServerDbHtml'), 'scanner server DB panel not found');
   assert(html.includes('scannerUpdateScanLogServer'), 'scanner server sync log updater not found');
   assert(html.includes('serverDbLastSyncAt'), 'server DB sync timestamp not found');
+  assert(html.includes('scannerLookupPostgres'), 'scanner server lookup not found');
+  assert(html.includes('scannerApplyLookupEntry'), 'scanner lookup merge not found');
+  assert(html.includes('openScannerCreateModalV2'), 'compact scanner intake modal not found');
   assert(html.includes('crmAgentCustomerSalesReply'), 'customer sales reply composer not found');
   assert(html.includes('Гарантия магазина обычно 14 дней'), 'customer warranty phrase not found');
   assert(html.includes('Цена по базе сейчас'), 'customer price phrase not found');
@@ -310,8 +313,18 @@ await test('Integration: статика и каталог отдаются се�
 await test('Integration: API защищает серверную БД токеном', async () => {
   const noToken = await jsonFetch('/api/stock');
   const badToken = await jsonFetch('/api/stock', { headers: { Authorization: 'Bearer wrong' } });
+  const noLookupToken = await jsonFetch('/api/scan/lookup?code=356789012345678');
   assert(noToken.response.status === 401, 'stock without token should be 401');
   assert(badToken.response.status === 401, 'stock with bad token should be 401');
+  assert(noLookupToken.response.status === 401, 'scan lookup without token should be 401');
+});
+
+await test('Integration: lookup сканера без PostgreSQL явно недоступен', async () => {
+  const result = await jsonFetch('/api/scan/lookup?code=356789012345678', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert(result.response.status === 503, 'scan lookup without DATABASE_URL should return 503');
+  assert(result.body.ok === false, 'scan lookup dry run should be explicit failure');
 });
 
 await test('Integration: scan endpoint не пишет без PostgreSQL и не падает', async () => {

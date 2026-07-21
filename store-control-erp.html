@@ -5611,6 +5611,68 @@ function scannerServerStatusBadge(status){
   if(status==='skipped') return '<span class="badge b-grey">без токена</span>';
   return '<span class="badge b-progress">локально</span>';
 }
+function scannerApplyLookupEntry(entry){
+  if(!entry || !entry.tab || !entry.item) return null;
+  scannerEnsureBarcodes();
+  const tab=entry.tab;
+  const item=entry.item;
+  const aliases=[item.imei,item.sku,item.barcode,item.labelCode,item.unitCode,item.serialNumber,entry.barcode,entry.primary].filter(Boolean).map(scannerNormalize);
+  const exists=(DATA.scannerStock[tab]||[]).some(row=>{
+    const rowAliases=[row.imei,row.sku,row.barcode,row.labelCode,row.unitCode,row.serialNumber].filter(Boolean).map(scannerNormalize);
+    return aliases.some(code=>rowAliases.includes(code));
+  });
+  if(!exists) DATA.scannerStock[tab].push(item);
+  DATA.warehouse=DATA.warehouse||scannerEmptyStock();
+  DATA.warehouse[tab]=DATA.warehouse[tab]||[];
+  const whExists=DATA.warehouse[tab].some(row=>{
+    const rowAliases=[row.imei,row.sku,row.barcode,row.labelCode,row.unitCode,row.serialNumber].filter(Boolean).map(scannerNormalize);
+    return aliases.some(code=>rowAliases.includes(code));
+  });
+  if(!whExists) DATA.warehouse[tab].push({...item});
+  if(typeof lsSave==='function') lsSave();
+  return scannerFind(entry.barcode||entry.primary||scannerCodeForItem(item)) || {tab,item,primary:entry.primary||scannerPrimaryCode(item),barcode:entry.barcode||scannerCodeForItem(item)};
+}
+function scannerUpdateLogFromLookup(code, entry, found){
+  const target=scannerNormalize(code);
+  const row=(DATA.scanLog||[]).find(l=>scannerNormalize(l.code)===target);
+  if(!row) return;
+  row.serverStatus='ok';
+  row.serverMessage=found?'найдено в PostgreSQL':'на сервере нет';
+  if(found && entry){
+    row.model=entry.item?.model||row.model;
+    row.tab=entry.tab||row.tab;
+    row.action='Найдено на сервере';
+  }
+  if(typeof lsSave==='function') lsSave();
+}
+async function scannerLookupPostgres(raw, host, options={}){
+  const code=scannerNormalize(raw);
+  if(!code || !scannerDbToken() || !can('canReadServerDb')) return null;
+  const result=host.querySelector('#scannerResult');
+  try{
+    const res=await fetch(erpApi('/api/scan/lookup?code='+encodeURIComponent(code)), {headers:erpAuthHeaders()});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok || !data.ok) throw new Error(data.error||('HTTP '+res.status));
+    if(data.found && data.entry){
+      const entry=scannerApplyLookupEntry(data.entry);
+      scannerUpdateLogFromLookup(code, entry, true);
+      if(result) result.innerHTML=scannerResultHtml(entry, code);
+      scannerRefreshLog(host);
+      scannerWireResult(host);
+      toast('Товар найден в серверной БД', 'success');
+      return entry;
+    }
+    scannerUpdateLogFromLookup(code, null, false);
+    scannerRefreshLog(host);
+    if(options.autoCreate && scannerAnalyzeCode(code).canCreate) setTimeout(()=>openScannerCreateModalV2(code, {auto:true}), 120);
+    return null;
+  }catch(e){
+    scannerUpdateScanLogServer(code, {ok:false, error:e.message||String(e)});
+    scannerRefreshLog(host);
+    if(options.autoCreate && scannerAnalyzeCode(code).canCreate) setTimeout(()=>openScannerCreateModalV2(code, {auto:true}), 120);
+    return null;
+  }
+}
 function scannerRenderResult(raw, host, options={}){
   const result=host.querySelector('#scannerResult');
   const code=scannerNormalize(raw);
@@ -5624,6 +5686,11 @@ function scannerRenderResult(raw, host, options={}){
   result.innerHTML=scannerResultHtml(entry, code);
   scannerRefreshLog(host);
   scannerWireResult(host);
+  if(!entry && !options.skipServerLookup && scannerDbToken()){
+    scannerLookupPostgres(code, host, {autoCreate:analysis.canCreate});
+  }else if(!entry && analysis.canCreate && options.autoCreate!==false){
+    setTimeout(()=>openScannerCreateModalV2(code, {auto:true}), 120);
+  }
 }
 function scannerWireResult(host){
   host.querySelectorAll('[data-open-wh]').forEach(btn=>btn.addEventListener('click',()=>openWarehouseItemDrill(btn.dataset.openWh)));
@@ -5631,7 +5698,7 @@ function scannerWireResult(host){
     const entry=scannerEntries().find(x=>x.barcode===btn.dataset.printLabel);
     if(entry) scannerPrintLabel(entry);
   }));
-  host.querySelectorAll('[data-scan-create]').forEach(btn=>btn.addEventListener('click',()=>openScannerCreateModal(btn.dataset.scanCreate||'')));
+  host.querySelectorAll('[data-scan-create]').forEach(btn=>btn.addEventListener('click',()=>openScannerCreateModalV2(btn.dataset.scanCreate||'')));
 }
 function openScannerCreateModal(raw=''){
   scannerEnsureBarcodes();
@@ -5666,6 +5733,81 @@ function openScannerCreateModal(raw=''){
     {label:'Сохранить', cls:'btn-primary', action:saveScannerCreatedItem}
   ]);
   scannerWireCatalogPicker();
+}
+function scannerTypeHelpText(scan){
+  if(!scan) return 'Сканируем код с коробки и сохраняем товар в базу.';
+  if(scan.type==='imei' || scan.type==='imei_embedded') return 'Это единичная техника: в базу попадёт один конкретный товар по IMEI.';
+  if(['ean13','upc','gtin14'].includes(scan.type)) return 'Это товарный штрихкод: подходит для аксессуаров, запчастей и партийного остатка.';
+  if(['part_sku','accessory_sku','tradein_sku','sku'].includes(scan.type)) return 'Это внутренний код/SKU: можно использовать для учёта товара или собственной этикетки.';
+  return scan.hint || 'Проверьте код перед сохранением.';
+}
+function scannerWireCreateCategoryRules(){
+  const tab=document.getElementById('scanNewTab');
+  const qty=document.getElementById('scanNewQty');
+  const min=document.getElementById('scanNewMinStock');
+  const warranty=document.getElementById('scanNewWarranty');
+  const condition=document.getElementById('scanNewCondition');
+  if(!tab || !qty) return;
+  const apply=()=>{
+    const unit=tab.value==='tech'||tab.value==='tradein';
+    qty.value=unit?'1':(qty.value||'1');
+    qty.disabled=unit;
+    if(min && !min.dataset.touched) min.value=unit?'1':'2';
+    if(warranty && !warranty.value) warranty.value='14';
+    if(condition && tab.value==='tradein') condition.value='check';
+  };
+  min?.addEventListener('input',()=>{min.dataset.touched='1';});
+  tab.addEventListener('change', apply);
+  apply();
+}
+function openScannerCreateModalV2(raw='', options={}){
+  scannerEnsureBarcodes();
+  const analysis=scannerAnalyzeCode(raw);
+  if(raw && !analysis.canCreate){
+    toast('Этот скан нельзя сохранить как товар. Пикните IMEI, серийник, SKU или нормальный штрихкод.', 'error');
+    return;
+  }
+  const guessed=analysis.tab||scannerGuessTab(raw);
+  const code=raw?(analysis.canonical||scannerNormalize(raw)):'';
+  const body=
+    (options.auto?'<div class="kpi-delta" style="margin:0 0 14px 0;">'+ic('scan')+' Код новый: заполните товар один раз, дальше он будет находиться автоматически.</div>':'')+
+    '<div class="card soft" style="margin-bottom:14px;">'+
+      '<div class="field-grid">'+
+        field('Тип скана', analysis.label||'Новый код')+
+        field('Код для базы', code||'—', true)+
+        field('Подсказка', scannerTypeHelpText(analysis))+
+      '</div>'+
+    '</div>'+
+    '<div class="field-grid">'+
+      '<div class="field"><label>Категория</label><select class="input-mini" id="scanNewTab" style="width:100%;">'+
+        Object.entries({tech:'Техника', tradein:'Trade-in', accessories:'Аксессуары', parts:'Запчасти'}).map(([t,label])=>'<option value="'+t+'" '+(t===guessed?'selected':'')+'>'+label+'</option>').join('')+
+      '</select></div>'+
+      '<div class="field"><label>Код с коробки</label><input class="input-mini mono" id="scanNewCode" value="'+escAttr(code)+'" placeholder="Пикните код" style="width:100%;"></div>'+
+      '<div class="field" style="grid-column:1/-1;"><label>Название товара</label><input class="input-mini" id="scanNewModel" list="scanCatalogOptions" placeholder="Например: iPhone 15 Pro 256GB Natural Titanium" style="width:100%;"><datalist id="scanCatalogOptions"></datalist></div>'+
+      '<input type="hidden" id="scanNewCatalogSlug"><input type="hidden" id="scanNewCatalogUrl"><input type="hidden" id="scanNewCatalogImage"><input type="hidden" id="scanNewCatalogBrand">'+
+      '<div class="field"><label>Закупка</label><input class="input-mini" id="scanNewPurchase" type="number" value="0" style="width:100%;"></div>'+
+      '<div class="field"><label>Цена продажи</label><input class="input-mini" id="scanNewPrice" type="number" value="0" style="width:100%;"></div>'+
+      '<div class="field"><label>Количество</label><input class="input-mini" id="scanNewQty" type="number" value="1" min="1" style="width:100%;"></div>'+
+      '<div class="field"><label>Место</label><input class="input-mini" id="scanNewLocation" value="Склад" style="width:100%;"></div>'+
+    '</div>'+
+    '<details style="margin-top:14px;"><summary class="tsub" style="cursor:pointer;">Дополнительно: память, цвет, гарантия, комплект, комментарий</summary>'+
+      '<div class="field-grid" style="margin-top:12px;">'+
+        '<div class="field"><label>Память / объем</label><input class="input-mini" id="scanNewMemory" placeholder="256 GB / 1 TB" style="width:100%;"></div>'+
+        '<div class="field"><label>Цвет</label><input class="input-mini" id="scanNewColor" placeholder="Black / Natural Titanium" style="width:100%;"></div>'+
+        '<div class="field"><label>Состояние</label><select class="input-mini" id="scanNewCondition" style="width:100%;"><option value="new">Новое</option><option value="excellent">Отличное</option><option value="good">Хорошее</option><option value="check">На проверке</option><option value="defect">С дефектом</option></select></div>'+
+        '<div class="field"><label>Мин. остаток</label><input class="input-mini" id="scanNewMinStock" type="number" value="'+((guessed==='accessories'||guessed==='parts')?'2':'1')+'" min="0" style="width:100%;"></div>'+
+        '<div class="field"><label>Гарантия, дней</label><input class="input-mini" id="scanNewWarranty" type="number" value="14" min="0" style="width:100%;"></div>'+
+        '<div class="field"><label>АКБ, %</label><input class="input-mini" id="scanNewBattery" type="number" min="0" max="100" placeholder="если нужно" style="width:100%;"></div>'+
+        '<div class="field" style="grid-column:1/-1;"><label>Комплект</label><input class="input-mini" id="scanNewKit" placeholder="Коробка, кабель, чек" style="width:100%;"></div>'+
+        '<div class="field" style="grid-column:1/-1;"><label>Комментарий</label><textarea class="input-mini" id="scanNewComment" placeholder="Что важно знать продавцу или владельцу" style="width:100%;min-height:70px;"></textarea></div>'+
+      '</div>'+
+    '</details>';
+  openModal('Приёмка по скану', 'Минимум полей, чтобы товар сразу попал в складскую БД', body, [
+    {label:'Сохранить в БД', cls:'btn-primary', action:saveScannerCreatedItem}
+  ]);
+  scannerWireCatalogPicker();
+  scannerWireCreateCategoryRules();
+  setTimeout(()=>document.getElementById('scanNewModel')?.focus(),80);
 }
 function saveScannerCreatedItem(){
   const tab=document.getElementById('scanNewTab').value;
@@ -5808,7 +5950,7 @@ function renderScanner(c){
   const run=()=>{ scannerRenderResult(input.value, c); input.focus(); input.select(); };
   input.addEventListener('keydown', e=>{ if(e.key==='Enter') run(); });
   c.querySelector('#scannerRunBtn').addEventListener('click', run);
-  c.querySelector('#scanCreateBtn').addEventListener('click', ()=>openScannerCreateModal(input.value));
+  c.querySelector('#scanCreateBtn').addEventListener('click', ()=>openScannerCreateModalV2(input.value));
   c.querySelector('#scannerExportDbBtn').addEventListener('click', scannerExportCoreDb);
   c.querySelector('#scannerLoadServerBtn')?.addEventListener('click', ()=>loadServerStock());
   c.querySelector('#scannerServerExportBtn')?.addEventListener('click', serverExportDb);
