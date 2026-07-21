@@ -5787,18 +5787,12 @@ function renderScanner(c){
   scannerEnsureBarcodes();
   coreDbSyncScannerStock();
   const entries=scannerEntries();
-  const dbStats=coreDbStats();
   const serverButtons=[
     can('canReadServerDb')?'<button class="btn" id="scannerLoadServerBtn">'+ic('refresh')+' С сервера</button>':'',
     can('canExportServerDb')?'<button class="btn" id="scannerServerExportBtn">'+ic('download')+' Экспорт сервера</button>':'',
     can('canImportServerDb')?'<button class="btn" id="scannerServerImportBtn">'+ic('chain')+' Импорт локального</button>':''
   ].filter(Boolean).join('');
-  let html='<div class="grid grid-4" style="margin-bottom:18px;">'+
-    kpiPlain('Товаров в БД', num(dbStats.products), 'warehouse')+
-    kpiPlain('Единиц с IMEI', num(dbStats.units), 'phone')+
-    kpiPlain('Партии / остатки', num(dbStats.batchQty)+' шт.', 'box')+
-    kpiPlain('Движений склада', num(dbStats.movements), 'analytics')+
-  '</div>';
+  let html='';
   html+='<div class="section"><div class="section-head"><div><div class="section-eyebrow">Рабочий учет склада</div><div class="section-title">Сканирование товара с коробки</div><p class="tsub">Поставьте курсор в поле и пикните сканером код с коробки. Если код уже есть в базе, откроется товар. Если нет — система предложит внести новую единицу.</p></div><div style="display:flex;gap:10px;flex-wrap:wrap;">'+serverButtons+'<button class="btn" id="scannerExportDbBtn">'+ic('download')+' Экспорт локально</button><button class="btn btn-primary" id="scanCreateBtn">'+ic('plus')+' Добавить по скану</button></div></div>'+
     '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">'+
       '<input class="input-mini mono" id="scannerInput" placeholder="Пикните код с коробки: IMEI, серийник или SKU" style="flex:1;min-width:320px;font-size:18px;padding:14px;">'+
