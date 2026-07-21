@@ -4864,6 +4864,100 @@ const CODE128_PATTERNS=[
 const SCANNER_TAB_LABELS={tech:'Техника', tradein:'Trade-in', accessories:'Аксессуары', parts:'Запчасти'};
 function escAttr(s){return escHtml(String(s||'')).replace(/"/g,'&quot;');}
 function scannerNormalize(code){return String(code||'').trim().replace(/\s+/g,'').toUpperCase();}
+function scannerDigits(code){return String(code||'').replace(/\D/g,'');}
+function scannerImeiLuhnValid(code){
+  const digits=String(code||'');
+  if(!/^\d{15}$/.test(digits)) return false;
+  let sum=0;
+  for(let i=0;i<14;i++){
+    let n=parseInt(digits[i],10);
+    if(i%2===1){
+      n*=2;
+      if(n>9) n-=9;
+    }
+    sum+=n;
+  }
+  return ((sum+parseInt(digits[14],10))%10)===0;
+}
+function scannerExtractImei(raw){
+  const text=String(raw||'');
+  const chunks=text.match(/\d{15}/g)||[];
+  const valid=chunks.find(scannerImeiLuhnValid);
+  if(valid) return valid;
+  const digits=scannerDigits(text);
+  for(let i=0;i<=digits.length-15;i++){
+    const candidate=digits.slice(i,i+15);
+    if(scannerImeiLuhnValid(candidate)) return candidate;
+  }
+  if(/^\d{15}$/.test(digits)) return digits;
+  return '';
+}
+function scannerAnalyzeCode(raw){
+  const original=String(raw||'').trim();
+  const normalized=scannerNormalize(raw);
+  const digits=scannerDigits(raw);
+  const imei=scannerExtractImei(raw);
+  const weird=/[^\dA-Za-zА-Яа-яЁё\-_.:/?=&+%]/.test(original);
+  const nonAscii=/[^\x20-\x7E]/.test(original);
+  const looksLikeQuery=/[?=&]/.test(original) && digits.length>8;
+
+  if(!normalized){
+    return {type:'empty', label:'Нет кода', canonical:'', tab:'accessories', canCreate:false, severity:'warn', hint:'Поставьте курсор в поле и пикните код.'};
+  }
+  if(/^01\d{14}21/.test(digits) || /^02\d{14}/.test(digits)){
+    return {
+      type:'gs1',
+      label:'GS1 / служебный код коробки',
+      canonical:normalized,
+      tab:'tech',
+      canCreate:false,
+      severity:'warn',
+      hint:'Это не чистый IMEI. Такой код может содержать GTIN, серийник и служебные данные. Для телефона лучше пикнуть именно строку IMEI из 15 цифр.'
+    };
+  }
+  if(/^\d{15}$/.test(digits) && normalized===digits){
+    const valid=scannerImeiLuhnValid(digits);
+    return {
+      type:'imei',
+      label:valid?'IMEI устройства':'15 цифр, похоже на IMEI',
+      canonical:digits,
+      tab:'tech',
+      canCreate:true,
+      severity:valid?'ok':'warn',
+      hint:valid?'Это индивидуальный IMEI. Его можно вносить как единицу техники.':'Формат похож на IMEI, но контрольная сумма не сходится. Перед записью лучше сверить цифры на коробке.'
+    };
+  }
+  if(weird || nonAscii || looksLikeQuery){
+    return {type:'service', label:'Служебный или нечитаемый код', canonical:normalized, tab:'accessories', canCreate:false, severity:'bad', hint:'Сканер прочитал служебную строку или бинарный QR. Такой код не используем для склада.'};
+  }
+  if(imei){
+    return {
+      type:'imei_embedded',
+      label:'IMEI внутри длинного скана',
+      canonical:imei,
+      tab:'tech',
+      canCreate:true,
+      severity:'ok',
+      hint:'В длинной строке найден валидный IMEI. В базу пойдет только IMEI, лишний хвост отброшен.'
+    };
+  }
+  if(/^\d{13}$/.test(digits) && normalized===digits){
+    return {type:'ean13', label:'EAN-13 товарный штрихкод', canonical:digits, tab:'accessories', canCreate:true, severity:'warn', hint:'Это общий товарный штрихкод. Для аксессуаров можно вести остаток партией; для телефона нужен IMEI.'};
+  }
+  if(/^\d{12}$/.test(digits) && normalized===digits){
+    return {type:'upc', label:'UPC товарный штрихкод', canonical:digits, tab:'accessories', canCreate:true, severity:'warn', hint:'Это общий товарный штрихкод. Для аксессуаров можно вести остаток партией; для телефона нужен IMEI.'};
+  }
+  if(/^\d{14}$/.test(digits) && normalized===digits){
+    return {type:'gtin14', label:'GTIN-14 товарный код', canonical:digits, tab:'accessories', canCreate:true, severity:'warn', hint:'Это код модели/товара, а не индивидуальный IMEI. Для аксессуаров подходит, для техники лучше сканировать IMEI.'};
+  }
+  if(/^\d{16,30}$/.test(digits) && normalized===digits){
+    return {type:'long_digits', label:'Длинная цифровая строка', canonical:digits, tab:'tech', canCreate:false, severity:'bad', hint:'В строке слишком много цифр и валидный IMEI не найден. Не пишем это в базу, лучше пикнуть другой штрихкод.'};
+  }
+  if(/^(PRT|PART|BAT|DISPLAY|MOD)/.test(normalized)) return {type:'part_sku', label:'SKU запчасти', canonical:normalized, tab:'parts', canCreate:true, severity:'ok', hint:'Похоже на внутренний код запчасти. Можно внести в склад запчастей.'};
+  if(/^(ACC|CASE|GLASS|CABLE|CHG)/.test(normalized)) return {type:'accessory_sku', label:'SKU аксессуара', canonical:normalized, tab:'accessories', canCreate:true, severity:'ok', hint:'Похоже на внутренний код аксессуара. Можно внести в склад аксессуаров.'};
+  if(/^TRD/.test(normalized)) return {type:'tradein_sku', label:'Trade-in код', canonical:normalized, tab:'tradein', canCreate:true, severity:'ok', hint:'Похоже на внутренний код trade-in. Можно внести в базу после проверки устройства.'};
+  return {type:'sku', label:'Внутренний SKU / серийник', canonical:normalized, tab:'accessories', canCreate:true, severity:'warn', hint:'Код можно внести вручную, но сначала убедитесь, что это именно нужная этикетка товара.'};
+}
 function scannerCodeForItem(item){
   return item.imei || item.sku || item.barcode || item.labelCode || '';
 }
@@ -5241,15 +5335,13 @@ function scannerEntries(){
 function scannerFind(raw){
   const code=scannerNormalize(raw);
   if(!code) return null;
-  return scannerEntries().find(entry=>entry.aliases.includes(code))||null;
+  const analysis=scannerAnalyzeCode(raw);
+  const candidates=[code, scannerNormalize(analysis.canonical), scannerNormalize(scannerExtractImei(raw))]
+    .filter(Boolean);
+  return scannerEntries().find(entry=>candidates.some(candidate=>entry.aliases.includes(candidate)))||null;
 }
 function scannerGuessTab(raw){
-  const code=scannerNormalize(raw);
-  if(/^\d{14,17}$/.test(code)) return 'tech';
-  if(/^(PRT|PART|BAT|DISPLAY|MOD)/.test(code)) return 'parts';
-  if(/^(ACC|CASE|GLASS|CABLE|CHG)/.test(code)) return 'accessories';
-  if(/^TRD/.test(code)) return 'tradein';
-  return 'accessories';
+  return scannerAnalyzeCode(raw).tab||'accessories';
 }
 let IMAGNATE_CATALOG_CACHE=null;
 let IMAGNATE_CATALOG_PROMISE=null;
@@ -5406,7 +5498,12 @@ function scannerConditionLabel(value){
 }
 function scannerAgentHintHtml(entry, raw){
   if(!entry){
-    return '<div class="kpi-delta down" style="margin:12px 0;">'+ic('alert')+' Проверка сканера: кода нет в базе. Внесите товар один раз, и дальше эта коробка будет открываться по этому же коду.</div>';
+    const scan=scannerAnalyzeCode(raw);
+    const cls=scan.canCreate?'down':'';
+    const text=scan.canCreate
+      ? 'кода нет в базе. Проверьте товар и внесите его один раз, дальше эта коробка будет открываться по этому же коду.'
+      : 'это не код для записи товара. Не добавляем его в базу, лучше пикнуть IMEI, серийник или нужную этикетку.';
+    return '<div class="kpi-delta '+cls+'" style="margin:12px 0;">'+ic(scan.canCreate?'alert':'scan')+' Проверка сканера: '+escHtml(text)+'</div>';
   }
   const it=entry.item;
   const st=it.status||'';
@@ -5422,16 +5519,24 @@ function scannerAgentHintHtml(entry, raw){
 }
 function scannerResultHtml(entry, raw){
   if(!entry){
-    const guess=scannerGuessTab(raw);
-    return '<div class="card" style="border-color:rgba(255,92,92,.35);">'+
-      '<div class="section-title" style="margin-bottom:8px;">Код не найден</div>'+
-      '<p class="tsub" style="margin-top:0;">Система не нашла <span class="mono">'+escHtml(raw||'—')+'</span> в базе IMEI, серийников и SKU. Если это новая коробка, внесите её в базу.</p>'+
+    const scan=scannerAnalyzeCode(raw);
+    const guess=scan.tab||scannerGuessTab(raw);
+    const border=scan.severity==='bad'?'rgba(255,92,92,.35)':(scan.severity==='ok'?'rgba(44,211,188,.35)':'rgba(255,193,92,.45)');
+    const title=scan.canCreate?'Код не найден':'Код не записываем';
+    const createBtn=scan.canCreate
+      ? '<button class="btn btn-primary" data-scan-create="'+escAttr(scan.canonical||raw||'')+'">'+ic('plus')+' Внести в базу</button>'
+      : '<button class="btn" disabled>'+ic('alert')+' Нужен другой код</button>';
+    return '<div class="card" style="border-color:'+border+';">'+
+      '<div class="section-title" style="margin-bottom:8px;">'+title+'</div>'+
+      '<p class="tsub" style="margin-top:0;">Система прочитала <span class="mono">'+escHtml(raw||'—')+'</span>. '+escHtml(scan.hint)+'</p>'+
       '<div class="field-grid">'+
+        field('Тип скана', scan.label)+
+        field('Код для базы', scan.canonical||'—', true)+
         field('Предполагаемая категория', SCANNER_TAB_LABELS[guess])+
-        field('Что делать', 'Добавить товар по скану')+
+        field('Что делать', scan.canCreate?'Проверить товар и внести по скану':'Пикнуть IMEI / нужную этикетку')+
       '</div>'+
       scannerAgentHintHtml(null, raw)+
-      '<button class="btn btn-primary" data-scan-create="'+escAttr(raw||'')+'">'+ic('plus')+' Внести в базу</button>'+
+      createBtn+
     '</div>';
   }
   const it=entry.item;
@@ -5464,11 +5569,12 @@ function scannerResultHtml(entry, raw){
   '</div>';
 }
 function scannerPushLog(raw, entry, action){
+  const analysis=scannerAnalyzeCode(raw);
   DATA.scanLog=DATA.scanLog||[];
   DATA.scanLog.unshift({
-    code:scannerNormalize(raw),
+    code:analysis.canonical||scannerNormalize(raw),
     model:entry?.item?.model||'Не найдено',
-    tab:entry?.tab||scannerGuessTab(raw),
+    tab:entry?.tab||analysis.tab||scannerGuessTab(raw),
     action,
     at:DATA.today+' '+nowTime()
   });
@@ -5483,7 +5589,8 @@ function scannerRenderResult(raw, host, options={}){
     return;
   }
   const entry=scannerFind(code);
-  if(!options.skipLog) scannerPushLog(code, entry, entry?'Скан найден':'Код не найден');
+  const analysis=scannerAnalyzeCode(code);
+  if(!options.skipLog) scannerPushLog(code, entry, entry?'Скан найден':(analysis.canCreate?'Код не найден':'Код не подходит'));
   result.innerHTML=scannerResultHtml(entry, code);
   scannerRefreshLog(host);
   scannerWireResult(host);
@@ -5498,8 +5605,13 @@ function scannerWireResult(host){
 }
 function openScannerCreateModal(raw=''){
   scannerEnsureBarcodes();
-  const guessed=scannerGuessTab(raw);
-  const code=raw?scannerNormalize(raw):'';
+  const analysis=scannerAnalyzeCode(raw);
+  if(raw && !analysis.canCreate){
+    toast('Этот скан не похож на код товара. Лучше пикнуть IMEI или нужную этикетку.', 'error');
+    return;
+  }
+  const guessed=analysis.tab||scannerGuessTab(raw);
+  const code=raw?(analysis.canonical||scannerNormalize(raw)):'';
   const body='<div class="field-grid">'+
     '<div class="field"><label>Категория</label><select class="input-mini" id="scanNewTab" style="width:100%;">'+
       Object.keys(SCANNER_TAB_LABELS).map(t=>'<option value="'+t+'" '+(t===guessed?'selected':'')+'>'+SCANNER_TAB_LABELS[t]+'</option>').join('')+
@@ -5527,8 +5639,10 @@ function openScannerCreateModal(raw=''){
 }
 function saveScannerCreatedItem(){
   const tab=document.getElementById('scanNewTab').value;
-  const code=scannerNormalize(document.getElementById('scanNewCode').value);
+  let code=scannerNormalize(document.getElementById('scanNewCode').value);
   const model=document.getElementById('scanNewModel').value.trim();
+  const scanCheck=scannerAnalyzeCode(code);
+  if(scanCheck.canonical) code=scannerNormalize(scanCheck.canonical);
   const purchase=parseInt(document.getElementById('scanNewPurchase').value,10)||0;
   const price=parseInt(document.getElementById('scanNewPrice').value,10)||0;
   const qty=Math.max(1, parseInt(document.getElementById('scanNewQty').value,10)||1);
@@ -5547,6 +5661,11 @@ function saveScannerCreatedItem(){
   const catalogImage=document.getElementById('scanNewCatalogImage')?.value.trim()||'';
   const catalogBrand=document.getElementById('scanNewCatalogBrand')?.value.trim()||'';
   if(!code || !model){ toast('Заполните код и название товара', 'error'); return; }
+  if(!scanCheck.canCreate){ toast('Этот код не подходит для записи в базу. Пикните IMEI, серийник или товарный штрихкод.', 'error'); return; }
+  if((tab==='tech'||tab==='tradein') && ['ean13','upc','gtin14','gs1','long_digits'].includes(scanCheck.type)){
+    toast('Для техники нужен IMEI или серийный номер, а не общий товарный штрихкод.', 'error');
+    return;
+  }
   if(scannerFind(code)){ toast('Такой код уже есть в базе', 'error'); return; }
   const metadata={memory,color,condition,kit,warrantyDays,batteryPercent,comment,minStock,catalogSlug,catalogUrl,catalogImage,catalogBrand,source:catalogSlug?'imagnate_catalog':'manual'};
   const status=(condition==='check'||condition==='defect'||tab==='tradein')?'check':'instock';

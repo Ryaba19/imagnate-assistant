@@ -30,13 +30,64 @@ function scannerNormalize(code) {
   return String(code || '').trim().replace(/\s+/g, '').toUpperCase();
 }
 
+function scannerDigits(code) {
+  return String(code || '').replace(/\D/g, '');
+}
+
+function scannerImeiLuhnValid(code) {
+  const digits = String(code || '');
+  if (!/^\d{15}$/.test(digits)) return false;
+  let sum = 0;
+  for (let i = 0; i < 14; i += 1) {
+    let n = parseInt(digits[i], 10);
+    if (i % 2 === 1) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    sum += n;
+  }
+  return ((sum + parseInt(digits[14], 10)) % 10) === 0;
+}
+
+function scannerExtractImei(raw) {
+  const text = String(raw || '');
+  const chunks = text.match(/\d{15}/g) || [];
+  const valid = chunks.find(scannerImeiLuhnValid);
+  if (valid) return valid;
+  const digits = scannerDigits(text);
+  for (let i = 0; i <= digits.length - 15; i += 1) {
+    const candidate = digits.slice(i, i + 15);
+    if (scannerImeiLuhnValid(candidate)) return candidate;
+  }
+  if (/^\d{15}$/.test(digits)) return digits;
+  return '';
+}
+
+function scannerAnalyzeCode(raw) {
+  const original = String(raw || '').trim();
+  const normalized = scannerNormalize(raw);
+  const digits = scannerDigits(raw);
+  const imei = scannerExtractImei(raw);
+  const weird = /[^\dA-Za-zА-Яа-яЁё\-_.:/?=&+%]/.test(original);
+  const nonAscii = /[^\x20-\x7E]/.test(original);
+  const looksLikeQuery = /[?=&]/.test(original) && digits.length > 8;
+  if (!normalized) return { type: 'empty', tab: 'accessories', canCreate: false };
+  if (/^01\d{14}21/.test(digits) || /^02\d{14}/.test(digits)) return { type: 'gs1', canonical: normalized, tab: 'tech', canCreate: false };
+  if (/^\d{15}$/.test(digits) && normalized === digits) return { type: 'imei', canonical: digits, tab: 'tech', canCreate: true };
+  if (weird || nonAscii || looksLikeQuery) return { type: 'service', canonical: normalized, tab: 'accessories', canCreate: false };
+  if (imei) return { type: 'imei_embedded', canonical: imei, tab: 'tech', canCreate: true };
+  if (/^\d{13}$/.test(digits) && normalized === digits) return { type: 'ean13', canonical: digits, tab: 'accessories', canCreate: true };
+  if (/^\d{12}$/.test(digits) && normalized === digits) return { type: 'upc', canonical: digits, tab: 'accessories', canCreate: true };
+  if (/^\d{14}$/.test(digits) && normalized === digits) return { type: 'gtin14', canonical: digits, tab: 'accessories', canCreate: true };
+  if (/^\d{16,30}$/.test(digits) && normalized === digits) return { type: 'long_digits', canonical: digits, tab: 'tech', canCreate: false };
+  if (/^(PRT|PART|BAT|DISPLAY|MOD)/.test(normalized)) return { type: 'part_sku', canonical: normalized, tab: 'parts', canCreate: true };
+  if (/^(ACC|CASE|GLASS|CABLE|CHG)/.test(normalized)) return { type: 'accessory_sku', canonical: normalized, tab: 'accessories', canCreate: true };
+  if (/^TRD/.test(normalized)) return { type: 'tradein_sku', canonical: normalized, tab: 'tradein', canCreate: true };
+  return { type: 'sku', canonical: normalized, tab: 'accessories', canCreate: true };
+}
+
 function scannerGuessTab(raw) {
-  const code = scannerNormalize(raw);
-  if (/^\d{14,17}$/.test(code)) return 'tech';
-  if (/^(PRT|PART|BAT|DISPLAY|MOD)/.test(code)) return 'parts';
-  if (/^(ACC|CASE|GLASS|CABLE|CHG)/.test(code)) return 'accessories';
-  if (/^TRD/.test(code)) return 'tradein';
-  return 'accessories';
+  return scannerAnalyzeCode(raw).tab || 'accessories';
 }
 
 function catalogSearchText(item) {
@@ -184,6 +235,15 @@ await test('Unit: нормализация и определение катег�
   assert(scannerGuessTab('BAT-IPHONE-13') === 'parts', 'BAT should be parts');
   assert(scannerGuessTab('GLASS-IP15') === 'accessories', 'GLASS should be accessories');
   assert(scannerGuessTab('TRD-001') === 'tradein', 'TRD should be tradein');
+});
+
+await test('Unit: сканер отличает IMEI от служебных кодов коробки', async () => {
+  assert(scannerAnalyzeCode('356789012345678').type === 'imei', '15 digits should be treated as IMEI-like code');
+  assert(scannerAnalyzeCode('4680656321474').type === 'ean13', 'EAN-13 should not be treated as IMEI');
+  assert(scannerAnalyzeCode('0104603934000779215SERIAL').type === 'gs1', 'GS1 box code should be detected');
+  assert(scannerAnalyzeCode('e=20260712E1503.bl=98246h000.at=7381440901203663').canCreate === false, 'URL/query service scan should be blocked');
+  assert(scannerAnalyzeCode('240bГЙэян/Ф').canCreate === false, 'binary/non-ascii scan should be blocked');
+  assert(scannerAnalyzeCode('C02ZK0ABCDE1').canCreate === true, 'normal serial should be allowed');
 });
 
 await test('Unit: поиск товара из справочника', async () => {
