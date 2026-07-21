@@ -5208,6 +5208,9 @@ function applyServerStockSnapshot(snapshot){
   DATA.scannerStock=Object.assign(scannerEmptyStock(), snapshot.scannerStock||{});
   DATA.coreDb=snapshot.coreDb||coreDbEmpty();
   DATA.coreDb.updatedAt=snapshot.coreDb?.updatedAt||new Date().toISOString();
+  DATA.serverDbLastSyncAt=DATA.today+' '+nowTime();
+  DATA.serverDbStats=snapshot.stats||{};
+  DATA.serverDbExportedAt=snapshot.exportedAt||'';
   if(typeof lsSave==='function') lsSave();
 }
 async function loadServerStock(options={}){
@@ -5575,11 +5578,38 @@ function scannerPushLog(raw, entry, action){
     code:analysis.canonical||scannerNormalize(raw),
     model:entry?.item?.model||'Не найдено',
     tab:entry?.tab||analysis.tab||scannerGuessTab(raw),
+    scanType:analysis.label||'Скан',
+    serverStatus:'local',
+    serverMessage:'',
     action,
     at:DATA.today+' '+nowTime()
   });
   DATA.scanLog=DATA.scanLog.slice(0,12);
   if(typeof lsSave==='function') lsSave();
+}
+function scannerUpdateScanLogServer(code, result){
+  const target=scannerNormalize(code);
+  const row=(DATA.scanLog||[]).find(l=>scannerNormalize(l.code)===target);
+  if(!row) return;
+  if(result?.ok){
+    row.serverStatus='synced';
+    row.serverMessage='PostgreSQL';
+    row.action=row.action==='Товар внесён в базу'?'Товар внесён в базу и сервер':row.action;
+  } else if(result?.skipped){
+    row.serverStatus='skipped';
+    row.serverMessage='нет токена';
+  } else {
+    row.serverStatus='error';
+    row.serverMessage=result?.error||'ошибка';
+  }
+  row.serverAt=DATA.today+' '+nowTime();
+  if(typeof lsSave==='function') lsSave();
+}
+function scannerServerStatusBadge(status){
+  if(status==='synced') return '<span class="badge b-done">сервер</span>';
+  if(status==='error') return '<span class="badge b-cancel">ошибка</span>';
+  if(status==='skipped') return '<span class="badge b-grey">без токена</span>';
+  return '<span class="badge b-progress">локально</span>';
 }
 function scannerRenderResult(raw, host, options={}){
   const result=host.querySelector('#scannerResult');
@@ -5689,7 +5719,18 @@ function saveScannerCreatedItem(){
   scannerPushLog(code, entry, 'Товар внесён в базу');
   if(typeof lsSave==='function') lsSave();
   scannerSyncPostgres(tab, item, code).then(result=>{
-    if(result?.ok) toast('Товар также сохранён в PostgreSQL', 'success');
+    scannerUpdateScanLogServer(code, result);
+    if(result?.ok){
+      DATA.serverDbLastSyncAt=DATA.today+' '+nowTime();
+      DATA.serverDbStats=Object.assign({}, DATA.serverDbStats||{}, coreDbStats());
+      toast('Товар также сохранён в PostgreSQL', 'success');
+    }
+    if(typeof lsSave==='function') lsSave();
+    if(STATE.page==='scanner'){
+      const host=document.getElementById('pageContent')||document;
+      scannerRefreshLog(host);
+      scannerRefreshServerPanel(host);
+    }
   });
   closeModal();
   STATE.scannerLastCode=code;
@@ -5699,13 +5740,48 @@ function saveScannerCreatedItem(){
 function scannerLogHtml(){
   const logs=DATA.scanLog||[];
   if(!logs.length) return '<div class="empty"><b>Пока сканов нет</b><span>Пикните реальный код с коробки или внесите товар вручную.</span></div>';
-  return '<div class="table-wrap"><table><thead><tr><th>Время</th><th>Код</th><th>Товар</th><th>Действие</th><th>Категория</th></tr></thead><tbody>'+
-    logs.map(l=>'<tr><td class="mono">'+escHtml(l.at)+'</td><td class="mono">'+escHtml(l.code)+'</td><td>'+escHtml(l.model)+'</td><td>'+escHtml(l.action)+'</td><td>'+escHtml(SCANNER_TAB_LABELS[l.tab]||l.tab)+'</td></tr>').join('')+
+  return '<div class="table-wrap"><table><thead><tr><th>Время</th><th>Код</th><th>Тип</th><th>Товар</th><th>Действие</th><th>Сервер</th></tr></thead><tbody>'+
+    logs.map(l=>'<tr><td class="mono">'+escHtml(l.at)+'</td><td class="mono">'+escHtml(l.code)+'</td><td>'+escHtml(l.scanType||'Скан')+'</td><td>'+escHtml(l.model)+'</td><td>'+escHtml(l.action)+'</td><td>'+scannerServerStatusBadge(l.serverStatus)+' '+(l.serverMessage?'<span class="tsub">'+escHtml(l.serverMessage)+'</span>':'')+'</td></tr>').join('')+
     '</tbody></table></div>';
 }
 function scannerRefreshLog(host){
   const log=host.querySelector('#scannerLog');
   if(log) log.innerHTML=scannerLogHtml();
+}
+function scannerServerMovementsHtml(hasServerView){
+  const rows=(coreDbEnsure().stockMovements||[]).slice(0,8);
+  if(!hasServerView) return '<div class="empty"><b>Сервер ещё не сверяли</b><span>Нажмите «С сервера» или добавьте товар при подключённом токене.</span></div>';
+  if(!rows.length) return '<div class="empty"><b>Серверных записей пока не видно</b><span>Нажмите «С сервера» или добавьте первый товар через сканер.</span></div>';
+  return '<div class="table-wrap"><table><thead><tr><th>Время</th><th>Код</th><th>Товар</th><th>Кол-во</th><th>Кто</th></tr></thead><tbody>'+
+    rows.map(m=>'<tr><td class="mono">'+escHtml(m.at||m.happenedAt||'')+'</td><td class="mono">'+escHtml(m.code||'')+'</td><td>'+escHtml(m.model||'')+'</td><td>'+escHtml(m.qty||1)+'</td><td>'+escHtml(m.by||m.actor||'system')+'</td></tr>').join('')+
+    '</tbody></table></div>';
+}
+function scannerServerDbHtml(){
+  const stats=DATA.serverDbStats||{};
+  const hasServerView=Boolean(DATA.serverDbLastSyncAt || Object.keys(stats).length);
+  const products=hasServerView?Number(stats.products||0):0;
+  const units=hasServerView?Number(stats.units||0):0;
+  const batchQty=hasServerView?Number(stats.batchQty||0):0;
+  const movements=hasServerView?Number(stats.movements||0):0;
+  const connected=Boolean(scannerDbToken());
+  const synced=DATA.serverDbLastSyncAt||'ещё не обновляли';
+  const status=connected
+    ? '<span class="badge b-done">токен есть</span>'
+    : '<span class="badge b-cancel">токен не сохранён</span>';
+  return '<div class="section" id="scannerServerPanel" style="margin-top:18px;">'+
+    '<div class="section-head"><div><div class="section-title">Серверная БД</div><p class="tsub">Проверка того, что товары реально лежат в PostgreSQL. Последнее обновление: '+escHtml(synced)+'.</p></div><div>'+status+'</div></div>'+
+    '<div class="grid grid-4" style="margin-bottom:14px;">'+
+      kpiPlain('Товаров на сервере', num(products), 'warehouse')+
+      kpiPlain('Единиц IMEI', num(units), 'phone')+
+      kpiPlain('Партии / остатки', num(batchQty)+' шт.', 'box')+
+      kpiPlain('Движений', num(movements), 'analytics')+
+    '</div>'+
+    scannerServerMovementsHtml(hasServerView)+
+  '</div>';
+}
+function scannerRefreshServerPanel(host){
+  const panel=host.querySelector('#scannerServerPanel');
+  if(panel) panel.outerHTML=scannerServerDbHtml();
 }
 function renderScanner(c){
   scannerEnsureBarcodes();
@@ -5731,6 +5807,7 @@ function renderScanner(c){
     (entries.length?'<p class="tsub" style="margin-top:12px;">В базе сканера сейчас '+num(entries.length)+' код(ов), которые были внесены через сканирование.</p>':'')+
   '</div>';
   html+='<div id="scannerResult" style="margin-top:18px;"></div>';
+  html+=scannerServerDbHtml();
   html+='<div class="section" style="margin-top:18px;"><div class="section-head"><div><div class="section-title">Последние сканы</div><p class="tsub">История нужна, чтобы видеть, кто что пикал и какой результат получила система.</p></div></div><div id="scannerLog">'+scannerLogHtml()+'</div></div>';
   c.innerHTML=html;
   const input=c.querySelector('#scannerInput');

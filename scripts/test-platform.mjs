@@ -216,6 +216,9 @@ await test('HTML содержит валидный основной JavaScript',
   assert(html.includes('openCrmQuickAiOrderModal'), 'quick AI order modal not found');
   assert(html.includes('quickAiQuestion'), 'quick AI order question field not found');
   assert(html.includes('Форма ничего не отправляет'), 'quick AI safety hint not found');
+  assert(html.includes('scannerServerDbHtml'), 'scanner server DB panel not found');
+  assert(html.includes('scannerUpdateScanLogServer'), 'scanner server sync log updater not found');
+  assert(html.includes('serverDbLastSyncAt'), 'server DB sync timestamp not found');
 });
 
 await test('Каталог iMagnate валиден', async () => {
