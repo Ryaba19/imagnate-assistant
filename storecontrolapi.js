@@ -612,6 +612,60 @@ function buildAiInput(body) {
   ].join('\n');
 }
 
+function buildAiInstructionsV2() {
+  return [
+    'Ты AI-продавец и внутренний помощник сети магазинов iMagnate.',
+    'Отвечай как живой продавец: спокойно, по делу, коротко, без канцелярита и без выдуманных фактов.',
+    'Главное правило: не придумывай наличие, цену, гарантию, комплектацию, состояние и адрес. Используй только данные из запроса и контекста CRM.',
+    'Если клиент спрашивает одновременно наличие, цену и гарантию, ответь по структуре: наличие по CRM, цена по CRM, гарантия/проверка, следующий шаг.',
+    'Если товар найден и есть свободный остаток, подтверди наличие, цену, комплект/проверку и предложи резерв или приезд.',
+    'Если товар занят резервом, на проверке или не найден, честно скажи это и предложи подобрать альтернативу или оформить под заказ.',
+    'Если вопрос про trade-in или выкуп, попроси модель, память, состояние, процент аккумулятора, комплект и фото.',
+    'Если вопрос про ремонт, попроси модель, неисправность, был ли ремонт, включается ли устройство, и передай к мастеру.',
+    'Если вопрос внутренний для сотрудника, отвечай как помощник CRM, но не отправляй клиенту спорные инструкции.',
+    'Не упоминай, что ты нейросеть, API, модель или демо. Пиши от лица продавца iMagnate.',
+    'Ответ должен быть готовым текстом для отправки клиенту. Максимум 4 коротких предложения.'
+  ].join('\n');
+}
+
+function buildAiInputV2(body) {
+  const stock = cleanList(body.stock, 80, item => {
+    const name = clean(item.name || item.model || item.title, 140);
+    if (!name) return '';
+    const price = Number(item.price || 0) ? String(item.price) : 'нет цены';
+    const qty = item.qty == null ? '' : String(item.qty);
+    const status = clean(item.status || '', 40);
+    const tab = clean(item.tab || item.kind || item.category || '', 40);
+    return `- ${name}; раздел: ${tab || 'не указан'}; цена: ${price}; остаток: ${qty || 'не указан'}; статус: ${status || 'не указан'}`;
+  }).join('\n');
+  const knowledge = cleanList(body.knowledge, 24, item => {
+    const topic = clean(item.topic || item.intent || item.question || '', 120);
+    const answer = clean(item.answer || '', 500);
+    return topic && answer ? `- ${topic}: ${answer}` : '';
+  }).join('\n');
+  const product = body.product || {};
+  const availability = body.availability || {};
+  const lead = body.lead || {};
+  return [
+    `Канал клиента: ${clean(body.channel || lead.channel || 'crm', 40)}`,
+    `Имя клиента: ${clean(lead.name || body.customer || 'Клиент', 80)}`,
+    `Вопрос клиента: ${clean(body.question, 1500)}`,
+    `Товар из заявки: ${clean(body.item || lead.item || '', 160) || 'не указан'}`,
+    `Распознанный товар: ${clean(product.name || '', 160) || 'не найден'}`,
+    `Цена из CRM: ${Number(product.price || 0) ? product.price + ' руб.' : 'нет точной цены'}`,
+    `Наличие из CRM: ${clean(availability.label || '', 80) || 'неизвестно'}; ${clean(availability.detail || '', 220)}`,
+    `Локальный черновик CRM: ${clean(body.localDraft || '', 1200)}`,
+    '',
+    'Остатки CRM:',
+    stock || '- нет переданных остатков',
+    '',
+    'Базовые правила/ответы магазина:',
+    knowledge || '- нет дополнительных правил',
+    '',
+    'Сформируй один финальный ответ клиенту. Если данных не хватает, попроси ровно то, что нужно уточнить.'
+  ].join('\n');
+}
+
 function extractOpenAiText(data) {
   if (typeof data.output_text === 'string' && data.output_text.trim()) return data.output_text.trim();
   const chunks = [];
@@ -820,8 +874,8 @@ const server = http.createServer((req, res) => {
 
       const payload = {
         model: OPENAI_MODEL,
-        instructions: buildAiInstructions(),
-        input: buildAiInput(body),
+        instructions: buildAiInstructionsV2(),
+        input: buildAiInputV2(body),
         max_output_tokens: OPENAI_MAX_OUTPUT_TOKENS,
         temperature: 0.35
       };

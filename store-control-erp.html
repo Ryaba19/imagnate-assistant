@@ -6540,7 +6540,7 @@ const IMAGNATE_SELLER_AGENT={
 const IMAGNATE_BASE_KNOWLEDGE=[
   {id:'im_base_availability', source:'imagnate_base', status:'active', topic:'Наличие и цена', intent:'buy', keyword:'наличие цена есть сколько купить заказ резерв', tags:['наличие','цена','есть','сколько','купить','резерв'], answer:'Здравствуйте! {товар}: {наличие}. {цена_фраза} {следующий_шаг}'},
   {id:'im_base_reserve', source:'imagnate_base', status:'active', topic:'Резерв', intent:'reserve', keyword:'резерв отложить забронировать забрать сегодня завтра', tags:['резерв','отложить','забронировать','забрать'], answer:'Здравствуйте! Можем поставить {товар} в резерв после проверки свободного остатка. Напишите, пожалуйста, имя и примерное время, когда удобно подъехать.'},
-  {id:'im_base_warranty', source:'imagnate_base', status:'active', topic:'Гарантия и проверка', intent:'trust', keyword:'гарантия оригинал оригинальность проверка официальный магазин', tags:['гарантия','оригинал','оригинальность','проверка'], answer:'Здравствуйте! {товар} можно проверить перед покупкой. Гарантию и условия подтверждаем по конкретной позиции. Покажем состояние, комплект и серийные данные перед оплатой.'},
+  {id:'im_base_warranty', source:'imagnate_base', status:'active', topic:'Гарантия и проверка', intent:'trust', keyword:'гарантия оригинал оригинальность проверка официальный магазин', tags:['гарантия','оригинал','оригинальность','проверка'], answer:'Здравствуйте! {товар} можно проверить перед покупкой. Гарантия магазина обычно 14 дней; точные условия, состояние, комплект и серийные данные покажем перед оплатой.'},
   {id:'im_base_condition', source:'imagnate_base', status:'active', topic:'Состояние товара', intent:'condition', keyword:'состояние царапины аккумулятор батарея комплект фото б у бу', tags:['состояние','царапины','аккумулятор','комплект','фото'], answer:'Здравствуйте! По {товар} лучше сверить конкретную карточку: состояние, комплект, фото и проверку перед выдачей. Если нужно, подготовим фото/видео и уточним все нюансы.'},
   {id:'im_base_complectation', source:'imagnate_base', status:'active', topic:'Комплектация', intent:'card', keyword:'комплект комплектация коробка кабель документы зарядка', tags:['комплект','комплектация','коробка','кабель','документы'], answer:'Здравствуйте! Комплектацию по {товар} проверяем по конкретной единице. Обычно смотрим коробку, кабель, документы и дополнительные аксессуары, чтобы перед выдачей не было расхождений.'},
   {id:'im_base_delivery', source:'imagnate_base', status:'active', topic:'Получение товара', intent:'delivery', keyword:'доставка самовывоз курьер адрес магазин забрать', tags:['доставка','самовывоз','курьер','адрес','забрать'], answer:'Здравствуйте! Можно обсудить самовывоз из магазина или доставку. Сначала проверим {товар}, цену и комплект, затем согласуем удобный способ получения.'},
@@ -6555,7 +6555,7 @@ const IMAGNATE_AGENT_PLAYBOOK=[
   {id:'im_pb_reserve_time', source:'imagnate_playbook', priority:70, status:'active', topic:'Срок резерва', intent:'reserve', keyword:'сколько держите резерв отложить до вечера забронировать', tags:['резерв','отложить','вечера','держите'], answer:'Здравствуйте! Резерв по {товар} ставим только после проверки свободного остатка. Обычно фиксируем товар под клиента на короткое время в день обращения, точный срок продавец подтверждает по ситуации.'},
   {id:'im_pb_arrival_guarantee', source:'imagnate_playbook', priority:65, status:'active', topic:'Приезд клиента', intent:'reserve', keyword:'приеду точно будет на месте успею забрать сегодня', tags:['приеду','точно','на месте','забрать'], answer:'Здравствуйте! Чтобы {товар} точно ждал вас, лучше сначала поставить его в резерв после проверки. Без резерва свободная единица может уйти другому клиенту.'},
   {id:'im_pb_prepay_later', source:'imagnate_playbook', priority:60, status:'active', topic:'Оплата и поздняя выдача', intent:'payment', keyword:'оплатить сейчас забрать позже предоплата оставить оплату', tags:['оплатить','забрать позже','предоплата'], answer:'Здравствуйте! Вариант оплаты сейчас и выдачи позже возможен только после проверки конкретной позиции и условий оформления. Продавец зафиксирует {товар}, способ оплаты и время выдачи.'},
-  {id:'im_pb_new_warranty', source:'imagnate_playbook', priority:72, status:'active', topic:'Гарантия на новый товар', intent:'trust', keyword:'гарантия новый iphone новый товар официальная', tags:['гарантия','новый','официальная'], answer:'Здравствуйте! По новому {товар} гарантию подтверждаем по конкретной позиции перед продажей. Покажем серийные данные, комплект и условия гарантии до оплаты.'},
+  {id:'im_pb_new_warranty', source:'imagnate_playbook', priority:72, status:'active', topic:'Гарантия на новый товар', intent:'trust', keyword:'гарантия новый iphone новый товар официальная', tags:['гарантия','новый','официальная'], answer:'Здравствуйте! {товар} можно проверить перед покупкой. Гарантия магазина обычно 14 дней; точные условия, комплект и серийные данные покажем перед оплатой.'},
   {id:'im_pb_used_warranty', source:'imagnate_playbook', priority:72, status:'active', topic:'Гарантия на б/у товар', intent:'trust', keyword:'гарантия бу б у used trade in бывший', tags:['гарантия','б/у','бу','trade-in'], answer:'Здравствуйте! По б/у {товар} условия гарантии зависят от конкретной единицы. Перед покупкой проверяем состояние, комплект, серийные данные и отдельно проговариваем гарантию.'},
   {id:'im_pb_return_policy', source:'imagnate_playbook', priority:68, status:'active', topic:'Возврат', intent:'trust', keyword:'вернуть возврат если не понравится обмен проблема после покупки', tags:['возврат','вернуть','обмен','проблема'], answer:'Здравствуйте! Если после покупки возникнет вопрос по {товар}, нужно сразу связаться с магазином. Дальше проверим ситуацию по гарантии, состоянию и документам покупки.'},
   {id:'im_pb_documents', source:'imagnate_playbook', priority:62, status:'active', topic:'Документы', intent:'payment', keyword:'чек документ договор товарный чек документы покупка оформление', tags:['чек','документ','договор','оформление'], answer:'Здравствуйте! При оформлении покупки по {товар} продавец подскажет, какие документы выдаются по конкретной позиции и способу оплаты.'},
@@ -6812,9 +6812,9 @@ function crmAgentIntent(text){
   if(/скид|дешев|торг|акци|уступ/.test(q)) return {id:'discount', label:'Цена', step:'проверить актуальные условия'};
   if(/резерв|отлож|заброни/.test(q)) return {id:'reserve', label:'Резерв', step:'проверить свободный остаток'};
   if(/описан|характер|комплект|состояни|фото/.test(q)) return {id:'card', label:'Карточка', step:'дать описание и комплектацию'};
-  if(/гарант|оригинал|провер/.test(q)) return {id:'trust', label:'Проверка', step:'подтвердить гарантию и проверку'};
   if(/достав|самовывоз|курьер|адрес/.test(q)) return {id:'delivery', label:'Выдача', step:'уточнить способ получения'};
   if(/цен|сколько|налич|есть|купить|заказ|резерв/.test(q)) return {id:'buy', label:'Покупка', step:'проверить наличие и цену'};
+  if(/гарант|оригинал|провер/.test(q)) return {id:'trust', label:'Проверка', step:'подтвердить гарантию и проверку'};
   return {id:'question', label:'Вопрос', step:'ответить и уточнить детали'};
 }
 function crmAgentStockRows(){
@@ -6973,10 +6973,60 @@ function crmAgentProductCard(product){
     text:name+' — '+kind+'. Перед выдачей важно сверить модель, комплектацию, состояние и код товара.'
   };
 }
+function crmAgentCleanProductName(value){
+  const raw=String(value||'').replace(/\s+/g,' ').trim();
+  if(!raw) return 'эту позицию';
+  return raw
+    .replace(/^(по\s+)?нов(ый|ому|ая|ую|ое)\s+/i,'')
+    .replace(/^по\s+/i,'')
+    .trim() || raw;
+}
+function crmAgentQuestionFlags(text){
+  const q=crmAiNormalize(text);
+  return {
+    asksAvailability:/налич|есть|свобод|купить|можно забрать|забрать/.test(q),
+    asksPrice:/цен|сколько|стоим|почем|по чем/.test(q),
+    asksWarranty:/гарант|официальн|ваш|провер|оригинал/.test(q)
+  };
+}
+function crmAgentCustomerSalesReply(pack, lead){
+  const flags=crmAgentQuestionFlags(pack.question);
+  const salesIntent=['buy','reserve','discount','trust'].includes(pack.intent.id);
+  const isSalesQuestion=salesIntent || flags.asksAvailability || flags.asksPrice || flags.asksWarranty;
+  if(!isSalesQuestion || ['internal','repair','tradein','avito','compare','payment'].includes(pack.intent.id)) return '';
+  const product=pack.product;
+  const name=crmAgentCleanProductName(product?.name || lead?.item || 'эту позицию');
+  const parts=['Здравствуйте!'];
+  if(product && pack.availability.level==='ok'){
+    parts.push(name+' есть в наличии: '+pack.availability.detail+'.');
+  }else if(product && pack.availability.level==='warn'){
+    parts.push(name+' сейчас '+pack.availability.label+': '+pack.availability.detail+'.');
+  }else if(product && pack.availability.level==='bad'){
+    parts.push('По '+name+' свободного остатка сейчас не вижу.');
+  }else{
+    parts.push('По '+name+' нужно сверить свободный остаток в базе.');
+  }
+  if(flags.asksPrice || pack.intent.id==='buy' || pack.intent.id==='discount'){
+    parts.push(product?.price ? 'Цена по базе сейчас '+rub(product.price)+'.' : 'Точную цену сверим по конфигурации, памяти и состоянию.');
+  }
+  if(flags.asksWarranty){
+    parts.push('Гарантия магазина обычно 14 дней; точные условия подтвердим по конкретной единице перед оплатой.');
+  }
+  if(pack.availability.level==='ok'){
+    parts.push('Можем проверить состояние и комплект, затем поставить в резерв.');
+  }else if(pack.availability.level==='warn'){
+    parts.push('Если позиция не освободится, подберём ближайший вариант или оформим под заказ.');
+  }else{
+    parts.push('Можем подобрать ближайший вариант или оформить под заказ.');
+  }
+  return parts.join(' ');
+}
 function crmAgentReply(pack, lead){
   const product=pack.product;
   const name=product?.name || (lead?.item||'эту позицию');
   const price=product?.price ? ' Цена сейчас '+rub(product.price)+'.' : '';
+  const salesReply=crmAgentCustomerSalesReply(pack, lead);
+  if(salesReply) return salesReply;
   const known=crmAiKnowledgeMatch(pack.question, name);
   if(known&&known.answer) return crmAiRenderAnswer(known.answer, name, pack.question, pack);
   if(pack.intent.id==='internal') return 'Для сотрудника: по этому вопросу нужно сверить раздел в системе и не отправлять ответ клиенту без проверки. Если это склад — сканируем код и сохраняем позицию. Если смена — сверяем кассу, расходы, инкассацию и фактический остаток.';

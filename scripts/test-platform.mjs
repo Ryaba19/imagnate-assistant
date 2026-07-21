@@ -219,6 +219,25 @@ await test('HTML содержит валидный основной JavaScript',
   assert(html.includes('scannerServerDbHtml'), 'scanner server DB panel not found');
   assert(html.includes('scannerUpdateScanLogServer'), 'scanner server sync log updater not found');
   assert(html.includes('serverDbLastSyncAt'), 'server DB sync timestamp not found');
+  assert(html.includes('crmAgentCustomerSalesReply'), 'customer sales reply composer not found');
+  assert(html.includes('Гарантия магазина обычно 14 дней'), 'customer warranty phrase not found');
+  assert(html.includes('Цена по базе сейчас'), 'customer price phrase not found');
+});
+
+await test('AI-продавец отвечает на наличие, цену и гарантию без канцелярита', async () => {
+  const html = await readFile(new URL('../store-control-erp.html', import.meta.url), 'utf8');
+  const buyIntentIndex = html.indexOf("if(/цен|сколько|налич|есть|купить|заказ|резерв/.test(q))");
+  const trustIntentIndex = html.indexOf("if(/гарант|оригинал|провер/.test(q))");
+  assert(buyIntentIndex > -1 && trustIntentIndex > -1 && buyIntentIndex < trustIntentIndex, 'buy intent must win over warranty-only intent');
+  assert(html.includes('crmAgentCleanProductName'), 'product name cleanup is missing');
+  assert(!html.includes('По новому {товар}'), 'old awkward warranty template returned');
+});
+
+await test('Серверный AI-промпт использует чистый русский текст', async () => {
+  const api = await readFile(new URL('../storecontrolapi.js', import.meta.url), 'utf8');
+  assert(api.includes('buildAiInstructionsV2'), 'clean AI instructions are missing');
+  assert(api.includes('Если клиент спрашивает одновременно наличие, цену и гарантию'), 'combined sales question instruction is missing');
+  assert(api.includes('buildAiInputV2(body)'), 'API must use clean AI input builder');
 });
 
 await test('Каталог iMagnate валиден', async () => {
