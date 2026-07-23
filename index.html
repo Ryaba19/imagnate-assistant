@@ -1107,6 +1107,24 @@ let DATA = {
   ],
 
   /* Начисления по задачам — идут в зарплату */
+  /* Поставки — контейнеры: несколько товаров, один штрихкод на коробку.
+     Сформирована -> (скан курьера) В пути -> (скан склада) Доставлена. */
+  shipments:[
+    {id:1, barcode:'SHP-1-3344', status:'formed', createdBy:'Владелец', createdAt:'27.06.2026',
+     items:[{reqId:5004, name:'Xiaomi Redmi Note 13 Pro', qty:6},{reqId:5007, name:'Samsung Galaxy S24 Ultra 256GB', qty:1}],
+     units:[
+       {code:'TOV-1-1', name:'Xiaomi Redmi Note 13 Pro', scanned:false, scannedBy:null, scannedAt:null},
+       {code:'TOV-1-2', name:'Xiaomi Redmi Note 13 Pro', scanned:false, scannedBy:null, scannedAt:null},
+       {code:'TOV-1-3', name:'Xiaomi Redmi Note 13 Pro', scanned:false, scannedBy:null, scannedAt:null},
+       {code:'TOV-1-4', name:'Xiaomi Redmi Note 13 Pro', scanned:false, scannedBy:null, scannedAt:null},
+       {code:'TOV-1-5', name:'Xiaomi Redmi Note 13 Pro', scanned:false, scannedBy:null, scannedAt:null},
+       {code:'TOV-1-6', name:'Xiaomi Redmi Note 13 Pro', scanned:false, scannedBy:null, scannedAt:null},
+       {code:'TOV-1-7', name:'Samsung Galaxy S24 Ultra 256GB', scanned:false, scannedBy:null, scannedAt:null},
+     ],
+     transitBy:null, transitAt:null, deliveredBy:null, deliveredAt:null,
+     log:[{at:'27.06.2026 09:10', by:'Владелец', text:'Поставка сформирована (2 позиции)'}]},
+  ],
+
   taskPayouts:[
     {id:9101, taskId:150, employee:'Олег П.', amount:1200, date:'24.06.2026', period:'Июнь 2026', paid:false},
     {id:9102, taskId:151, employee:'Кузьмина Е.', amount:1500, date:'23.06.2026', period:'Июнь 2026', paid:false},
@@ -1245,10 +1263,10 @@ let DATA = {
     {id:5001, supplierId:'sup_denis', reason:'Под заказ клиента', item:'iPhone 15 Pro 256GB Titan Black', qty:1, status:'new', createdFrom:'Заказ №10482', linkedOrderId:10482, purchasePrice:null, invoiceNo:'', waybillNo:''},
     {id:5002, supplierId:'sup_denis', reason:'Под заказ клиента', item:'AirPods Pro 2 USB-C', qty:2, status:'sent', createdFrom:'Заказ №10477', linkedOrderId:10477, price:null, purchasePrice:null, invoiceNo:'', waybillNo:''},
     {id:5003, supplierId:'sup_denis', reason:'Восполнение ассортимента', item:'Samsung Galaxy S24 Ultra 256GB', qty:4, status:'priced', createdFrom:'Авто-анализ остатков', price:84000, purchasePrice:84000, invoiceNo:'', waybillNo:''},
-    {id:5004, supplierId:'sup_denis', reason:'Восполнение ассортимента', item:'Xiaomi Redmi Note 13 Pro', qty:6, status:'confirmed', createdFrom:'Авто-анализ остатков', price:21000, purchasePrice:21000, eta:'30.06.2026', invoiceNo:'', waybillNo:''},
+    {id:5004, supplierId:'sup_denis', reason:'Восполнение ассортимента', item:'Xiaomi Redmi Note 13 Pro', qty:6, status:'confirmed', createdFrom:'Авто-анализ остатков', price:21000, purchasePrice:21000, eta:'30.06.2026', invoiceNo:'', waybillNo:'', barcode:'PST-5004-1177', shipmentId:1},
     {id:5005, supplierId:'sup_denis', reason:'Для ремонта №2231', item:'Дисплейный модуль iPhone 13', qty:1, status:'new', createdFrom:'Ремонт №2231', purchasePrice:null, invoiceNo:'', waybillNo:''},
-    {id:5006, supplierId:'sup_denis', reason:'Восполнение ассортимента', item:'AirPods Pro 2 USB-C', qty:2, status:'confirmed', createdFrom:'Авто-анализ остатков', price:18000, purchasePrice:18000, eta:'27.06.2026', packaging:'sealed', invoiceNo:'', waybillNo:''},
-    {id:5007, supplierId:'sup_denis', reason:'Под заказ клиента', item:'Samsung Galaxy S24 Ultra 256GB', qty:1, status:'confirmed', createdFrom:'Заказ №10477', linkedOrderId:10477, price:84000, purchasePrice:84000, eta:'27.06.2026', packaging:'bag', invoiceNo:'', waybillNo:''},
+    {id:5006, supplierId:'sup_denis', reason:'Восполнение ассортимента', item:'AirPods Pro 2 USB-C', qty:2, status:'intransit', createdFrom:'Авто-анализ остатков', price:18000, purchasePrice:18000, eta:'27.06.2026', packaging:'sealed', invoiceNo:'', waybillNo:'', barcode:'PST-5006-4821', transitBy:'Сергей Т.', transitAt:'27.06.2026 09:40'},
+    {id:5007, supplierId:'sup_denis', reason:'Под заказ клиента', item:'Samsung Galaxy S24 Ultra 256GB', qty:1, status:'confirmed', createdFrom:'Заказ №10477', linkedOrderId:10477, price:84000, purchasePrice:84000, eta:'27.06.2026', packaging:'bag', invoiceNo:'', waybillNo:'', barcode:'PST-5007-9315', shipmentId:1},
     /* ПРЕДЗАКАЗ — нет ни у нас, ни у сборщика. Сборщик ищет каждый день.
        НЕ попадает в пополнение склада — это отдельный поток. */
     {id:5008, supplierId:'sup_denis', reason:'Предзаказ', item:'AirPods Pro 2 USB-C', qty:2, status:'searching', createdFrom:'Заказ №10477', linkedOrderId:10477, purchasePrice:null, invoiceNo:'', waybillNo:'', searchStartedAt:'25.06.2026', lastCheckedAt:'27.06.2026'},
@@ -1759,7 +1777,7 @@ function createEmptyStoreData(storeName){
     warehouse:{tech:[],tradein:[],accessories:[],parts:[]},
     purchaseRequests:[], customers:[], leads:[], integrations:[], tasks:[], taskPayouts:[],
     employees:[], deliveries:[], messages:{channels:[],conversations:[]},
-    financeOps:[], expenseRequests:[], notifications:[], taskIdeas:[],
+    financeOps:[], expenseRequests:[], notifications:[], taskIdeas:[], shipments:[],
     marginSchemes:JSON.parse(JSON.stringify(refSchemes)),
     categorySchemeMap:JSON.parse(JSON.stringify(refMap)),
     marginGroups:JSON.parse(JSON.stringify(refGroups)),
@@ -4765,6 +4783,7 @@ function renderWarehouse(c){
   html+='<div class="toolbar"><div class="chip-tabs">'+
     tabs.map(t=>'<div class="chip-tab '+(STATE.whFilters.tab===t?'active':'')+'" data-wt="'+t+'">'+WH_TABS[t]+'</div>').join('')+
     '</div><div class="topbar-spacer"></div>'+
+    '<button class="btn btn-sm" id="whScanBtn">📷 Сканировать поставку</button>'+
     '<button class="btn btn-sm btn-primary" id="whReceiveBtn">'+ic('truck')+' Принять поставку</button>'+
     '<input class="input-mini" id="whSearch" placeholder="Поиск по модели / IMEI" value="'+STATE.whFilters.q+'" style="width:240px;margin-left:8px;"></div>';
 
@@ -4802,6 +4821,8 @@ function renderWarehouse(c){
   c.querySelectorAll('[data-wt]').forEach(el=>el.addEventListener('click',()=>{STATE.whFilters.tab=el.dataset.wt; renderWarehouse(c);}));
   const search=document.getElementById('whSearch');
   search.addEventListener('input', ()=>{STATE.whFilters.q=search.value; renderWarehouse(c); document.getElementById('whSearch').focus();});
+  const whScan=document.getElementById('whScanBtn');
+  if(whScan) whScan.addEventListener('click', openSupplyScanModal);
   const recvBtn=document.getElementById('whReceiveBtn');
   if(recvBtn) recvBtn.addEventListener('click', ()=>{
     // Приёмка — это действие над складом, а не отдельный раздел.
@@ -4836,10 +4857,12 @@ const PR_STATUS={
   sent:['Отправлена поставщику','b-progress'],
   priced:['Цена указана','b-ready'],
   confirmed:['Подтверждена','b-done'],
+  intransit:['В пути — у курьера','b-progress'],
   received:['Принята на склад','b-grey'],
 };
 const PURCHASE_TABS=[
   {id:'requests',  label:'Заявки'},
+  {id:'shipments', label:'Поставки'},
   {id:'preorders', label:'Предзаказы'},
   {id:'suppliers', label:'Поставщики'},
 ];
@@ -4856,10 +4879,14 @@ function renderPurchase(c){
     PURCHASE_TABS.map(t=>{
       let badge='';
       if(t.id==='preorders'&&preCount) badge=' ('+preCount+')';
+      if(t.id==='shipments'&&activeShipments().length) badge=' ('+activeShipments().length+')';
       if(t.id==='suppliers') badge=' ('+activeSuppliers().length+')';
       return '<div class="chip-tab '+(STATE.purchaseTab===t.id?'active':'')+'" data-pt="'+t.id+'">'+t.label+badge+'</div>';
     }).join('')+
-  '</div></div>';
+  '</div>'+
+  '<div class="topbar-spacer"></div>'+
+  '<button class="btn" id="supplyScanBtn" style="padding:11px 16px;">📷 Сканировать штрихкод</button>'+
+  '</div>';
 
   if(missing>0 && STATE.role==='owner'){
     html+='<div class="card" style="margin-bottom:12px;border-color:var(--warning);">'+
@@ -4870,6 +4897,8 @@ function renderPurchase(c){
 
   if(STATE.purchaseTab==='suppliers'){
     html+=renderSuppliersTab();
+  } else if(STATE.purchaseTab==='shipments'){
+    html+=renderShipmentsTab();
   } else {
     const list=STATE.purchaseTab==='preorders'
       ? collectorSearchList()
@@ -4911,6 +4940,19 @@ function renderPurchase(c){
           if(noPrice && (STATE.role==='owner'||STATE.role==='senior')){
             html+='<div style="margin-top:8px;"><button class="btn btn-sm" data-set-cost="'+r.id+'">Указать закупочную цену</button></div>';
           }
+          if(['confirmed','intransit','received'].includes(r.status)){
+            ensureSupplyBarcode(r);
+            html+='<div class="tsub" style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
+              '<span class="mono">Штрихкод: '+r.barcode+'</span>'+
+              '<button class="btn btn-sm" data-supply-label="'+r.id+'">🏷 Этикетка</button>'+
+            '</div>';
+            if(r.shipmentId){
+              const sh=shipments().find(x=>x.id===r.shipmentId);
+              if(sh) html+='<div class="tsub" style="margin-top:4px;">📦 Едет в поставке <b>SHP-'+sh.id+'</b> ('+((SHIPMENT_STATUS[sh.status]||['—'])[0])+')</div>';
+            }
+            if(r.transitAt)  html+='<div class="tsub" style="margin-top:4px;color:var(--accent-2);">🚚 В пути: отсканировал '+escHtml(r.transitBy||'—')+' · '+r.transitAt+'</div>';
+            if(r.receivedAt) html+='<div class="tsub" style="margin-top:4px;color:var(--positive);">'+ic('check')+' Принята на склад: '+escHtml(r.receivedBy||'—')+' · '+r.receivedAt+'</div>';
+          }
         }
         html+='</div>';
       });
@@ -4927,6 +4969,10 @@ function renderPurchase(c){
   }));
   c.querySelectorAll('[data-pre-found]').forEach(el=>el.addEventListener('click',()=>openPreorderFoundModal(parseInt(el.dataset.preFound), c)));
   c.querySelectorAll('[data-set-cost]').forEach(el=>el.addEventListener('click',()=>openSetPurchasePriceModal(parseInt(el.dataset.setCost), c)));
+  c.querySelectorAll('[data-supply-label]').forEach(el=>el.addEventListener('click',()=>openSupplyLabelModal(parseInt(el.dataset.supplyLabel))));
+  const scanB=document.getElementById('supplyScanBtn');
+  if(scanB) scanB.addEventListener('click', openSupplyScanModal);
+  wireShipmentsTab(c);
   wireSuppliersTab(c);
   c.querySelectorAll('[data-pr-action]').forEach(el=>el.addEventListener('click',()=>handlePurchaseAction(el.dataset.prAction, parseInt(el.dataset.prId))));
 }
@@ -5078,12 +5124,352 @@ function openSetPurchasePriceModal(reqId, c){
   }}]);
 }
 
+/* ============================================================
+   ШТРИХКОДЫ ПОСТАВОК
+   Подтверждена → (курьер сканирует) В пути → (склад сканирует) Принята.
+   Сканер штрихкодов работает как клавиатура — код печатается в поле сам.
+============================================================ */
+const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
+function code128Svg(text, unit, height){
+  unit=unit||2; height=height||60;
+  const codes=[104];                                   /* Start B */
+  for(let i=0;i<text.length;i++){
+    const v=text.charCodeAt(i)-32;
+    if(v>=0 && v<=94) codes.push(v);
+  }
+  let sum=104;
+  for(let i=1;i<codes.length;i++) sum+=codes[i]*i;
+  codes.push(sum%103);
+  codes.push(106);                                     /* Stop */
+  let x=10, bars='';
+  codes.forEach(c=>{
+    const pat=C128[c];
+    for(let i=0;i<pat.length;i++){
+      const w=parseInt(pat[i])*unit;
+      if(i%2===0) bars+='<rect x="'+x+'" y="0" width="'+w+'" height="'+height+'" fill="#111"/>';
+      x+=w;
+    }
+  });
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="'+(x+10)+'" height="'+height+'" viewBox="0 0 '+(x+10)+' '+height+'" style="max-width:100%;background:#fff;">'+bars+'</svg>';
+}
+
+/* ---------------- ПОСТАВКИ (контейнеры) ---------------- */
+const SHIPMENT_STATUS={formed:['Сформирована','b-new'], intransit:['В пути','b-progress'], delivered:['Доставлена','b-done']};
+function shipments(){ if(!Array.isArray(DATA.shipments)) DATA.shipments=[]; return DATA.shipments; }
+function activeShipments(){ return shipments().filter(s=>s.status!=='delivered'); }
+function logShipment(s, text){
+  if(!Array.isArray(s.log)) s.log=[];
+  s.log.push({at:DATA.today+' '+nowTime(), by:taskMe(), text:text});
+}
+
+function shipmentLabelHTML(s){
+  const list=s.items.slice(0,5).map(i=>escHtml(i.name)+' × '+i.qty).join('<br>')+(s.items.length>5?'<br>… ещё '+(s.items.length-5):'');
+  return '<div style="background:#fff;color:#111;border-radius:12px;padding:18px;text-align:center;display:inline-block;min-width:280px;">'+
+    '<div style="font-weight:700;font-size:15px;">Поставка SHP-'+s.id+'</div>'+
+    '<div style="font-size:11.5px;margin:4px 0 10px;line-height:1.45;">'+list+'</div>'+
+    code128Svg(s.barcode,2,64)+
+    '<div style="font-family:monospace;font-size:13px;letter-spacing:2px;margin-top:5px;">'+s.barcode+'</div>'+
+  '</div>';
+}
+
+function openShipmentLabelModal(id){
+  const s=shipments().find(x=>x.id===id); if(!s) return;
+  const label=shipmentLabelHTML(s);
+  const body='<div style="text-align:center;">'+label+'</div>'+
+    '<div class="tsub" style="margin-top:12px;line-height:1.55;">Один штрихкод на всю коробку. Курьер сканирует при заборе — «В пути», склад при получении — «Доставлена». Все позиции внутри переключаются вместе с поставкой.</div>';
+  openModal('🏷 Этикетка поставки SHP-'+s.id,'',body,[{label:'Распечатать', cls:'btn-primary', action:()=>{
+    const w=window.open('','_blank','width=480,height=420');
+    if(!w){ toast('Разрешите всплывающие окна, чтобы печатать этикетки','error'); return; }
+    w.document.write('<html><head><title>Этикетка — поставка SHP-'+s.id+'</title></head><body style="display:flex;justify-content:center;padding:24px;font-family:Arial;">'+label+'</body></html>');
+    w.document.close(); w.focus();
+    setTimeout(()=>{ try{ w.print(); }catch(e){} },300);
+  }}]);
+}
+
+function buildShipmentUnits(shipId, items){
+  const units=[]; let seq=0;
+  items.forEach(i=>{
+    for(let k=0;k<i.qty;k++){
+      seq++;
+      units.push({code:'TOV-'+shipId+'-'+seq, name:i.name, scanned:false, scannedBy:null, scannedAt:null});
+    }
+  });
+  return units;
+}
+function shipmentUnitProgress(s){
+  const total=(s.units||[]).length;
+  const done=(s.units||[]).filter(u=>u.scanned).length;
+  return {total:total, done:done};
+}
+
+function unitLabelHTML(u){
+  return '<div style="background:#fff;color:#111;border:1px dashed #999;border-radius:8px;padding:10px 12px;text-align:center;width:200px;">'+
+    '<div style="font-size:10.5px;font-weight:700;line-height:1.3;min-height:26px;">'+escHtml(u.name)+'</div>'+
+    code128Svg(u.code,1.6,42)+
+    '<div style="font-family:monospace;font-size:11px;letter-spacing:1px;margin-top:2px;">'+u.code+'</div>'+
+  '</div>';
+}
+
+function openShipmentUnitLabelsModal(id){
+  const s=shipments().find(x=>x.id===id); if(!s || !(s.units||[]).length) return;
+  const sheet='<div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;background:#fff;padding:14px;border-radius:12px;">'+
+    s.units.map(unitLabelHTML).join('')+'</div>';
+  const body=sheet+'<div class="tsub" style="margin-top:12px;">По одной этикетке на каждую единицу товара ('+s.units.length+' шт.). Наклейте на коробки/пакеты. Склад сканирует каждую при приёмке — система покажет, всё ли доехало.</div>';
+  openModal('🏷 Этикетки на единицы — SHP-'+s.id,'',body,[{label:'Распечатать лист', cls:'btn-primary', action:()=>{
+    const w=window.open('','_blank','width=760,height=600');
+    if(!w){ toast('Разрешите всплывающие окна, чтобы печатать этикетки','error'); return; }
+    w.document.write('<html><head><title>Этикетки единиц — SHP-'+s.id+'</title></head><body style="font-family:Arial;">'+sheet+'</body></html>');
+    w.document.close(); w.focus();
+    setTimeout(()=>{ try{ w.print(); }catch(e){} },300);
+  }}]);
+}
+
+function openShipmentCreateModal(){
+  const avail=(DATA.purchaseRequests||[]).filter(r=>r.status==='confirmed' && !r.shipmentId);
+  let body='<div class="drill-block-label">Подтверждённые заявки закупа</div>';
+  body+= avail.length
+    ? avail.map(r=>'<label style="display:flex;gap:10px;align-items:center;margin-bottom:7px;cursor:pointer;font-size:13.5px;color:var(--text-1);">'+
+        '<input type="checkbox" data-ship-req="'+r.id+'" style="width:17px;height:17px;">'+
+        '<span>Заявка №'+r.id+' — <b>'+escHtml(r.item)+'</b> × '+r.qty+'</span></label>').join('')
+    : '<div class="tsub">Свободных подтверждённых заявок нет — добавьте позиции вручную ниже.</div>';
+  body+='<div class="field" style="margin-top:12px;"><label>Дополнительные позиции — каждая с новой строки, «Название × количество»</label>'+
+    '<textarea class="textarea-mini" id="shipExtra" rows="3" style="width:100%;font-family:inherit;" placeholder="Плёнки защитные × 10\nПакеты фирменные × 100"></textarea></div>'+
+    '<div class="tsub">Поставка получит единый штрихкод на коробку — распечатайте этикетку и наклейте.</div>';
+  openModal('📦 Сформировать поставку','Соберите в поставку всё, что едет одной коробкой',body,[{label:'Сформировать', cls:'btn-primary', action:()=>{
+    const items=[];
+    document.querySelectorAll('[data-ship-req]:checked').forEach(chk=>{
+      const r=DATA.purchaseRequests.find(x=>x.id===parseInt(chk.dataset.shipReq));
+      if(r) items.push({reqId:r.id, name:r.item, qty:r.qty});
+    });
+    (document.getElementById('shipExtra').value||'').split('\n').map(l=>l.trim()).filter(Boolean).forEach(line=>{
+      const m=line.split(/[×x*]/i);
+      const name=(m[0]||'').trim();
+      const qty=parseInt((m[1]||'1').trim())||1;
+      if(name) items.push({reqId:null, name:name, qty:qty});
+    });
+    if(!items.length){ toast('Добавьте хотя бы одну позицию','error'); return; }
+    const id=(shipments().length?Math.max(...shipments().map(s=>s.id)):0)+1;
+    const s={id:id, barcode:'SHP-'+id+'-'+(1000+Math.floor(Math.random()*9000)), status:'formed',
+      createdBy:taskMe(), createdAt:DATA.today, items:items,
+      units:buildShipmentUnits(id, items),
+      transitBy:null, transitAt:null, deliveredBy:null, deliveredAt:null, log:[]};
+    logShipment(s,'Поставка сформирована ('+items.length+' '+(items.length===1?'позиция':'позиций')+', единиц товара: '+s.units.length+')');
+    items.filter(i=>i.reqId).forEach(i=>{
+      const r=DATA.purchaseRequests.find(x=>x.id===i.reqId);
+      if(r){ r.shipmentId=id; ensureSupplyBarcode(r); }
+    });
+    shipments().unshift(s);
+    closeModal();
+    if(STATE.page==='purchase') renderPage();
+    toast('Поставка SHP-'+id+' сформирована','success');
+    openShipmentLabelModal(id);
+  }}]);
+}
+
+function openShipmentViewModal(id){
+  const s=shipments().find(x=>x.id===id); if(!s) return;
+  const st=SHIPMENT_STATUS[s.status]||['—','b-grey'];
+  let body='<div class="field-grid">'+
+    field('Статус', st[0])+
+    field('Штрихкод', s.barcode)+
+    field('Сформировал', (s.createdBy||'—')+' · '+(s.createdAt||''))+
+    (s.transitAt?field('Забрал курьер', (s.transitBy||'—')+' · '+s.transitAt):'')+
+    (s.deliveredAt?field('Доставлена', (s.deliveredBy||'—')+' · '+s.deliveredAt):'')+
+  '</div>';
+  body+='<div class="drill-block-label" style="margin-top:12px;">Состав ('+s.items.length+')</div>'+
+    s.items.map(i=>'<div class="tsub" style="margin-bottom:3px;">• '+escHtml(i.name)+' × '+i.qty+(i.reqId?' <span class="mono" style="opacity:.7;">(заявка №'+i.reqId+')</span>':'')+'</div>').join('');
+  if((s.units||[]).length){
+    const pr=shipmentUnitProgress(s);
+    body+='<div class="drill-block-label" style="margin-top:12px;">Единицы товара — сверено '+pr.done+' из '+pr.total+'</div>'+
+      s.units.map(u=>'<div class="tsub" style="margin-bottom:3px;'+(u.scanned?'color:var(--positive);':'')+'">'+
+        (u.scanned?ic('check'):'▫')+' <span class="mono">'+u.code+'</span> — '+escHtml(u.name)+
+        (u.scanned?' · '+escHtml(u.scannedBy||'—')+' · '+(u.scannedAt||''):'')+'</div>').join('');
+  }
+  body+='<div class="drill-block-label" style="margin-top:12px;">Журнал действий</div>'+
+    (s.log&&s.log.length? s.log.map(l=>'<div class="hist-row"><div><div class="h-main" style="font-size:12.5px;">'+escHtml(l.text)+'</div><div class="h-sub">'+l.at+' · '+escHtml(l.by||'—')+'</div></div></div>').join('')
+                        : '<div class="tsub">Пока пусто</div>');
+  openModal('📦 Поставка SHP-'+s.id,'<span class="badge '+st[1]+'">'+st[0]+'</span>',body,
+    [{label:'🏷 Этикетка коробки', cls:'', action:()=>openShipmentLabelModal(s.id)},
+     ((s.units||[]).length?{label:'🏷 Этикетки единиц', cls:'', action:()=>openShipmentUnitLabelsModal(s.id)}:null)].filter(Boolean));
+}
+
+function renderShipmentsTab(){
+  const list=shipments();
+  let html='<div class="toolbar" style="margin-bottom:12px;">'+
+    '<button class="btn btn-primary" id="shipCreateBtn" style="padding:11px 20px;">'+ic('plus')+' Сформировать поставку</button>'+
+    '<div class="topbar-spacer"></div></div>';
+  if(!list.length){
+    html+='<div class="card"><div class="empty"><b>Поставок пока нет</b><span>Сформируйте первую — соберите товары в коробку с единым штрихкодом.</span></div></div>';
+    return html;
+  }
+  const order={formed:0, intransit:1, delivered:2};
+  html+='<div class="grid grid-2" style="grid-template-columns:1fr;gap:12px;">';
+  list.slice().sort((a,b)=>(order[a.status]-order[b.status])||(b.id-a.id)).forEach(s=>{
+    const st=SHIPMENT_STATUS[s.status]||['—','b-grey'];
+    const brief=s.items.slice(0,3).map(i=>escHtml(i.name)+' × '+i.qty).join(' · ')+(s.items.length>3?' · ещё '+(s.items.length-3):'');
+    html+='<div class="card">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">'+
+        '<div><div class="kpi-label">📦 Поставка SHP-'+s.id+' · <span class="mono">'+s.barcode+'</span></div>'+
+        '<div class="tname" style="font-size:14px;margin-top:3px;">'+brief+'</div>'+
+        '<div class="tsub" style="margin-top:4px;">Сформировал: '+escHtml(s.createdBy||'—')+' · '+(s.createdAt||'')+'</div></div>'+
+        '<span class="badge '+st[1]+'">'+st[0]+'</span>'+
+      '</div>'+
+      (s.transitAt?'<div class="tsub" style="margin-top:6px;color:var(--accent-2);">🚚 В пути: '+escHtml(s.transitBy||'—')+' · '+s.transitAt+'</div>':'')+
+      (s.deliveredAt?'<div class="tsub" style="margin-top:4px;color:var(--positive);">'+ic('check')+' Доставлена: '+escHtml(s.deliveredBy||'—')+' · '+s.deliveredAt+'</div>':'')+
+      (function(){
+        const pr=shipmentUnitProgress(s);
+        if(!pr.total) return '';
+        const all=pr.done===pr.total;
+        return '<div class="tsub" style="margin-top:6px;'+(all?'color:var(--positive);':(pr.done?'color:var(--accent-2);':''))+'">'+
+          '🔍 Сверка единиц: '+pr.done+' из '+pr.total+(all?' — состав полный':'')+'</div>';
+      })()+
+      '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">'+
+        '<button class="btn btn-sm" data-ship-view="'+s.id+'">Открыть — состав и журнал</button>'+
+        '<button class="btn btn-sm" data-ship-label="'+s.id+'">🏷 Этикетка коробки</button>'+
+        ((s.units||[]).length?'<button class="btn btn-sm" data-ship-units="'+s.id+'">🏷 Этикетки единиц ('+s.units.length+')</button>':'')+
+      '</div>'+
+    '</div>';
+  });
+  html+='</div>';
+  return html;
+}
+
+function wireShipmentsTab(c){
+  const nb=document.getElementById('shipCreateBtn');
+  if(nb) nb.addEventListener('click', openShipmentCreateModal);
+  c.querySelectorAll('[data-ship-view]').forEach(el=>el.addEventListener('click',()=>openShipmentViewModal(parseInt(el.dataset.shipView))));
+  c.querySelectorAll('[data-ship-label]').forEach(el=>el.addEventListener('click',()=>openShipmentLabelModal(parseInt(el.dataset.shipLabel))));
+  c.querySelectorAll('[data-ship-units]').forEach(el=>el.addEventListener('click',()=>openShipmentUnitLabelsModal(parseInt(el.dataset.shipUnits))));
+}
+
+function ensureSupplyBarcode(r){
+  if(!r.barcode) r.barcode='PST-'+r.id+'-'+(1000+Math.floor(Math.random()*9000));
+  return r.barcode;
+}
+
+function supplyLabelHTML(r){
+  return '<div style="background:#fff;color:#111;border-radius:12px;padding:18px;text-align:center;display:inline-block;min-width:260px;">'+
+    '<div style="font-weight:700;font-size:15px;">Поставка №'+r.id+'</div>'+
+    '<div style="font-size:12px;margin:2px 0 10px;">'+escHtml(r.item)+' × '+r.qty+'</div>'+
+    code128Svg(r.barcode,2,64)+
+    '<div style="font-family:monospace;font-size:13px;letter-spacing:2px;margin-top:5px;">'+r.barcode+'</div>'+
+  '</div>';
+}
+
+function openSupplyLabelModal(id){
+  const r=DATA.purchaseRequests.find(x=>x.id===id); if(!r) return;
+  ensureSupplyBarcode(r);
+  const label=supplyLabelHTML(r);
+  const body='<div style="text-align:center;">'+label+'</div>'+
+    '<div class="tsub" style="margin-top:12px;line-height:1.55;">Распечатайте и наклейте на коробку. Курьер сканирует при заборе — поставка отметится «В пути». Склад сканирует при получении — «Принята на склад».</div>';
+  openModal('🏷 Этикетка поставки №'+r.id,'',body,[{label:'Распечатать', cls:'btn-primary', action:()=>{
+    const w=window.open('','_blank','width=460,height=380');
+    if(!w){ toast('Разрешите всплывающие окна, чтобы печатать этикетки','error'); return; }
+    w.document.write('<html><head><title>Этикетка — поставка №'+r.id+'</title></head><body style="display:flex;justify-content:center;padding:24px;font-family:Arial;">'+label+'</body></html>');
+    w.document.close(); w.focus();
+    setTimeout(()=>{ try{ w.print(); }catch(e){} },300);
+  }}]);
+}
+
+function processSupplyScan(){
+  const inp=document.getElementById('supplyScanInput');
+  const res=document.getElementById('supplyScanResult');
+  if(!inp||!res) return;
+  const code=(inp.value||'').trim().toUpperCase();
+  const box=(color,txt)=>{ res.innerHTML='<div class="card" style="border-color:'+color+';margin:0;"><div class="tsub" style="line-height:1.6;">'+txt+'</div></div>'; };
+  if(!code){ toast('Отсканируйте или введите код','error'); inp.focus(); return; }
+  /* 0) Единица товара (TOV-…): поштучная сверка внутри поставки */
+  for(const sh of shipments()){
+    const u=(sh.units||[]).find(x=>x.code.toUpperCase()===code);
+    if(u){
+      const who0=taskMe(), now0=DATA.today+' '+nowTime();
+      if(u.scanned){
+        box('var(--warning)','Единица <span class="mono">'+u.code+'</span> — '+escHtml(u.name)+'<br>Уже отсканирована: '+escHtml(u.scannedBy||'—')+' · '+(u.scannedAt||'—'));
+      } else {
+        u.scanned=true; u.scannedBy=who0; u.scannedAt=now0;
+        const pr=shipmentUnitProgress(sh);
+        if(pr.done===1) logShipment(sh,'Начата поштучная сверка единиц товара');
+        if(pr.done===pr.total) logShipment(sh,'Все единицы сверены ('+pr.total+' из '+pr.total+') — состав полный');
+        box(pr.done===pr.total?'var(--positive)':'var(--accent-2)',
+          (pr.done===pr.total?'✅':'📦')+' <b>'+escHtml(u.name)+'</b> <span class="mono">'+u.code+'</span><br>'+
+          'Поставка SHP-'+sh.id+': сверено <b>'+pr.done+' из '+pr.total+'</b>'+
+          (pr.done===pr.total?' — все единицы на месте!':'')+
+          '<br>Отсканировал: '+escHtml(who0)+' · '+now0);
+        toast(pr.done===pr.total?('SHP-'+sh.id+': все '+pr.total+' единиц сверены'):('Сверено '+pr.done+' из '+pr.total),'success');
+      }
+      inp.value=''; inp.focus();
+      return;
+    }
+  }
+  /* 1) Поставка-контейнер (SHP-…): один скан двигает всю коробку */
+  const s=shipments().find(x=>(x.barcode&&x.barcode.toUpperCase()===code) || ('SHP-'+x.id)===code);
+  if(s){
+    const who2=taskMe(), now2=DATA.today+' '+nowTime();
+    const linked=()=> s.items.filter(i=>i.reqId).map(i=>DATA.purchaseRequests.find(x=>x.id===i.reqId)).filter(Boolean);
+    if(s.status==='formed'){
+      s.status='intransit'; s.transitBy=who2; s.transitAt=now2;
+      logShipment(s,'Курьер отсканировал штрихкод — поставка в пути');
+      linked().forEach(r2=>{ r2.status='intransit'; r2.transitBy=who2; r2.transitAt=now2; });
+      box('var(--accent-2)','🚚 Поставка <b>SHP-'+s.id+'</b> ('+s.items.length+' поз.)<br>Новый статус: <b>В ПУТИ</b><br>Отсканировал: '+escHtml(who2)+' · '+now2);
+      toast('Поставка SHP-'+s.id+': в пути','success');
+    } else if(s.status==='intransit'){
+      s.status='delivered'; s.deliveredBy=who2; s.deliveredAt=now2;
+      logShipment(s,'Склад отсканировал штрихкод — поставка доставлена');
+      linked().forEach(r2=>{ r2.status='received'; r2.receivedBy=who2; r2.receivedAt=now2; });
+      box('var(--positive)','✅ Поставка <b>SHP-'+s.id+'</b> ('+s.items.length+' поз.)<br>Новый статус: <b>ДОСТАВЛЕНА</b> — все позиции приняты на склад<br>Отсканировал: '+escHtml(who2)+' · '+now2);
+      toast('Поставка SHP-'+s.id+': доставлена','success');
+    } else {
+      box('var(--warning)','Поставка SHP-'+s.id+' уже доставлена ('+(s.deliveredAt||'—')+', '+escHtml(s.deliveredBy||'—')+').');
+    }
+    inp.value=''; inp.focus();
+    return;
+  }
+  /* 2) Одиночная заявка закупа (PST-…) */
+  const r=(DATA.purchaseRequests||[]).find(x=>
+    (x.barcode && x.barcode.toUpperCase()===code) || ('PST-'+x.id)===code || String(x.id)===code);
+  if(!r){ box('var(--negative)','❌ Код <span class="mono">'+escHtml(code)+'</span> не найден. Проверьте этикетку или введите номер поставки.'); inp.value=''; inp.focus(); return; }
+  const who=taskMe(), now=DATA.today+' '+nowTime();   /* реальное имя сотрудника, а не название роли */
+  if(!Array.isArray(r.scanLog)) r.scanLog=[];
+  if(r.status==='confirmed'){
+    r.status='intransit'; r.transitBy=who; r.transitAt=now;
+    r.scanLog.push({at:now, by:who, text:'Скан: курьер забрал — в пути'});
+    box('var(--accent-2)','🚚 Поставка №'+r.id+' — <b>'+escHtml(r.item)+' × '+r.qty+'</b><br>Новый статус: <b>В ПУТИ</b><br>Отсканировал: '+escHtml(who)+' · '+now);
+    toast('Поставка №'+r.id+': в пути','success');
+  } else if(r.status==='intransit'){
+    r.status='received'; r.receivedBy=who; r.receivedAt=now;
+    r.scanLog.push({at:now, by:who, text:'Скан: принята на склад'});
+    box('var(--positive)','✅ Поставка №'+r.id+' — <b>'+escHtml(r.item)+' × '+r.qty+'</b><br>Новый статус: <b>ПРИНЯТА НА СКЛАД</b> — поставка завершена<br>Отсканировал: '+escHtml(who)+' · '+now);
+    toast('Поставка №'+r.id+': принята на склад','success');
+  } else if(r.status==='received'){
+    box('var(--warning)','Поставка №'+r.id+' уже принята на склад ('+(r.receivedAt||'—')+', '+escHtml(r.receivedBy||'—')+'). Повторный скан ничего не меняет.');
+  } else {
+    box('var(--warning)','Поставка №'+r.id+' ещё не подтверждена (сейчас: '+((PR_STATUS[r.status]||['—'])[0])+'). Сканировать можно после подтверждения закупа.');
+  }
+  inp.value=''; inp.focus();
+}
+
+function openSupplyScanModal(){
+  const body='<div class="field"><label>Штрихкод поставки</label>'+
+    '<input class="input-mini mono" id="supplyScanInput" style="width:100%;font-size:16px;padding:14px;" placeholder="Наведите сканер на этикетку или введите код…" autocomplete="off"></div>'+
+    '<div class="tsub" style="line-height:1.5;">Сканер работает как клавиатура: код появится в поле сам. Без сканера можно ввести код вручную. <b>SHP-…</b> — вся коробка (первый скан — «В пути», второй — «Доставлена»), <b>TOV-…</b> — единица товара (поштучная сверка при приёмке), <b>PST-…</b> — одиночная заявка.</div>'+
+    '<div id="supplyScanResult" style="margin-top:12px;"></div>';
+  openModal('📷 Сканирование поставки','Подтверждена → В пути → Принята на склад',body,
+    [{label:'Обработать', cls:'btn-primary', action:processSupplyScan}]);
+  const inp=document.getElementById('supplyScanInput');
+  if(inp){
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); processSupplyScan(); } });
+    setTimeout(()=>inp.focus(),100);
+  }
+}
+
 function purchaseActions(r){
   const role=ROLES[STATE.role];
   if(r.status==='new') return '<button class="btn btn-sm btn-primary" data-pr-action="send" data-pr-id="'+r.id+'">Отправить в точку сбора</button>';
   if(r.status==='sent') return role.canPriceCollection? '<button class="btn btn-sm btn-primary" data-pr-action="price" data-pr-id="'+r.id+'">Указать закупочную цену</button>' : '<span class="tsub">'+ic('alert')+' Ожидает цену от сборщика</span>';
   if(r.status==='priced') return role.canConfirmPurchase? '<button class="btn btn-sm btn-primary" data-pr-action="confirm" data-pr-id="'+r.id+'">Подтвердить закуп</button>' : '<span class="tsub">'+ic('alert')+' Ожидает подтверждения магазина</span>';
-  return '<span class="tsub">'+ic('check')+' Закуп подтверждён</span>';
+  if(r.status==='intransit') return '<span class="tsub">🚚 Едет в магазин</span>';
+  if(r.status==='received') return '<span class="tsub">'+ic('check')+' Принята на склад</span>';
+  return '<span class="tsub">'+ic('check')+' Подтверждена — ждёт курьера</span>';
 }
 
 function handlePurchaseAction(action, id){
@@ -8502,6 +8888,16 @@ function renderDeliveries(c){
   const me=currentEmployee();
   if(!me){ c.innerHTML='<div class="empty"><b>Доступно только в роли курьера</b></div>'; return; }
   renderCourierView(c, me);
+  /* Плашка сканирования поставок — курьер отмечает забор груза */
+  const scanCard=document.createElement('div');
+  scanCard.className='card';
+  scanCard.style.cssText='margin-bottom:14px;padding:16px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;cursor:pointer;border-style:dashed;';
+  scanCard.innerHTML='<div style="font-size:24px;flex:0 0 auto;">📷</div>'+
+    '<div style="flex:1;min-width:200px;"><div class="tname" style="font-size:15px;">Сканировать штрихкод поставки</div>'+
+    '<div class="tsub" style="margin-top:3px;">Забираете поставку у поставщика — отсканируйте этикетку, статус станет «В пути»</div></div>'+
+    '<button class="btn btn-primary" style="padding:10px 18px;pointer-events:none;">Сканировать ▸</button>';
+  scanCard.addEventListener('click', openSupplyScanModal);
+  c.insertBefore(scanCard, c.firstChild);
 }
 
 /* ============================================================
@@ -8721,7 +9117,7 @@ function inferStoreFromPR(p){
   return '—';
 }
 function renderReceiving(c){
-  const ready=DATA.purchaseRequests.filter(p=>p.status==='confirmed');
+  const ready=DATA.purchaseRequests.filter(p=>p.status==='confirmed'||p.status==='intransit');
   let html='<div class="section"><div class="section-title" style="margin-bottom:12px;">Ожидают приёмки ('+ready.length+')</div>';
   if(ready.length===0){
     html+='<div class="card"><div class="empty"><b>Нет поступлений, ожидающих приёмки</b></div></div>';
@@ -8733,6 +9129,7 @@ function renderReceiving(c){
           '<div><div class="kpi-label">Заявка №'+p.id+' · '+p.reason+'</div><div class="tname" style="font-size:14.5px;">'+p.item+' × '+p.qty+'</div><div class="tsub">Ожидаемая дата: '+(p.eta||'—')+'</div></div>'+
           '<span class="badge '+(sealed?'b-done':'b-progress')+'">'+(sealed?'Опечатано':'В пакете')+'</span>'+
         '</div>'+
+        (p.status==='intransit'?'<div class="tsub" style="margin-top:6px;color:var(--accent-2);">🚚 В пути — отсканировал '+escHtml(p.transitBy||'курьер')+' · '+(p.transitAt||'')+'</div>':'')+
         '<div class="tsub" style="margin-top:8px;">Ответственный за содержимое: <b style="color:var(--text-1);">'+(sealed?'Сборщик (документация на коробку)':'Курьер — требуется проверка содержимого при приёмке')+'</b></div>'+
         '<div style="display:flex;gap:10px;margin-top:12px;">'+
           '<button class="btn btn-primary btn-sm" data-receive="'+p.id+'">'+ic('check')+' Принять на склад</button>'+
@@ -10915,8 +11312,68 @@ document.getElementById('storeSelectorSelect').addEventListener('change', functi
   switchStore(this.value);
 });
 
-/* Кнопка сброса localStorage */
-window._erp_clearStorage=function(){ localStorage.removeItem(LS_KEY); location.reload(); };
+/* ============================================================
+   ПОЛНОЕ АВТОСОХРАНЕНИЕ (v2) — все разделы, все точки.
+   Заказы, задачи, поставки, CRM, подключение сайта и т.д.
+   переживают перезагрузку страницы: данные лежат в localStorage
+   этого браузера. Кнопка ⟳ в шапке — вернуть демо-данные.
+============================================================ */
+const LS_FULL_KEY='store_control_full_v2';
+const _lsStripHeavy=(k,v)=>(typeof v==='string' && v.startsWith('data:') && v.length>80000)? null : v;
+function fullSave(){
+  if(window._skipAutosave) return;   /* при сбросе не даём пересохранить данные перед перезагрузкой */
+  try{
+    const payload={stores:STORE_DATA, storeId:STATE.activeStoreId, savedAt:nowTime()};
+    try{
+      localStorage.setItem(LS_FULL_KEY, JSON.stringify(payload));
+    }catch(e1){
+      /* не влезло (обычно из-за крупных фото) — сохраняем без них */
+      localStorage.setItem(LS_FULL_KEY, JSON.stringify(payload, _lsStripHeavy));
+      if(!window._lsWarned){ window._lsWarned=true; try{ toast('Место в браузере на исходе: данные сохранены без части крупных фото','info'); }catch(e2){} }
+    }
+  }catch(e){ console.warn('autosave error:', e); }
+}
+function fullLoad(){
+  try{
+    const raw=localStorage.getItem(LS_FULL_KEY);
+    if(!raw) return false;
+    const p=JSON.parse(raw);
+    if(!p || !p.stores) return false;
+    Object.keys(p.stores).forEach(sid=>{
+      if(STORE_DATA[sid]){
+        /* сохранённые разделы кладём поверх демо; разделы, появившиеся
+           в новой версии системы, остаются из демо */
+        Object.keys(p.stores[sid]).forEach(k=>{ STORE_DATA[sid][k]=p.stores[sid][k]; });
+      } else {
+        STORE_DATA[sid]=p.stores[sid];
+      }
+    });
+    if(p.storeId && STORE_DATA[p.storeId]) STATE.activeStoreId=p.storeId;
+    DATA=STORE_DATA[STATE.activeStoreId];
+    return true;
+  }catch(e){ console.warn('autosave load error:', e); return false; }
+}
+const _fullLoaded=fullLoad();
+if(_fullLoaded) updateStoreSelector();
+setInterval(fullSave, 4000);
+window.addEventListener('beforeunload', fullSave);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') fullSave(); });
+
+/* Кнопка сброса: вернуть демо-данные */
+window._erp_clearStorage=function(){ window._skipAutosave=true; try{ localStorage.removeItem(LS_KEY); localStorage.removeItem(LS_FULL_KEY); }catch(e){} location.reload(); };
+(function(){
+  const tb=document.getElementById('themeBtn');
+  if(!tb) return;
+  const rb=document.createElement('div');
+  rb.className='topbar-icon-btn'; rb.id='resetDataBtn'; rb.title='Сбросить сохранённое и вернуть демо-данные';
+  rb.innerHTML=ic('refresh');
+  tb.parentNode.insertBefore(rb, tb.nextSibling);
+  rb.addEventListener('click', ()=>{
+    openModal('Сбросить сохранённые данные?','',
+      '<div class="tsub" style="line-height:1.6;">Будут удалены все изменения, сохранённые в этом браузере: заказы, задачи, поставки, подключение сайта и остальное. Система вернётся к демо-данным. Отменить это будет нельзя.</div>',
+      [{label:'Сбросить и перезагрузить', cls:'btn-danger', action:()=>window._erp_clearStorage()}]);
+  });
+})();
 
 renderSidebar();
 renderPage();
@@ -10925,6 +11382,7 @@ updateBellBadge();
 /* Напоминания при входе: исполнителю — сдачи, владельцу — запросы на продление */
 showDueTaskPush();
 showOwnerDecisionPush();
+if(_fullLoaded) toast('Восстановлены данные прошлой сессии','success');
 if(loaded && DATA.siteCatalog.length){
   toast('Восстановлено: '+DATA.siteCatalog.length+' товаров каталога', 'success');
 }
