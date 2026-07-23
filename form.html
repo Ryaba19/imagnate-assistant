@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iMagnate — оставить заявку</title>
+<style>
+  body{margin:0;min-height:100vh;background:linear-gradient(160deg,#0b1220,#111c33);display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;}
+  .page-note{text-align:center;color:#64748b;font-size:12px;margin-top:16px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;}
+</style>
+</head>
+<body>
+<div>
+<!-- ============================================================
+     STORE CONTROL — ФОРМА ЗАЯВКИ ДЛЯ САЙТА
+     Вставьте этот блок целиком в страницу вашего сайта
+     (например, перед закрывающим </body>).
+     ЕДИНСТВЕННАЯ НАСТРОЙКА: впишите адрес вашего API в SC_API_URL ниже.
+============================================================ -->
+<div id="sc-lead-widget">
+  <style>
+    #sc-lead-widget{--sc-accent:#10B981;--sc-bg:#0f172a;--sc-card:#1e293b;--sc-text:#f1f5f9;--sc-sub:#94a3b8;
+      max-width:440px;margin:0 auto;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;}
+    #sc-lead-widget .sc-card{background:var(--sc-card);border-radius:18px;padding:26px;box-shadow:0 10px 40px rgba(0,0,0,.25);}
+    #sc-lead-widget h3{margin:0 0 4px;color:var(--sc-text);font-size:20px;}
+    #sc-lead-widget .sc-sub{color:var(--sc-sub);font-size:13.5px;margin-bottom:18px;}
+    #sc-lead-widget label{display:block;color:var(--sc-sub);font-size:12px;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 5px;}
+    #sc-lead-widget input,#sc-lead-widget select,#sc-lead-widget textarea{width:100%;box-sizing:border-box;background:var(--sc-bg);
+      color:var(--sc-text);border:1px solid #334155;border-radius:10px;padding:11px 13px;font-size:14.5px;outline:none;}
+    #sc-lead-widget input:focus,#sc-lead-widget select:focus,#sc-lead-widget textarea:focus{border-color:var(--sc-accent);}
+    #sc-lead-widget button{width:100%;margin-top:18px;background:var(--sc-accent);color:#04291d;border:none;border-radius:12px;
+      padding:14px;font-size:15.5px;font-weight:700;cursor:pointer;transition:filter .15s;}
+    #sc-lead-widget button:hover{filter:brightness(1.1);}
+    #sc-lead-widget button:disabled{opacity:.6;cursor:default;}
+    #sc-lead-widget .sc-msg{margin-top:14px;padding:12px 14px;border-radius:10px;font-size:14px;display:none;}
+    #sc-lead-widget .sc-msg.ok{display:block;background:rgba(16,185,129,.15);color:#34d399;}
+    #sc-lead-widget .sc-msg.err{display:block;background:rgba(239,68,68,.15);color:#f87171;}
+    #sc-lead-widget .sc-hp{position:absolute;left:-9999px;opacity:0;height:0;overflow:hidden;}
+  </style>
+
+  <div class="sc-card">
+    <h3>Оставить заявку</h3>
+    <div class="sc-sub">Ответим в течение 15 минут в рабочее время</div>
+    <form id="sc-lead-form">
+      <label>Ваше имя *</label>
+      <input type="text" name="name" maxlength="80" required placeholder="Иван">
+
+      <label>Телефон *</label>
+      <input type="tel" name="phone" maxlength="30" required placeholder="+7 900 000-00-00">
+
+      <label>Что вас интересует</label>
+      <select name="topic">
+        <option value="buy">Покупка техники</option>
+        <option value="tradein">Трейд-ин (обмен)</option>
+        <option value="repair">Ремонт</option>
+        <option value="question">Другой вопрос</option>
+      </select>
+
+      <label>Модель / товар</label>
+      <input type="text" name="item" maxlength="90" placeholder="iPhone 16 Pro 256GB">
+
+      <label>Комментарий</label>
+      <textarea name="comment" rows="3" maxlength="1000" placeholder="Удобное время звонка, вопросы…"></textarea>
+
+      <!-- ловушка для спам-ботов: люди её не видят и не заполняют -->
+      <div class="sc-hp"><label>Не заполняйте это поле</label><input type="text" name="website" tabindex="-1" autocomplete="off"></div>
+
+      <button type="submit" id="sc-submit">Отправить заявку</button>
+      <div class="sc-msg" id="sc-result"></div>
+    </form>
+  </div>
+
+  <script>
+  (function(){
+    /* ===== НАСТРОЙКА: адрес вашего API (без слэша в конце) ===== */
+    var SC_API_URL = '/api';  /* тот же сервер Render */
+    /* =========================================================== */
+
+    var form=document.getElementById('sc-lead-form');
+    var btn=document.getElementById('sc-submit');
+    var msg=document.getElementById('sc-result');
+    var lastSent=0;
+
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      msg.className='sc-msg';
+      /* антиспам: ловушка + не чаще 1 раза в 20 секунд */
+      if(form.website.value){ return; }
+      if(Date.now()-lastSent<20000){ show('err','Заявка уже отправлена. Подождите немного.'); return; }
+
+      var payload={
+        name: form.name.value.trim(),
+        phone: form.phone.value.trim(),
+        topic: form.topic.value,
+        item: form.item.value.trim(),
+        comment: form.comment.value.trim(),
+        page: location.href
+      };
+      if(!payload.name || !payload.phone){ show('err','Заполните имя и телефон.'); return; }
+
+      btn.disabled=true; btn.textContent='Отправляем…';
+      var scBase=SC_API_URL.replace(/\/+$/,'');
+      var scUrl=/\.php$/i.test(scBase) ? scBase+'?action=lead' : scBase+'/lead';
+      fetch(scUrl, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      })
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      .then(function(){
+        lastSent=Date.now();
+        form.reset();
+        show('ok','Спасибо! Заявка принята — мы скоро свяжемся с вами.');
+      })
+      .catch(function(){
+        show('err','Не получилось отправить. Позвоните нам или попробуйте ещё раз.');
+      })
+      .finally(function(){ btn.disabled=false; btn.textContent='Отправить заявку'; });
+    });
+
+    function show(cls, text){ msg.className='sc-msg '+cls; msg.textContent=text; }
+  })();
+  </script>
+</div>
+<!-- ============ конец блока Store Control ============ -->
+
+<div class="page-note">iMagnate — магазин премиальной техники</div>
+</div>
+</body>
+</html>

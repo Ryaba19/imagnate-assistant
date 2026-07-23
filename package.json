@@ -1,20 +1,9 @@
 {
-  "name": "imagnate-store-control",
+  "name": "store-control",
   "version": "1.0.0",
-  "private": true,
-  "description": "Store Control ERP with iMagnate AI assistant",
-  "main": "storecontrolapi.js",
-  "type": "commonjs",
+  "description": "Store Control ERP + приём заявок с сайта",
+  "main": "server.js",
   "scripts": {
-    "start": "node storecontrolapi.js",
-    "check": "node --check storecontrolapi.js",
-    "catalog:imagnate": "node scripts/build-imagnate-catalog.mjs",
-    "test": "node scripts/test-platform.mjs"
-  },
-  "dependencies": {
-    "pg": "^8.16.3"
-  },
-  "engines": {
-    "node": "20.x"
+    "start": "node server.js"
   }
 }
