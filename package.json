@@ -1,13 +1,9 @@
 {
-  "name": "imagnate-assistant",
-  "version": "0.5.0",
-  "private": true,
-  "description": "Demo assistant for a small electronics store with optional OpenAI-backed answers.",
+  "name": "store-control",
+  "version": "1.0.0",
+  "description": "Store Control ERP + приём заявок с сайта",
+  "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "check": "node -c server.js && node -c assets/js/app.js"
-  },
-  "engines": {
-    "node": ">=18"
+    "start": "node server.js"
   }
 }
