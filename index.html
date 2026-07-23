@@ -865,6 +865,21 @@ body.light .kpi-delta.down{color:#c0392b;}
 body.light .kan-head{background:var(--bg-soft);}
 body.light .msg-bubble{color:var(--text-1);}
 body.light .kbd, body.light .mono{}
+/* ===== Диалог заявки (воронка CRM) ===== */
+.ld-msgs{display:flex;flex-direction:column;gap:8px;max-height:250px;overflow-y:auto;padding:12px;background:var(--glass-2);border:1px solid var(--glass-border-soft);border-radius:14px;margin:10px 0;}
+.ld-msg{max-width:78%;padding:9px 13px;border-radius:13px;font-size:13px;line-height:1.5;}
+.ld-msg.in{background:rgba(148,163,184,.13);border:1px solid var(--glass-border-soft);align-self:flex-start;border-bottom-left-radius:4px;}
+.ld-msg.out{background:var(--accent);color:#fff;align-self:flex-end;border-bottom-right-radius:4px;}
+.ld-msg .t{display:block;font-size:10px;opacity:.65;margin-top:3px;}
+.ld-sys{align-self:center;font-size:10.5px;color:var(--text-3);}
+.ld-compose{display:flex;gap:8px;margin-bottom:4px;}
+.ld-mine{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px;}
+.ld-chip{padding:5px 11px;border-radius:9px;background:var(--glass-2);border:1px solid var(--glass-border-soft);font-size:11.5px;cursor:pointer;color:var(--text-2);}
+.ld-chip.on{border-color:var(--accent);color:var(--text-1);font-weight:700;}
+.ld-vip{display:inline-block;padding:2px 9px;border-radius:8px;background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.4);font-size:11px;font-weight:800;}
+.kan-card.alarm{border-color:var(--negative)!important;box-shadow:0 0 0 1px var(--negative);}
+body.light .ld-msg.in{background:#eef1f6;}
+body.light .ld-vip{color:#8a6100;}
 </style>
 </head>
 <body>
@@ -1053,6 +1068,14 @@ let DATA = {
      Переписка остаётся в исходном канале, отсюда — ссылка на неё.
   ============================================================ */
   leads:[
+    {id:7300, channel:'site', externalId:null, sourceUrl:'', source:'sync', name:'Тарасов Виктор', contact:'+7 916 700-00-77', item:'iPhone 16 Pro Max 1TB', stage:'working', owner:'Иванов Д.', createdAt:'27.06.2026', lastTouch:'27.06.2026',
+     msgs:[{id:1,dir:'in',text:'Добрый день! Нужен 16 Pro Max на 1TB, забрать сегодня. Как обычно, оформите на меня.',at:'27.06.2026 10:05',status:'sent'},{id:2,dir:'out',text:'Виктор Андреевич, добрый день! Конечно, есть Natural Titanium. Отложил.',at:'27.06.2026 10:12',status:'sent'},{id:3,dir:'in',text:'Отлично, после обеда буду.',at:'27.06.2026 10:14',status:'sent'}], unread:1, notes:[]},
+    {id:7301, channel:'avito', externalId:null, sourceUrl:'', source:'sync', name:'Орлова Марина', contact:'+7 921 440-12-09', item:'AirPods Max 2', stage:'waiting', owner:'Иванов Д.', createdAt:'26.06.2026', lastTouch:'27.06.2026', waitingSince:'27.06.2026 10:00', waitingDeadline:'28.06.2026 12:00',
+     msgs:[{id:1,dir:'in',text:'Посоветуюсь с мужем и отвечу.',at:'27.06.2026 09:58',status:'sent'},{id:2,dir:'out',text:'Конечно, Марина! Держу для вас серебристые до завтра.',at:'27.06.2026 10:00',status:'sent'}], unread:0, notes:[]},
+    {id:7302, channel:'vk', externalId:null, sourceUrl:'', source:'sync', name:'Быстров Илья', contact:'+7 903 111-22-33', item:'PlayStation 5 Pro', stage:'working', owner:'Кузьмина Е.', createdAt:'25.06.2026', lastTouch:'26.06.2026', fellBack:true,
+     msgs:[{id:1,dir:'in',text:'Есть PS5 Pro с двумя геймпадами?',at:'26.06.2026 15:40',status:'sent'}], unread:0, notes:[{date:'27.06.2026', text:'Автовозврат из «В ожидании»: не подтверждён до 27.06.2026 12:00'}]},
+    {id:7303, channel:'site', externalId:null, sourceUrl:'', source:'sync', name:'Дмитриев Олег', contact:'+7 902 444-55-66', item:'MacBook Pro 14 M4', stage:'waiting', owner:'Кузьмина Е.', createdAt:'26.06.2026', lastTouch:'27.06.2026', waitingDeadline:'29.06.2026 12:00', callbackAt:'30.06.2026 11:00',
+     msgs:[{id:1,dir:'in',text:'Дадут премию на неделе — напишите мне в понедельник, возьму.',at:'27.06.2026 11:20',status:'sent'}], unread:0, notes:[{date:'27.06.2026', text:'Клиент просил ответ 30.06 в 11:00 — назначено в календаре'}]},
     {id:7001, channel:'avito',    externalId:'av_88213', sourceUrl:'https://www.avito.ru/profile/messenger/channel/88213', source:'sync', name:'Игорь М.',   contact:'+7 916 300-11-22', item:'iPhone 15 Pro 256GB', stage:'new',      owner:null,       createdAt:'27.06.2026', lastTouch:'27.06.2026', msgs:[{id:1,dir:'in',text:'Здравствуйте! iPhone 15 Pro 256 в наличии? Какая цена?',at:'27.06.2026 14:12',status:'sent'}], unread:1, notes:[{date:'27.06.2026', text:'Спрашивает наличие и цену'}]},
     {id:7002, channel:'vk',       externalId:'vk_40219', sourceUrl:'https://vk.com/im?sel=40219',                          source:'sync', name:'Алина Р.',   contact:'vk.com/alina_r',   item:'AirPods Pro 2',       stage:'working',  owner:'Анна К.',  createdAt:'26.06.2026', lastTouch:'27.06.2026', msgs:[{id:1,dir:'in',text:'Привет, AirPods Pro 2 есть?',at:'26.06.2026 11:04',status:'sent'},{id:2,dir:'out',text:'Здравствуйте! Да, в наличии. 21 990 ₽, оригинал, гарантия 12 месяцев.',at:'26.06.2026 11:20',author:'Анна К.',status:'sent'},{id:3,dir:'in',text:'А гарантия официальная или ваша?',at:'27.06.2026 09:41',status:'sent'}], unread:1, notes:[{date:'26.06.2026', text:'Ответили: в наличии, 21 990 ₽'},{date:'27.06.2026', text:'Уточняет гарантию'}]},
     {id:7003, channel:'telegram', externalId:'tg_77410', sourceUrl:'https://t.me/dk_moscow',                               source:'sync', name:'Дмитрий К.', contact:'@dk_moscow',       item:'MacBook Air M3',      stage:'thinking', owner:'Анна К.',  createdAt:'25.06.2026', lastTouch:'26.06.2026', msgs:[{id:1,dir:'in',text:'Добрый день. MacBook Air M3 13\" 256GB сколько?',at:'25.06.2026 16:30',status:'sent'},{id:2,dir:'out',text:'Добрый день! 139 990 ₽. Есть в наличии, цвет Midnight и Starlight.',at:'25.06.2026 16:48',author:'Анна К.',status:'sent'},{id:3,dir:'in',text:'Спасибо, подумаю',at:'25.06.2026 17:02',status:'sent'}], unread:0, notes:[{date:'25.06.2026', text:'Цену назвали, думает'}]},
@@ -1133,6 +1156,7 @@ let DATA = {
   ],
 
   customers:[
+    {id:99, name:'Тарасов Виктор Андреевич', email:'tarasov.va@mail.ru', phones:['+7 916 700-00-77'], consent:true, source:'Магазин (вручную)', orders:[], totalSpent:1450000, purchaseCount:5},
     {id:1, name:'Орлова Марина Сергеевна', email:'m.orlova@mail.ru', phones:['+7 921 440-12-09'], consent:true, source:'Интернет-магазин', orders:[10482]},
     {id:2, name:'Седых Павел Игоревич', email:'p.sedykh@gmail.com', phones:['+7 911 220-87-44'], consent:false, source:'Интернет-магазин', orders:[10481]},
     {id:3, name:'Громов Артём Денисович', email:'gromov.ad@yandex.ru', phones:['+7 905 661-30-02'], consent:true, source:'Магазин (вручную)', orders:[10480]},
@@ -5587,14 +5611,13 @@ const CHANNELS={
 /* Активные этапы — с ними работают каждый день.
    «Заказал» и «Отказ» — конечные состояния, уходят в архив. */
 const LEAD_STAGES=[
-  {id:'new',      label:'Новый запрос', hint:'Не отвечали'},
-  {id:'working',  label:'В обработке',  hint:'Ведём диалог'},
-  {id:'thinking', label:'Думает',       hint:'Мяч у клиента'},
-  {id:'waiting',  label:'Ждём ответа',  hint:'Мы ответили'},
+  {id:'new',      label:'Новый заказ', hint:'Не отвечали',            color:'#4f7cff'},
+  {id:'working',  label:'Общение',     hint:'Ведём диалог',           color:'#2dd4bf'},
+  {id:'waiting',  label:'В ожидании',  hint:'Ждём решения клиента',   color:'#fbbf24'},
 ];
 const ARCHIVE_STAGES=[
-  {id:'won',      label:'Заказал',      hint:'Оформлен заказ'},
-  {id:'lost',     label:'Отказ',        hint:'С причиной'},
+  {id:'won',      label:'Подтверждённые', hint:'Прикреплены к заказу', color:'#34d399'},
+  {id:'lost',     label:'Отказ',          hint:'С причиной',           color:'#f87171'},
 ];
 const ALL_STAGES=[...LEAD_STAGES, ...ARCHIVE_STAGES];
 function stageById(id){ return ALL_STAGES.find(s=>s.id===id); }
@@ -6102,8 +6125,67 @@ function sendMessage(lead, c){
         canDeliver?'info':'error');
 }
 
+/* ================= ВОРОНКА: клиенты, таймеры, роли ================= */
+function crmIsManager(){ return STATE.role==='owner'||STATE.role==='senior'; }
+function normPhone(s){ let d=String(s||'').replace(/\D/g,''); if(d.length===11&&d[0]==='8') d='7'+d.slice(1); return d; }
+
+/* Проверка клиента: есть ли в базе (галочка/крестик) и постоянный ли
+   (постоянный = сумма выкупа >= 1 000 000 ₽ И покупок больше 3) */
+function clientInfo(contact){
+  const p=normPhone(contact);
+  if(p.length<10) return {found:false,vip:false,total:0,count:0,customer:null,orders:[]};
+  const cust=(DATA.customers||[]).find(c=>(c.phones||[]).some(ph=>normPhone(ph)===p));
+  const orders=(DATA.orders||[]).filter(o=>normPhone(o.phone)===p && o.status!=='cancel');
+  let total=orders.reduce((s,o)=>{ try{ const v=orderPayablePrice(o); return s+(isFinite(v)?v:0); }catch(e){ return s; } },0);
+  let count=orders.length;
+  if(cust && cust.totalSpent!=null){ total=Math.max(total, cust.totalSpent); count=Math.max(count, cust.purchaseCount||0); }
+  return {found:!!cust||count>0, vip:(total>=1000000 && count>3), total:total, count:count, customer:cust||null, orders:orders};
+}
+function clientCheckHTML(l, small){
+  const ci=clientInfo(l.contact);
+  return '<span style="font-weight:800;'+(ci.found?'color:var(--positive);':'color:var(--negative);')+'" title="'+(ci.found?'Клиент найден в базе':'Клиента нет в базе')+'">'+(ci.found?'✓':'✗')+'</span>'+
+    (ci.vip?' <span class="ld-vip"'+(small?' style="font-size:9.5px;padding:1px 6px;"':'')+'>★ Постоянный</span>':'');
+}
+function nextDayNoon(){
+  const d=parseRuDate(DATA.today); d.setDate(d.getDate()+1);
+  return ('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2)+'.'+d.getFullYear()+' 12:00';
+}
+function migrateCrmLeads(){
+  (DATA.leads||[]).forEach(l=>{
+    if(l.stage==='thinking') l.stage='working';   /* этап «Думает» упразднён */
+    if(!Array.isArray(l.msgs)) l.msgs=[];
+    if(!Array.isArray(l.notes)) l.notes=[];
+  });
+}
+/* Таймеры воронки:
+   1) «В ожидании» без подтверждения до 12:00 следующего дня -> назад в «Общение» (красная рамка + !)
+   2) назначенный в календаре ответ клиенту -> уведомление сотруднику */
+function checkCrmTimers(){
+  const now=taskNow();
+  (DATA.leads||[]).forEach(l=>{
+    if(l.stage==='waiting' && l.waitingDeadline){
+      const p=String(l.waitingDeadline).split(' ');
+      if(now>=parseRuDateTime(p[0], p[1]||'12:00')){
+        l.stage='working'; l.fellBack=true; l.waitingDeadline=null;
+        l.notes.unshift({date:DATA.today, text:'Автовозврат из «В ожидании»: не подтверждён до '+p[0]+' '+(p[1]||'12:00')});
+        if(l.owner) notifyEmployee(l.owner,'Заявка «'+l.name+'» вернулась в «Общение» — не подтверждена вовремя');
+      }
+    }
+    if(l.callbackAt && !l.callbackNotified){
+      const p=String(l.callbackAt).split(' ');
+      if(now>=parseRuDateTime(p[0], p[1]||'10:00')){
+        l.callbackNotified=true; l.callbackDue=true;
+        if(l.owner) notifyEmployee(l.owner,'⏰ Пора написать клиенту '+l.name+(l.item?' ('+l.item+')':'')+' — ответ назначен на '+l.callbackAt);
+      }
+    }
+  });
+  updateBellBadge();
+}
+
 function renderCrm(c){
   if(!STATE.crmTab) STATE.crmTab='funnel';
+  migrateCrmLeads();
+  checkCrmTimers();
   if(!STATE.crmChannel) STATE.crmChannel='all';
 
   /* Вкладки */
@@ -6131,11 +6213,19 @@ function renderCrm(c){
   }
 
   const all=DATA.leads||[];
-  const activeLeads=all.filter(l=>!isArchived(l));
+  const meCrm=taskMe();
+  const managerCrm=crmIsManager();
+  let activeLeads=all.filter(l=>!isArchived(l));
+  /* Продавец видит только «Новый заказ» и «Общение» (закреплённое за ним) */
+  if(!managerCrm) activeLeads=activeLeads.filter(l=> l.stage==='new' || (l.stage==='working' && l.owner===meCrm));
   const archived=all.filter(isArchived);
 
   if(!STATE.crmView) STATE.crmView='kanban';
+  if(!managerCrm && STATE.crmView==='archive') STATE.crmView='kanban';   /* архив — только владельцу/старшему */
   if(!STATE.crmQuery) STATE.crmQuery='';
+
+  /* Утреннее напоминание: до 10:00 написать клиентам в «Ожидании» */
+  var morningLeads=all.filter(l=>l.stage==='waiting' && l.owner===meCrm);
 
   /* Архив — отдельный вид, на доске его нет */
   const pool = STATE.crmView==='archive' ? archived : activeLeads;
@@ -6163,6 +6253,13 @@ function renderCrm(c){
     kpiPlain('Без ответа 2+ дн.', stale.length, 'alert')+
     kpiPlain('Конверсия', conv+'%', 'check')+
   '</div>';
+
+  if(morningLeads.length && nowTime()<'10:00'){
+    html+='<div class="card" style="margin-bottom:14px;border-color:var(--accent);">'+
+      '<div class="kpi-label" style="color:var(--accent-2);">⏰ До 10:00 напишите клиентам в «Ожидании» — узнайте о готовности: '+morningLeads.length+'</div>'+
+      '<div class="tsub" style="margin-top:4px;">'+morningLeads.map(l=>escHtml(l.name)+(l.item?' ('+escHtml(l.item)+')':'')).join(' · ')+'</div>'+
+    '</div>';
+  }
 
   /* Сломанные интеграции — заявки не приходят */
   if(broken){
@@ -6192,7 +6289,7 @@ function renderCrm(c){
     '<div class="chip-tabs">'+
       '<div class="chip-tab '+(STATE.crmView==='kanban'?'active':'')+'" data-view="kanban">Доска</div>'+
       '<div class="chip-tab '+(STATE.crmView==='table'?'active':'')+'" data-view="table">Список</div>'+
-      '<div class="chip-tab '+(STATE.crmView==='archive'?'active':'')+'" data-view="archive">Архив ('+archived.length+')</div>'+
+      (managerCrm?'<div class="chip-tab '+(STATE.crmView==='archive'?'active':'')+'" data-view="archive">Архив ('+archived.length+')</div>':'')+
     '</div>'+
     '<select class="select-mini" id="crmChSel" style="min-width:150px;">'+
       '<option value="all"'+(STATE.crmChannel==='all'?' selected':'')+'>Все каналы</option>'+
@@ -6221,7 +6318,32 @@ function renderCrm(c){
   c.querySelectorAll('[data-view]').forEach(el=>el.addEventListener('click',()=>{
     STATE.crmView=el.dataset.view; STATE.crmStaleOnly=false; renderCrm(c);
   }));
-  c.querySelectorAll('[data-lead]').forEach(el=>el.addEventListener('click',()=>openLeadModal(parseInt(el.dataset.lead), c)));
+  c.querySelectorAll('[data-lead]').forEach(el=>el.addEventListener('click',()=>openLeadDialog(parseInt(el.dataset.lead), c)));
+
+  /* Архив: тумблер переписок + выгрузка файлом (только владелец/старший) */
+  const histTgl=document.getElementById('chatHistTgl');
+  if(histTgl) histTgl.addEventListener('change',()=>{
+    DATA.settings.saveChatHistory=histTgl.checked;
+    toast(histTgl.checked?'Истории переписок сохраняются':'Истории переписок НЕ будут сохраняться при подтверждении','info');
+  });
+  const expBtn=document.getElementById('exportArchiveBtn');
+  if(expBtn) expBtn.addEventListener('click',()=>{
+    const keep=!(DATA.settings && DATA.settings.saveChatHistory===false);
+    const data=(DATA.leads||[]).filter(isArchived).map(l=>({
+      id:l.id, клиент:l.name, телефон:l.contact, канал:(CHANNELS[l.channel]||{}).label||l.channel,
+      интересовало:l.item||'', итог:l.stage==='won'?'Подтверждён':'Отказ',
+      номер_заказа:l.orderId||null, причина_отказа:l.lostReason||null,
+      ответственный:l.owner||null, создан:l.createdAt||null, закрыт:l.lastTouch||null,
+      заметки:(l.notes||[]).map(n=>n.date+': '+n.text),
+      переписка: keep ? (l.msgs||[]).map(m=>(m.dir==='in'?'Клиент':'Магазин')+' ['+m.at+']: '+m.text) : '(отключено тумблером)',
+    }));
+    const blob=new Blob([JSON.stringify({выгружено:DATA.today+' '+nowTime(), записей:data.length, архив:data}, null, 2)],{type:'application/json'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='crm-архив-'+DATA.today.replace(/\./g,'-')+'.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    toast('Архив выгружен: '+data.length+' записей'+(keep?' с перепиской':' без переписки'),'success');
+  });
 
   const chSel=document.getElementById('crmChSel');
   if(chSel) chSel.addEventListener('change',()=>{ STATE.crmChannel=chSel.value; renderCrm(c); });
@@ -6247,7 +6369,14 @@ function renderCrm(c){
 
 /* Архив — заказавшие и отказавшиеся. Просмотр, не работа. */
 function crmArchiveHTML(list, won, lost){
-  let html='<div class="grid grid-3" style="margin-bottom:12px;">'+
+  let html='<div class="toolbar" style="margin-bottom:12px;">'+
+    '<label class="tsub" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">'+
+      '<input type="checkbox" id="chatHistTgl" style="width:17px;height:17px;" '+((DATA.settings&&DATA.settings.saveChatHistory===false)?'':'checked')+'>'+
+      'Сохранять истории переписок</label>'+
+    '<div class="topbar-spacer"></div>'+
+    '<button class="btn btn-primary" id="exportArchiveBtn">⬇ Выгрузить архив файлом</button>'+
+  '</div>';
+  html+='<div class="grid grid-3" style="margin-bottom:12px;">'+
     kpiPlain('Заказали', won, 'check')+
     kpiPlain('Отказались', lost, 'x')+
     kpiPlain('Конверсия', ((won+lost)?Math.round(won/(won+lost)*100):0)+'%', 'analytics')+
@@ -6282,16 +6411,19 @@ function crmArchiveHTML(list, won, lost){
   return html;
 }
 
-/* Доска — колонки с внутренней прокруткой, чтобы 50 заявок не ломали страницу */
+/* Доска: Новый заказ -> Общение -> В ожидании -> Подтверждённые.
+   Продавец видит только первые две колонки (Общение — своё).
+   Цветные счётчики, галочка/крестик базы, красная рамка + «!» у возвратов. */
 function crmKanbanHTML(list){
+  const cols=crmIsManager()? [...LEAD_STAGES, ARCHIVE_STAGES[0]] : LEAD_STAGES.filter(s=>s.id==='new'||s.id==='working');
   let html='<div class="kanban">';
-  LEAD_STAGES.forEach(stage=>{
+  cols.forEach(stage=>{
     const items=list.filter(l=>l.stage===stage.id);
     html+='<div class="kan-col">'+
       '<div class="kan-head">'+
         '<div><div class="kan-title">'+stage.label+'</div>'+
         '<div class="kan-hint">'+stage.hint+'</div></div>'+
-        '<span class="kan-count">'+items.length+'</span>'+
+        '<span class="kan-count" style="background:'+stage.color+'26;color:'+stage.color+';border:1px solid '+stage.color+'55;">'+items.length+'</span>'+
       '</div>'+
       '<div class="kan-body">';
     if(!items.length){
@@ -6300,14 +6432,21 @@ function crmKanbanHTML(list){
       items.forEach(l=>{
         const idle=daysIdle(l);
         const isStale=!['won','lost'].includes(l.stage) && idle>=2;
-        html+='<div class="kan-card'+(isStale?' stale':'')+'" data-lead="'+l.id+'">'+
+        const alarm=!!(l.fellBack||l.callbackDue);
+        html+='<div class="kan-card'+(isStale?' stale':'')+(alarm?' alarm':'')+'" data-lead="'+l.id+'">'+
           '<div class="kan-card-top">'+channelBadge(l.channel)+
-            '<span class="kan-name">'+escHtml(l.name)+'</span></div>'+
+            '<span class="kan-name">'+escHtml(l.name)+'</span>'+
+            (alarm?'<span style="color:var(--negative);font-weight:900;margin-left:4px;font-size:15px;">!</span>':'')+'</div>'+
           '<div class="kan-item">'+escHtml(l.item||'—')+'</div>'+
+          '<div class="kan-meta">База: '+clientCheckHTML(l, true)+'</div>'+
           '<div class="kan-meta">'+
             (l.owner?escHtml(l.owner):'<span style="color:var(--warning);">не взят</span>')+
             (isStale?' · <span style="color:var(--warning);font-weight:600;">'+idle+' дн.</span>':'')+
+            ((l.unread||0)?' · <span style="color:var(--accent-2);font-weight:700;">✉ '+l.unread+'</span>':'')+
           '</div>'+
+          (l.stage==='waiting'&&l.waitingDeadline?'<div class="kan-meta" style="color:var(--warning);">⏳ подтвердить до '+l.waitingDeadline+'</div>':'')+
+          (l.callbackAt?'<div class="kan-meta" style="color:var(--accent-2);">📅 ответ: '+l.callbackAt+'</div>':'')+
+          (l.fellBack?'<div class="kan-meta" style="color:var(--negative);font-weight:600;">Вернулся из «В ожидании»</div>':'')+
           (l.stage==='won'&&l.orderId?'<div class="kan-meta mono">Заказ №'+l.orderId+'</div>':'')+
           (l.stage==='lost'&&l.lostReason?'<div class="kan-meta">'+escHtml(l.lostReason)+'</div>':'')+
         '</div>';
@@ -6353,6 +6492,208 @@ function crmTableHTML(list){
   });
   html+='</tbody></table></div>';
   return html;
+}
+
+/* ================= ДИАЛОГ ЗАЯВКИ (вариант 1) =================
+   Окно поверх воронки: переписка + движение только вперёд/назад.
+   Цепочка: Новый заказ -> Общение -> В ожидании -> Подтверждённые. */
+const CRM_CHAIN=['new','working','waiting','won'];
+
+function openLeadDialog(id, c){
+  const l=(DATA.leads||[]).find(x=>x.id===id);
+  if(!l) return;
+  const me=taskMe();
+  const manager=crmIsManager();
+  const ch=CHANNELS[l.channel]||CHANNELS.phone;
+  const ci=clientInfo(l.contact);
+  const stage=stageById(l.stage);
+  const idx=CRM_CHAIN.indexOf(l.stage);
+  l.unread=0;
+
+  /* Мои активные диалоги — быстрый переключатель */
+  const mine=(DATA.leads||[]).filter(x=>x.owner===me && !isArchived(x));
+  let mineStrip='';
+  if(mine.length>1 || (mine.length===1 && mine[0].id!==l.id)){
+    mineStrip='<div class="drill-block-label" style="margin-top:2px;">Мои диалоги ('+mine.length+')</div><div class="ld-mine">'+
+      mine.map(x=>'<span class="ld-chip'+(x.id===l.id?' on':'')+'" data-switch-lead="'+x.id+'">'+escHtml(x.name)+((x.unread||0)?' ✉':'')+(x.fellBack||x.callbackDue?' ❗':'')+'</span>').join('')+'</div>';
+  }
+
+  let body='';
+  if(l.fellBack) body+='<div class="card" style="border-color:var(--negative);margin-bottom:10px;padding:10px 14px;"><div class="tsub" style="color:var(--negative);font-weight:600;">❗ Заявка вернулась из «В ожидании» — не была подтверждена до 12:00. Свяжитесь с клиентом.</div></div>';
+  if(l.callbackDue) body+='<div class="card" style="border-color:var(--accent);margin-bottom:10px;padding:10px 14px;"><div class="tsub" style="color:var(--accent-2);font-weight:600;">⏰ Наступило время ответа, назначенное клиентом: '+l.callbackAt+'</div></div>';
+
+  body+='<div class="field-grid">'+
+    field('Клиент', escHtml(l.name)+' '+clientCheckHTML(l))+
+    field('Телефон', l.contact||'—')+
+    field('Интересует', l.item||'—')+
+    field('Канал', ch.label)+
+    field('Ответственный', l.owner?escHtml(l.owner):'не взят')+
+    field('Этап', (stage?stage.label:'—'))+
+    (ci.found?field('История клиента', 'покупок: '+ci.count+' · выкуп: '+rub(ci.total)):'')+
+    (l.stage==='waiting'&&l.waitingDeadline?field('Подтвердить до', l.waitingDeadline):'')+
+    (l.callbackAt?field('Ответ назначен на', l.callbackAt):'')+
+    (l.stage==='won'&&l.orderId?field('Прикреплена к заказу', '№'+l.orderId):'')+
+  '</div>';
+
+  body+=mineStrip;
+
+  /* Переписка */
+  body+='<div class="ld-msgs" id="ldMsgs">'+
+    ((l.msgs&&l.msgs.length)? l.msgs.map(m=>'<div class="ld-msg '+(m.dir==='in'?'in':'out')+'">'+escHtml(m.text)+'<span class="t">'+(m.dir==='in'?escHtml(l.name):(l.owner?escHtml(l.owner):'мы'))+' · '+m.at+'</span></div>').join('')
+      : '<div class="ld-sys">Переписки пока нет — напишите клиенту первым</div>')+
+  '</div>';
+  body+='<div class="ld-compose"><input class="input-mini" id="ldInput" style="flex:1;" placeholder="Написать клиенту…"><button class="btn btn-primary" id="ldSend" style="padding:11px 18px;">➤</button></div>';
+
+  /* Дополнительно: профиль и календарь (без лишних кнопок в подвале) */
+  body+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">'+
+    '<button class="btn btn-sm" id="ldProfile">👤 Профиль клиента</button>'+
+    (l.stage==='waiting'?'<button class="btn btn-sm" id="ldCalendar">📅 Назначить дату и время ответа</button>':'')+
+  '</div>';
+
+  /* Действия: взять себе + вперёд/назад по цепочке */
+  const actions=[];
+  if(!l.owner){
+    actions.push({label:'👋 Взять себе', cls:'btn-primary', action:()=>{
+      l.owner=me; if(l.stage==='new') l.stage='working';
+      l.lastTouch=DATA.today;
+      l.notes.unshift({date:DATA.today, text:'Заказ закрепил(а) за собой '+me});
+      closeModal(); refreshCrm(c); toast('Заказ закреплён за вами','success');
+    }});
+  }
+  if(idx>0 && l.stage!=='won'){
+    actions.push({label:'← Назад', action:()=>{
+      const prev=CRM_CHAIN[idx-1];
+      l.stage=prev; l.lastTouch=DATA.today;
+      if(prev!=='waiting'){ l.waitingDeadline=null; }
+      l.notes.unshift({date:DATA.today, text:'Возврат на этап «'+stageById(prev).label+'» — '+me});
+      closeModal(); refreshCrm(c); toast('Этап: '+stageById(prev).label,'info');
+    }});
+  }
+  if(l.stage==='won' && manager){
+    actions.push({label:'← Назад', action:()=>{
+      l.stage='waiting'; l.orderId=null; l.waitingDeadline=nextDayNoon(); l.lastTouch=DATA.today;
+      l.notes.unshift({date:DATA.today, text:'Возврат из «Подтверждённых» — '+me});
+      closeModal(); refreshCrm(c); toast('Этап: В ожидании','info');
+    }});
+  }
+  if(idx>=0 && idx<3){
+    const nxt=CRM_CHAIN[idx+1];
+    const canForward = nxt!=='won' || manager;   /* подтверждает владелец/старший */
+    if(canForward){
+      actions.push({label:'Вперёд →', cls:'btn-primary', action:()=>{
+        if(!l.owner){ toast('Сначала возьмите заказ себе','error'); return; }
+        if(nxt==='won'){ closeModal(); openLeadConfirmModal(l.id, c); return; }
+        l.stage=nxt; l.lastTouch=DATA.today; l.fellBack=false;
+        if(nxt==='waiting'){ l.waitingSince=DATA.today+' '+nowTime(); l.waitingDeadline=nextDayNoon(); }
+        l.notes.unshift({date:DATA.today, text:'Этап «'+stageById(nxt).label+'» — '+me});
+        closeModal(); refreshCrm(c); toast('Этап: '+stageById(nxt).label+(nxt==='waiting'?' · подтвердить до '+l.waitingDeadline:''),'success');
+      }});
+    }
+  }
+
+  openModal('Диалог — '+escHtml(l.name), channelBadge(l.channel)+' '+ch.label+' · '+clientCheckHTML(l, true), body, actions);
+
+  const box=document.getElementById('ldMsgs');
+  if(box) box.scrollTop=box.scrollHeight;
+  const sendMsg=()=>{
+    const inp=document.getElementById('ldInput');
+    const v=(inp.value||'').trim(); if(!v) return;
+    l.msgs.push({id:(l.msgs.length?Math.max(...l.msgs.map(m=>m.id)):0)+1, dir:'out', text:v, at:DATA.today+' '+nowTime(), status:'sent'});
+    l.lastTouch=DATA.today;
+    l.callbackDue=false;
+    if(!l.owner){ l.owner=me; if(l.stage==='new') l.stage='working'; }
+    openLeadDialog(l.id, c);   /* перерисовать окно с новым сообщением */
+  };
+  const sb=document.getElementById('ldSend');
+  if(sb) sb.addEventListener('click', sendMsg);
+  const inp=document.getElementById('ldInput');
+  if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); sendMsg(); } });
+  const pb=document.getElementById('ldProfile');
+  if(pb) pb.addEventListener('click', ()=>openClientProfileModal(l.id, c));
+  const cb=document.getElementById('ldCalendar');
+  if(cb) cb.addEventListener('click', ()=>openLeadCallbackModal(l.id, c));
+  document.querySelectorAll('[data-switch-lead]').forEach(el=>el.addEventListener('click',()=>openLeadDialog(parseInt(el.dataset.switchLead), c)));
+}
+
+function refreshCrm(c){
+  if(STATE.page==='crm'){ renderCrm(c||document.getElementById('pageContent')); }
+}
+
+/* Календарь: клиент просил ответить позже — сотрудник ставит дату и время,
+   в назначенный момент придёт уведомление «пора написать» */
+function openLeadCallbackModal(id, c){
+  const l=(DATA.leads||[]).find(x=>x.id===id); if(!l) return;
+  const body='<div class="field-grid">'+field('Клиент', l.name)+field('Интересует', l.item||'—')+'</div>'+
+    '<div class="field-grid" style="margin-top:8px;">'+
+      '<div class="field"><label>Дата ответа</label><input class="input-mini" id="cbDate" type="date" style="width:100%;"></div>'+
+      '<div class="field"><label>Время</label><input class="input-mini" id="cbTime" type="time" value="10:00" style="width:100%;"></div>'+
+    '</div>'+
+    '<div class="tsub" style="margin-top:6px;">Пример: клиент хочет дать ответ на следующей неделе — выберите день и время, и в этот момент вам придёт уведомление написать ему.</div>';
+  openModal('📅 Назначить ответ — '+escHtml(l.name),'',body,[{label:'Назначить', cls:'btn-primary', action:()=>{
+    const d=document.getElementById('cbDate').value;   /* ГГГГ-ММ-ДД */
+    const t=document.getElementById('cbTime').value || '10:00';
+    if(!d){ toast('Выберите дату','error'); return; }
+    const p=d.split('-');
+    l.callbackAt=p[2]+'.'+p[1]+'.'+p[0]+' '+t;
+    l.callbackNotified=false; l.callbackDue=false;
+    l.notes.unshift({date:DATA.today, text:'Ответ клиенту назначен на '+l.callbackAt+' — '+taskMe()});
+    closeModal(); refreshCrm(c); toast('Напоминание придёт '+l.callbackAt,'success');
+  }}]);
+}
+
+/* Подтверждение: заявка прикрепляется к номеру заказа */
+function openLeadConfirmModal(id, c){
+  const l=(DATA.leads||[]).find(x=>x.id===id); if(!l) return;
+  const ci=clientInfo(l.contact);
+  const suggest=ci.orders.slice(-4).map(o=>'№'+o.id).join(', ');
+  const body='<div class="field-grid">'+field('Клиент', l.name)+field('Интересует', l.item||'—')+'</div>'+
+    '<div class="field" style="margin-top:8px;"><label>Номер заказа <span style="color:var(--negative);">*</span></label>'+
+      '<input class="input-mini" id="cfOrderId" type="number" style="width:100%;" placeholder="Например, 10482">'+
+      (suggest?'<div class="tsub" style="margin-top:3px;">Заказы этого клиента: '+suggest+'</div>':'')+
+      '<div class="tsub" style="margin-top:3px;">Если заказа ещё нет — создайте его в разделе «Заказы» и вернитесь сюда.</div></div>';
+  openModal('Подтвердить — прикрепить к заказу','',body,[{label:'Подтвердить', cls:'btn-primary', action:()=>{
+    const oid=parseInt(document.getElementById('cfOrderId').value);
+    if(!oid){ toast('Укажите номер заказа','error'); return; }
+    if(!(DATA.orders||[]).some(o=>o.id===oid)){ toast('Заказ №'+oid+' не найден в системе','error'); return; }
+    l.stage='won'; l.orderId=oid; l.lastTouch=DATA.today;
+    l.fellBack=false; l.waitingDeadline=null; l.callbackDue=false;
+    l.notes.unshift({date:DATA.today, text:'Подтверждён и прикреплён к заказу №'+oid+' — '+taskMe()});
+    if(DATA.settings && DATA.settings.saveChatHistory===false) l.msgs=[];
+    if(l.owner && l.owner!==taskMe()) notifyEmployee(l.owner,'Ваша заявка «'+l.name+'» подтверждена и прикреплена к заказу №'+oid);
+    closeModal(); refreshCrm(c); toast('Заявка подтверждена: заказ №'+oid,'success');
+  }}]);
+}
+
+/* Профиль клиента: история покупок, диалогов и статус */
+function openClientProfileModal(leadId, c){
+  const l=(DATA.leads||[]).find(x=>x.id===leadId); if(!l) return;
+  const ci=clientInfo(l.contact);
+  let body='<div class="field-grid">'+
+    field('Имя', (ci.customer?ci.customer.name:l.name))+
+    field('Телефон', l.contact||'—')+
+    field('В базе клиентов', ci.found?'✓ Да':'✗ Нет')+
+    field('Статус', ci.vip?'★ Постоянный клиент':'Обычный клиент')+
+    field('Покупок', String(ci.count))+
+    field('Сумма выкупа', rub(ci.total))+
+    (ci.customer&&ci.customer.email?field('Email', ci.customer.email):'')+
+  '</div>';
+  if(!ci.vip){
+    body+='<div class="tsub" style="margin-top:6px;">До статуса «Постоянный»: выкуп от 1 000 000 ₽ и больше 3 покупок.</div>';
+  }
+  if(ci.orders.length){
+    body+='<div class="drill-block-label" style="margin-top:12px;">Заказы</div>'+
+      ci.orders.slice().reverse().slice(0,8).map(o=>'<div class="hist-row"><div><div class="h-main">№'+o.id+' — '+escHtml((o.items&&o.items[0]?o.items[0].name:'—'))+'</div><div class="h-sub">'+(o.date||'')+' · '+rub((function(){try{return orderPayablePrice(o);}catch(e){return 0;}})())+'</div></div></div>').join('');
+  }
+  const hist=(DATA.leads||[]).filter(x=>normPhone(x.contact)===normPhone(l.contact));
+  if(hist.length>1){
+    body+='<div class="drill-block-label" style="margin-top:12px;">История обращений</div>'+
+      hist.map(x=>'<div class="hist-row"><div><div class="h-main">'+escHtml(x.item||'—')+' <span class="badge b-grey" style="margin-left:6px;">'+((stageById(x.stage)||{}).label||x.stage)+'</span></div><div class="h-sub">'+(x.createdAt||'')+' · '+(x.owner?escHtml(x.owner):'не взят')+'</div></div></div>').join('');
+  }
+  if(l.notes&&l.notes.length){
+    body+='<div class="drill-block-label" style="margin-top:12px;">История профиля</div>'+
+      l.notes.slice(0,10).map(n=>'<div class="hist-row"><div><div class="h-main" style="font-size:12.5px;">'+escHtml(n.text)+'</div><div class="h-sub mono">'+n.date+'</div></div></div>').join('');
+  }
+  openModal('👤 Профиль клиента', clientCheckHTML(l, true), body, []);
 }
 
 function openLeadModal(id, c){
