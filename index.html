@@ -6191,8 +6191,8 @@ function migrateCrmLeads(){
   (DATA.leads||[]).forEach(l=>{
     if(l.stage==='thinking') l.stage='working';   /* этап «Думает» упразднён */
     /* Зарезервированный (взятый) заказ не хранится в «Новых» — сразу в «Общение» */
-    if(l.stage==='new' && l.owner){ l.stage='working'; l.workingSince=DATA.today+' '+nowTime(); }
-    if(l.stage==='working' && !l.workingSince) l.workingSince=DATA.today+' '+nowTime();
+    if(l.stage==='new' && l.owner){ l.stage='working'; l.workingSince=DATA.today+' '+nowTime(); l.lastTouch=DATA.today; }
+    if(l.stage==='working' && !l.workingSince) l.workingSince=(l.lastTouch||l.createdAt||DATA.today)+' 09:00';
     if(!Array.isArray(l.msgs)) l.msgs=[];
     if(!Array.isArray(l.notes)) l.notes=[];
   });
@@ -6214,15 +6214,26 @@ function checkCrmTimers(){
   const now=taskNow();
   const waitHrs=(DATA.settings && DATA.settings.crmWaitHours)||12;
   (DATA.leads||[]).forEach(l=>{
-    /* 1) Заявка висит в «Общении» дольше порога -> сама уходит в «Ожидание»,
-       куратору приходит уведомление подтвердить до 12:00 следующего дня */
-    if(l.stage==='working' && l.owner && l.workingSince){
-      const w=String(l.workingSince).split(' ');
-      const since=parseRuDateTime(w[0], w[1]||'00:00');
+    /* 1) Заявка не может висеть в «Общении» без движения дольше порога.
+       Точка отсчёта — последняя РЕАЛЬНАЯ активность: взятие, сообщение,
+       последнее касание (до конца того дня). Прошло больше waitHrs часов:
+       есть куратор -> в «Ожидание» с уведомлением; куратора нет -> на общую доску */
+    if(l.stage==='working'){
+      const lastMsgAt=(l.msgs&&l.msgs.length)? l.msgs[l.msgs.length-1].at : null;
+      const cands=[l.workingSince, lastMsgAt, (l.lastTouch? l.lastTouch+' 23:59' : null)]
+        .filter(Boolean)
+        .map(s=>{ const p=String(s).split(' '); return parseRuDateTime(p[0], p[1]||'12:00'); })
+        .filter(t=>t && t<=now);
+      const since=cands.length? Math.max.apply(null,cands) : null;
       if(since && (now-since)>=waitHrs*3600000){
-        l.stage='waiting'; l.waitingSince=DATA.today+' '+nowTime(); l.waitingDeadline=nextDayNoon();
-        l.notes.unshift({date:DATA.today, text:'Авто-переход в «Ожидание»: в «Общении» дольше '+waitHrs+' ч. Подтвердить до '+l.waitingDeadline});
-        notifyEmployee(l.owner,'Клиент «'+l.name+'» переведён в «Ожидание» — подтвердите или отмените до '+l.waitingDeadline);
+        if(l.owner){
+          l.stage='waiting'; l.waitingSince=DATA.today+' '+nowTime(); l.waitingDeadline=nextDayNoon();
+          l.notes.unshift({date:DATA.today, text:'Авто-переход в «Ожидание»: в «Общении» без движения дольше '+waitHrs+' ч. Подтвердить до '+l.waitingDeadline});
+          notifyEmployee(l.owner,'Клиент «'+l.name+'» переведён в «Ожидание» — подтвердите или отмените до '+l.waitingDeadline);
+        } else {
+          l.stage='new'; l.fellBack=true; l.workingSince=null;
+          l.notes.unshift({date:DATA.today, text:'Висел в «Общении» без куратора — возвращён на общую доску'});
+        }
       }
     }
     /* 2) Куратор не ответил до 12:00 -> заявка уходит на общую доску,
