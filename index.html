@@ -5806,13 +5806,14 @@ function importSiteLeads(arr){
     if(s==null || s.id==null) return;
     const ext='site_'+s.id;
     if((DATA.leads||[]).some(l=>l.externalId===ext)) return;   // защита от дублей
-    const topic=s.topic?(SITE_TOPICS[s.topic]||String(s.topic)):'';
+    const topicMap={buy:'device', tradein:'tradein', repair:'repair', question:'none'};
     DATA.leads.unshift({
       id:Math.max(7000,...DATA.leads.map(l=>l.id))+1,
       channel:'site', externalId:ext, sourceUrl:'', source:'sync',
       name:String(s.name||'Без имени').slice(0,80),
       contact:String(s.phone||s.contact||'').slice(0,60),
-      item:(topic+(s.item?(topic?': ':'')+String(s.item).slice(0,90):''))||'Заявка с сайта',
+      topic: topicMap[s.topic]||'none',
+      item: s.item? String(s.item).slice(0,90) : '',
       stage:'new', owner:null,
       createdAt:DATA.today, lastTouch:DATA.today,
       msgs:s.comment?[{id:1,dir:'in',text:String(s.comment).slice(0,1000),at:DATA.today+' '+nowTime(),status:'sent'}]:[],
@@ -6150,6 +6151,21 @@ function sendMessage(lead, c){
 }
 
 /* ================= ВОРОНКА: клиенты, таймеры, роли ================= */
+/* Тема заявки: устройство / услуга / ремонт / трейд-ин.
+   Если заявка пришла без формы (просто сообщение) и клиент товар
+   не выбрал — тема «Не определена», сотрудник уточняет в диалоге. */
+const LEAD_TOPICS={
+  device: {label:'Устройство',    color:'#2dd4bf'},
+  service:{label:'Услуга',        color:'#6ea8ff'},
+  repair: {label:'Ремонт',        color:'#fbbf24'},
+  tradein:{label:'Трейд-ин',      color:'#c084fc'},
+  none:   {label:'Не определена', color:'#94a3b8'},
+};
+function leadTopic(l){ return LEAD_TOPICS[l.topic]||LEAD_TOPICS.none; }
+function leadTopicBadge(l, small){
+  const t=leadTopic(l);
+  return '<span style="display:inline-block;padding:'+(small?'1px 7px':'2px 9px')+';border-radius:7px;font-size:'+(small?'9.5px':'10.5px')+';font-weight:800;background:'+t.color+'1f;color:'+t.color+';border:1px solid '+t.color+'55;">'+t.label+'</span>';
+}
 function crmIsManager(){ return STATE.role==='owner'||STATE.role==='senior'; }
 function normPhone(s){ let d=String(s||'').replace(/\D/g,''); if(d.length===11&&d[0]==='8') d='7'+d.slice(1); return d; }
 
@@ -6195,6 +6211,19 @@ function migrateCrmLeads(){
     if(l.stage==='working' && !l.workingSince) l.workingSince=(l.lastTouch||l.createdAt||DATA.today)+' 09:00';
     if(!Array.isArray(l.msgs)) l.msgs=[];
     if(!Array.isArray(l.notes)) l.notes=[];
+    /* Тема заявки: угадываем по префиксу из формы, иначе — по наличию товара */
+    if(!l.topic){
+      const it=String(l.item||'');
+      if(/^Ремонт/i.test(it)) l.topic='repair';
+      else if(/^Трейд-ин/i.test(it)) l.topic='tradein';
+      else if(/^Вопрос/i.test(it)||!it.trim()||it==='Заявка с сайта') l.topic='none';
+      else l.topic='device';
+      l.item=it.replace(/^(Покупка|Ремонт|Трейд-ин|Вопрос):?\s*/i,'').trim();
+    }
+  });
+  /* В «Ожидании» не бывает заявок без дедлайна — иначе они зависают навсегда */
+  (DATA.leads||[]).forEach(l=>{
+    if(l.stage==='waiting' && !l.waitingDeadline) l.waitingDeadline=nextDayNoon();
   });
   /* Номер заказа закрепляется за клиентом с самого начала.
      Гарантия: зарезервированный номер уникален и не пересекается
@@ -6228,10 +6257,11 @@ function checkCrmTimers(){
       if(since && (now-since)>=waitHrs*3600000){
         if(l.owner){
           l.stage='waiting'; l.waitingSince=DATA.today+' '+nowTime(); l.waitingDeadline=nextDayNoon();
+          l.lastTouch=DATA.today;
           l.notes.unshift({date:DATA.today, text:'Авто-переход в «Ожидание»: в «Общении» без движения дольше '+waitHrs+' ч. Подтвердить до '+l.waitingDeadline});
           notifyEmployee(l.owner,'Клиент «'+l.name+'» переведён в «Ожидание» — подтвердите или отмените до '+l.waitingDeadline);
         } else {
-          l.stage='new'; l.fellBack=true; l.workingSince=null;
+          l.stage='new'; l.fellBack=true; l.workingSince=null; l.lastTouch=DATA.today;
           l.notes.unshift({date:DATA.today, text:'Висел в «Общении» без куратора — возвращён на общую доску'});
         }
       }
@@ -6242,7 +6272,7 @@ function checkCrmTimers(){
       const p=String(l.waitingDeadline).split(' ');
       if(now>=parseRuDateTime(p[0], p[1]||'12:00')){
         const prevOwner=l.owner;
-        l.stage='new'; l.owner=null; l.fellBack=true; l.waitingDeadline=null; l.workingSince=null;
+        l.stage='new'; l.owner=null; l.fellBack=true; l.waitingDeadline=null; l.workingSince=null; l.lastTouch=DATA.today;
         l.notes.unshift({date:DATA.today, text:'Не подтверждена до '+p[0]+' '+(p[1]||'12:00')+' — возвращена на общую доску (куратор: '+(prevOwner||'—')+')'});
         if(prevOwner) notifyEmployee(prevOwner,'Заявка «'+l.name+'» не подтверждена до 12:00 — ушла на общую доску, её может забрать другой менеджер');
       }
@@ -6460,17 +6490,17 @@ function crmKanbanHTML(list){
     } else {
       items.forEach(l=>{
         const idle=daysIdle(l);
-        const isStale=!['won','lost'].includes(l.stage) && idle>=2;
+        const isStale=(l.stage==='new') && idle>=2;   /* только свободные: в «Общении» авто-перенос, в «Ожидании» дедлайн */
         const alarm=!!(l.fellBack||l.callbackDue);
         html+='<div class="kan-card'+(isStale?' stale':'')+(alarm?' alarm':'')+'" data-lead="'+l.id+'">'+
           (alarm?'<span class="kan-alert">!</span>':'')+
           '<div class="kan-card-top">'+channelBadge(l.channel)+
             '<span class="kan-name">'+escHtml(l.name)+'</span>'+clientMarkHTML(l)+'</div>'+
-          '<div class="kan-item">'+escHtml(l.item||'—')+'</div>'+
+          '<div class="kan-item">'+leadTopicBadge(l, true)+' '+(l.item?escHtml(l.item):'<span style="color:var(--warning);">товар не выбран</span>')+'</div>'+
           (function(){
             const parts=[];
             if(l.owner) parts.push(escHtml(l.owner));
-            if(isStale) parts.push('<span style="color:var(--warning);font-weight:600;" title="Заявке никто не отвечал '+idle+' дн.">⏳ без движения '+idle+' дн.</span>');
+            if(isStale) parts.push('<span style="color:var(--warning);font-weight:600;" title="Свободная заявка, которую '+idle+' дн. никто не взял">⏳ никто не взял '+idle+' дн.</span>');
             if(l.unread||0) parts.push('<span style="color:var(--accent-2);font-weight:700;">✉ '+l.unread+'</span>');
             return parts.length? '<div class="kan-meta">'+parts.join(' · ')+'</div>' : '';
           })()+
@@ -6594,7 +6624,8 @@ function openLeadDialog(id, c){
   body+='<div class="field-grid">'+
     field('Клиент', escHtml(l.name)+' '+clientCheckHTML(l)+'<span class="ld-edit" data-ledit="name" title="Исправить имя">✎</span>')+
     field(hasPhone?'Телефон':'Контакт · номера нет', escHtml(l.contact||'—')+'<span class="ld-edit" data-ledit="contact" title="'+(hasPhone?'Исправить номер':'Вписать номер телефона')+'">✎</span>')+
-    field('Интересует', escHtml(l.item||'—')+'<span class="ld-edit" data-ledit="item" title="Изменить позицию">✎</span>')+
+    field('Тема заявки', leadTopicBadge(l)+(l.topic==='none'?' <span class="tsub" style="color:var(--warning);">уточните</span>':'')+'<span class="ld-edit" data-ledit="topic" title="Выбрать тему">✎</span>')+
+    field('Интересует', (l.item?escHtml(l.item):'<span style="color:var(--warning);">не выбран</span>')+'<span class="ld-edit" data-ledit="item" title="Изменить позицию">✎</span>')+
     (manager?field('Ответственный', l.owner?escHtml(l.owner):'не взят'):'')+
     field('Номер заказа', l.orderId?('№'+l.orderId+(l.stage==='won'?'':' · зарезервирован')):'—')+
     (l.stage==='waiting'&&l.waitingDeadline?field('Подтвердить до', l.waitingDeadline):'')+
@@ -6765,6 +6796,22 @@ const LEAD_EDIT_FIELDS={
 };
 function openLeadEditFieldModal(id, key, c){
   const l=(DATA.leads||[]).find(x=>x.id===id); if(!l) return;
+  /* Тема — выбор из списка, не свободный текст */
+  if(key==='topic'){
+    const body='<div class="field"><label>Тема заявки</label><select class="select-mini" id="lefTopic" style="width:100%;">'+
+      Object.entries(LEAD_TOPICS).map(([k,t])=>'<option value="'+k+'"'+((l.topic||'none')===k?' selected':'')+'>'+t.label+'</option>').join('')+
+      '</select></div>'+
+      '<div class="tsub" style="margin-top:6px;">Устройство — покупка техники · Услуга — настройка, доставка и т.п. · Ремонт — сервис · Трейд-ин — обмен.</div>';
+    openModal('✎ Тема заявки','',body,[{label:'Сохранить', cls:'btn-primary', action:()=>{
+      const v=document.getElementById('lefTopic').value;
+      if(v!==l.topic){
+        l.notes.unshift({date:DATA.today, text:'Тема заявки: «'+leadTopic(l).label+'» → «'+LEAD_TOPICS[v].label+'» — '+taskMe()});
+        l.topic=v; l.lastTouch=DATA.today;
+      }
+      refreshCrm(c); closeModal(); openLeadDialog(l.id, c);
+    }}]);
+    return;
+  }
   const meta=LEAD_EDIT_FIELDS[key]; if(!meta) return;
   const cur=l[key]||'';
   const body='<div class="field"><label>'+meta.label+'</label>'+
@@ -6944,7 +6991,10 @@ function openNewLeadModal(c){
     '</select></div>'+
     '<div class="field"><label>Имя клиента</label><input class="input-mini" id="nlName"></div>'+
     '<div class="field"><label>Контакт</label><input class="input-mini" id="nlContact" placeholder="телефон / ник / ссылка"></div>'+
-    '<div class="field"><label>Что интересует</label><input class="input-mini" id="nlItem"></div>'+
+    '<div class="field"><label>Тема заявки</label><select class="select-mini" id="nlTopic" style="width:100%;">'+
+      Object.entries(LEAD_TOPICS).map(([k,t])=>'<option value="'+k+'"'+(k==='none'?' selected':'')+'>'+t.label+'</option>').join('')+
+    '</select></div>'+
+    '<div class="field"><label>Что интересует (можно оставить пустым)</label><input class="input-mini" id="nlItem" placeholder="уточните позже в диалоге"></div>'+
   '</div>'+
   '<div class="field"><label>Первая заметка</label><input class="input-mini" id="nlNote" style="width:100%;" placeholder="Что спросил клиент"></div>';
   openModal('Новая заявка','',body,[{label:'Создать', cls:'btn-primary', action:()=>{
@@ -6955,6 +7005,7 @@ function openNewLeadModal(c){
       id:Math.max(7000,...DATA.leads.map(l=>l.id))+1,
       channel:document.getElementById('nlCh').value,
       name, contact:document.getElementById('nlContact').value.trim(),
+      topic:document.getElementById('nlTopic').value,
       item:document.getElementById('nlItem').value.trim(),
       stage:'new', owner:null, source:'manual', externalId:null, sourceUrl:'',
       createdAt:DATA.today, lastTouch:DATA.today,
