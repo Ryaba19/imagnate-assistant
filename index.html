@@ -977,6 +977,35 @@ body.light .ld-vip{color:#8a6100;}
   .kanban{grid-auto-columns:88vw;}
   .page-title{font-size:16px;}
 }
+
+/* «Ещё» — шторка со всеми разделами (мобильная навигация без бокового меню) */
+.msheet-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:140;display:flex;align-items:flex-end;}
+.msheet{background:var(--bg,#101422);border:1px solid var(--glass-border);border-bottom:none;border-radius:18px 18px 0 0;width:100%;max-height:78vh;overflow-y:auto;padding:10px 14px calc(14px + env(safe-area-inset-bottom));box-shadow:0 -18px 60px rgba(0,0,0,.5);}
+.msheet-grip{width:40px;height:4px;border-radius:4px;background:var(--text-3);opacity:.4;margin:4px auto 10px;}
+.msheet-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin-bottom:8px;}
+.msheet-list{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.msheet-item{display:flex;align-items:center;gap:9px;padding:11px 10px;border-radius:10px;background:var(--glass);border:1px solid var(--glass-border-soft);font-size:13px;color:var(--text-1);cursor:pointer;}
+.msheet-item svg{width:17px;height:17px;flex-shrink:0;}
+.msheet-item.active{background:color-mix(in srgb, var(--page-accent) 16%, transparent);color:var(--text-0);}
+.msheet-item .label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.msheet-foot{margin-top:12px;border-top:1px solid var(--glass-border-soft);padding-top:12px;}
+.msheet-foot .role-select{width:100%;}
+@media (max-width:768px){
+  .hamburger{display:none !important;}   /* навигация целиком в нижней панели */
+}
+
+/* Мобильная Главная: меню-табличка и краткая сводка */
+.mdash-menu{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:12px;}
+.mdash-tile{display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 4px 9px;border-radius:12px;background:var(--glass);border:1px solid var(--glass-border-soft);cursor:pointer;}
+.mdash-tile.signal{border-color:color-mix(in srgb, var(--page-accent) 35%, transparent);}
+.mdash-ic{position:relative;display:inline-flex;}
+.mdash-ic svg{width:19px;height:19px;}
+.mdash-dot{position:absolute;top:-3px;right:-6px;width:8px;height:8px;border-radius:50%;}
+.mdash-lbl{font-size:9.5px;color:var(--text-2);text-align:center;line-height:1.15;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mdash-nums{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:10px;}
+.mdash-num{background:var(--glass);border:1px solid var(--glass-border-soft);border-radius:11px;padding:9px 8px;text-align:center;cursor:pointer;}
+.mdash-num b{display:block;font-size:19px;font-weight:800;}
+.mdash-num span{font-size:9.5px;color:var(--text-3);line-height:1.15;display:block;margin-top:2px;}
 </style>
 </head>
 <body>
@@ -2349,29 +2378,89 @@ function renderMobileTabBar(){
   const role=ROLES[STATE.role];
   const excluded=getStoreExcludedPages();
   const menu=role.menu.filter(k=>!excluded.includes(k));
-  // приоритетные страницы — первые 4 раздела меню + "tasks" если есть
-  const priority=[...menu.slice(0,5)];
-  const slots=priority.slice(0,5);
-  container.innerHTML=slots.map(key=>{
-    const p=PAGES[key];
-    if(!p) return '';
-    const active=STATE.page===key;
+  /* 4 частых раздела на роль + кнопка «Ещё» со всеми остальными */
+  const MOBILE_TABS={
+    owner:['dashboard','crm','orders','finance'],
+    director:['dashboard','crm','orders','finance'],
+    director2:['dashboard','crm','orders','finance'],
+    senior:['dashboard','crm','orders','warehouse'],
+    seller:['dashboard','crm','orders','team'],
+    master:['dashboard','service','warehouse','team'],
+    courier:['dashboard','deliveries','analytics','docs'],
+    collector:['dashboard','purchase','team','docs'],
+  };
+  let slots=(MOBILE_TABS[STATE.role]||menu.slice(0,4)).filter(k=>menu.includes(k));
+  menu.forEach(k=>{ if(slots.length<4 && !slots.includes(k)) slots.push(k); });
+  slots=slots.slice(0,4);
+  const dotFor=(key)=>{
     let tb=(key==='tasks')?taskBadgeText():'';
     if(key==='tasks' && !isBossRole()) tb = hasNewOpenTasks()?'dot':'';
     if(key==='crm' && !isBossRole()) tb = crmHasFreeNew()?'dotred':(crmNeedsReply()?'dotorange':'');
+    if(key==='crm' && isBossRole()) tb = (crmFreeNewCount()||'')+'';
     if(key==='orders' && !isBossRole()) tb = ordersHasNewSite()?'dotgreen':'';
-    const badge= tb==='dot' ? '<span style="position:absolute;top:-3px;right:-5px;width:9px;height:9px;border-radius:50%;background:var(--warning);"></span>'
+    if(key==='orders' && isBossRole()) tb = (ordersNewSiteCount()||'')+'';
+    if(key==='service'){ try{ tb = svcOverdueCount()? (isBossRole()? String(svcOverdueCount()) : 'dotred') : tb; }catch(e){} }
+    if(key==='purchase' && (isBossRole()||STATE.role==='senior')){ try{ tb = purchaseHasUnseenNew()?'dot':tb; }catch(e){} }
+    return tb||'';
+  };
+  const badgeHtml=(tb)=> tb==='dot' ? '<span style="position:absolute;top:-3px;right:-5px;width:9px;height:9px;border-radius:50%;background:var(--warning);"></span>'
       : tb==='dotred' ? '<span style="position:absolute;top:-3px;right:-5px;width:9px;height:9px;border-radius:50%;background:var(--negative);"></span>'
       : tb==='dotorange' ? '<span style="position:absolute;top:-3px;right:-5px;width:9px;height:9px;border-radius:50%;background:#fb923c;"></span>'
       : tb==='dotgreen' ? '<span style="position:absolute;top:-3px;right:-5px;width:9px;height:9px;border-radius:50%;background:var(--positive);"></span>'
       : tb?'<span style="position:absolute;top:-4px;right:-6px;background:var(--accent);color:#fff;font-size:9px;font-weight:800;min-width:14px;height:14px;line-height:14px;text-align:center;border-radius:20px;padding:0 3px;">'+tb+'</span>':'';
+  let html=slots.map(key=>{
+    const p=PAGES[key];
+    if(!p) return '';
+    const active=STATE.page===key;
     return '<button class="mobile-tab-item'+(active?' active':'')+'" data-mpage="'+key+'" aria-label="'+p.label+'">'+
-      '<span style="position:relative;display:inline-flex;">'+ic(p.icon)+badge+'</span><span>'+p.label+'</span>'+
+      '<span style="position:relative;display:inline-flex;">'+ic(p.icon)+badgeHtml(dotFor(key))+'</span><span>'+p.label+'</span>'+
     '</button>';
   }).join('');
+  /* «Ещё»: точка, если сигнал есть в разделе, которого нет в нижней панели */
+  const restHasSignal=menu.some(k=>!slots.includes(k) && dotFor(k));
+  html+='<button class="mobile-tab-item'+(!slots.includes(STATE.page)&&menu.includes(STATE.page)?' active':'')+'" id="mobileMoreBtn" aria-label="Ещё">'+
+    '<span style="position:relative;display:inline-flex;">'+ic('menu')+(restHasSignal?badgeHtml('dot'):'')+'</span><span>Ещё</span>'+
+  '</button>';
+  container.innerHTML=html;
   container.querySelectorAll('[data-mpage]').forEach(el=>{
     el.addEventListener('click', ()=>navigate(el.dataset.mpage));
   });
+  const more=document.getElementById('mobileMoreBtn');
+  if(more) more.addEventListener('click', openMobileMoreSheet);
+}
+function closeMobileMoreSheet(){
+  const ov=document.getElementById('msheetOverlay');
+  if(ov) ov.remove();
+}
+function openMobileMoreSheet(){
+  closeMobileMoreSheet();
+  const role=ROLES[STATE.role];
+  const excluded=getStoreExcludedPages();
+  const menu=role.menu.filter(k=>!excluded.includes(k));
+  const ov=document.createElement('div');
+  ov.id='msheetOverlay'; ov.className='msheet-overlay';
+  let rows=menu.map(key=>{
+    const p=PAGES[key];
+    let badge='';
+    try{ badge=menuBadgeHtml(key)||''; }catch(e){}
+    return '<div class="msheet-item'+(STATE.page===key?' active':'')+'" data-spage="'+key+'">'+ic(p.icon)+'<span class="label">'+p.label+'</span>'+badge+'</div>';
+  }).join('');
+  ov.innerHTML='<div class="msheet">'+
+    '<div class="msheet-grip"></div>'+
+    '<div class="msheet-title">Все разделы</div>'+
+    '<div class="msheet-list">'+rows+'</div>'+
+    '<div class="msheet-foot">'+
+      '<select class="role-select" id="msheetRole">'+
+        Object.keys(ROLES).map(k=>'<option value="'+k+'" '+(k===STATE.role?'selected':'')+'>'+ROLES[k].label+'</option>').join('')+
+      '</select>'+
+      '<div class="tsub" style="margin-top:8px;text-align:center;">Store Control · сборка '+BUILD_TAG+'</div>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click', e=>{ if(e.target===ov) closeMobileMoreSheet(); });
+  ov.querySelectorAll('[data-spage]').forEach(el=>el.addEventListener('click', ()=>{ closeMobileMoreSheet(); navigate(el.dataset.spage); }));
+  const rs=document.getElementById('msheetRole');
+  if(rs) rs.addEventListener('change', e=>{ closeMobileMoreSheet(); setRole(e.target.value); });
 }
 
 function setRole(role){
@@ -2413,6 +2502,49 @@ function pageGroupColor(key){
   const g=(typeof NAV_GROUPS!=='undefined')? NAV_GROUPS.find(x=>x.keys.includes(key)) : null;
   return (g && g.label && GROUP_COLORS[g.label]) || '#5e8bff';
 }
+
+/* ===== Мобильная Главная: маленькое меню-табличка сверху + краткая сводка (26.07) ===== */
+function isMobileView(){ try{ return window.matchMedia('(max-width:768px)').matches; }catch(e){ return false; } }
+function renderMobileDash(c){
+  const role=ROLES[STATE.role];
+  const excluded=getStoreExcludedPages();
+  const menu=role.menu.filter(k=>!excluded.includes(k));
+  /* плитки меню с цветными точками из общей логики значков */
+  let html='<div class="mdash-menu">'+menu.filter(k=>k!=='dashboard').map(key=>{
+    const p=PAGES[key];
+    let badge=''; try{ badge=menuBadgeHtml(key)||''; }catch(e){}
+    const m=/background:([^;"']+)/.exec(badge);
+    const dot=badge?('<span class="mdash-dot" style="background:'+(m?m[1]:'var(--accent)')+';"></span>'):'';
+    return '<div class="mdash-tile'+(badge?' signal':'')+'" data-mdpage="'+key+'">'+
+      '<span class="mdash-ic">'+ic(p.icon)+dot+'</span><span class="mdash-lbl">'+p.label+'</span></div>';
+  }).join('')+'</div>';
+
+  /* краткая полоса цифр */
+  const nums=[];
+  try{ const n=crmFreeNewCount(); if(n) nums.push({v:n, t:'незабранных заявок', page:'crm', clr:'var(--negative)'}); }catch(e){}
+  try{ const n=isBossRole()?ordersNewSiteCount():((typeof ordersHasNewSite==='function'&&ordersHasNewSite())?1:0); if(n) nums.push({v:n, t:'заказов с сайта', page:'orders', clr:'var(--positive)'}); }catch(e){}
+  try{ const n=svcOverdueCount(); if(n && menu.includes('service')) nums.push({v:n, t:'просроч. ремонтов', page:'service', clr:'var(--negative)'}); }catch(e){}
+  try{ const n=(DATA.service||[]).filter(t=>t.status==='progress').length; if(n && STATE.role==='master') nums.push({v:n, t:'ремонтов в работе', page:'service', clr:'var(--accent)'}); }catch(e){}
+  try{ const t=(DATA.timeOffRequests||[]).filter(r=>r.status==='pending').length; if(t && isBossRole()) nums.push({v:t, t:'заявок на отгул', page:'team', clr:'var(--warning)'}); }catch(e){}
+  if(nums.length){
+    html+='<div class="mdash-nums">'+nums.slice(0,3).map(n=>
+      '<div class="mdash-num" data-mdpage="'+n.page+'"><b style="color:'+n.clr+';">'+n.v+'</b><span>'+n.t+'</span></div>').join('')+'</div>';
+  }
+
+  /* сегодня на смене — одной строкой */
+  try{
+    const list=DATA.employees.filter(e=>!e.support && shiftForAt(e, schedToday(), STATE.activeStoreId));
+    html+='<div class="card" style="margin-bottom:10px;padding:10px 12px;"><div class="tsub">Сегодня на смене · '+escHtml((STORES.find(s=>s.id===STATE.activeStoreId)||{}).shortName||'')+'</div>'+
+      '<div style="margin-top:5px;font-weight:600;">'+(list.length?list.map(e=>(e.role==='Мастер'?'🔧 ':'')+escHtml(e.name)).join(', '):'никого')+'</div></div>';
+  }catch(e){}
+
+  html+='<button class="btn" id="mdashFull" style="width:100%;justify-content:center;">Полная сводка ↓</button>';
+  c.innerHTML=html;
+  c.querySelectorAll('[data-mdpage]').forEach(el=>el.addEventListener('click', ()=>navigate(el.dataset.mdpage)));
+  const fb=document.getElementById('mdashFull');
+  if(fb) fb.addEventListener('click', ()=>{ STATE.dashFull=true; renderPage(); });
+}
+
 function renderPage(){
   const p=PAGES[STATE.page];
   const activeStore=STORES.find(s=>s.id===STATE.activeStoreId);
@@ -2425,8 +2557,21 @@ function renderPage(){
   c.classList.remove('page-fade');
   if(STATE.page!=='pricing'){ const fab=document.getElementById('pricingResultFab'); if(fab) fab.remove(); }
 
+  if(STATE.page==='dashboard' && isMobileView() && !STATE.dashFull){
+    renderMobileDash(c);
+    requestAnimationFrame(()=>c.classList.add('page-fade'));
+    return;
+  }
+  if(STATE.page!=='dashboard') STATE.dashFull=false;
   const renderers={dashboard:renderDashboard, crm:renderCrm, orders:renderOrders, service:renderService, warehouse:renderWarehouse, purchase:renderPurchase, collection:renderCollection, receiving:renderReceiving, customers:renderCustomers, messages:renderMessages, pricing:renderPricing, finance:renderFinance, accounting:renderAccounting, expenses:renderExpenses, tasks:renderTasks, analytics:renderAnalytics, team:renderTeam, manage:renderManage, deliveries:renderDeliveries, docs:renderDocs};
   renderers[STATE.page](c);
+  if(STATE.page==='dashboard' && isMobileView() && STATE.dashFull){
+    const back=document.createElement('button');
+    back.className='btn btn-sm'; back.style.cssText='width:100%;justify-content:center;margin-bottom:12px;';
+    back.textContent='↑ Компактная Главная';
+    back.addEventListener('click', ()=>{ STATE.dashFull=false; renderPage(); });
+    c.insertBefore(back, c.firstChild);
+  }
   requestAnimationFrame(()=>c.classList.add('page-fade'));
 }
 
@@ -16651,7 +16796,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='26.07-11';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='26.07-13';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
