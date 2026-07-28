@@ -6,6 +6,9 @@
    • GET  /form        — страница с формой заявки для клиентов (form.html)
    • POST /api/lead    — приём заявки с формы (публично)
    • GET  /api/leads   — выдача заявок в ERP (по секретному токену)
+   • POST /api/notify    — уведомление в Telegram владельцу (по токену)
+   • GET  /api/telegram/chats — подсказка: показать chat_id (по токену)
+   • POST /api/send-mail — реальная отправка письма клиенту (по токену)
    • GET  /api/health  — проверка: жив ли сервер и подключена ли БД
 
    ХРАНЕНИЕ ЗАЯВОК:
@@ -20,6 +23,9 @@
    • Environment:
        STORE_TOKEN  = ваш длинный секрет
        DATABASE_URL = Internal Database URL вашей базы PostgreSQL на Render
+       TELEGRAM_BOT_TOKEN = токен бота из @BotFather (для /api/notify)
+       TELEGRAM_CHAT_IDS  = chat_id получателей через запятую
+       SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM = почта (для /api/send-mail)
 ============================================================ */
 const http = require('http');
 const fs = require('fs');
@@ -113,6 +119,68 @@ function sendFile(res, file) {
   });
 }
 
+
+/* ---------- Telegram-уведомления ---------- */
+const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const TG_CHATS = (process.env.TELEGRAM_CHAT_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+
+async function tgSend(text) {
+  if (!TG_TOKEN) return { error: 'TELEGRAM_BOT_TOKEN не задан в Environment' };
+  if (!TG_CHATS.length) return { error: 'TELEGRAM_CHAT_IDS не задан в Environment' };
+  const results = [];
+  for (const chat of TG_CHATS) {
+    try {
+      const r = await fetch('https://api.telegram.org/bot' + TG_TOKEN + '/sendMessage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chat, text: String(text).slice(0, 4000) })
+      });
+      const j = await r.json();
+      results.push({ chat, ok: !!j.ok, error: j.ok ? null : (j.description || 'ошибка') });
+    } catch (e) { results.push({ chat, ok: false, error: e.message }); }
+  }
+  return { ok: results.some(x => x.ok), results };
+}
+
+/* ---------- Почта (SMTP через nodemailer) ---------- */
+let nodemailer = null;
+try { nodemailer = require('nodemailer'); }
+catch (e) { console.log('Модуль nodemailer не установлен — /api/send-mail будет отвечать ошибкой'); }
+
+function mailTransport() {
+  if (!nodemailer) return null;
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER) return null;
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT || '465'),
+    secure: process.env.SMTP_SECURE !== 'false',   // 465 = SSL (Яндекс/Mail.ru по умолчанию)
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+  });
+}
+
+async function mailSend(to, subject, body, isHtml) {
+  const t = mailTransport();
+  if (!t) return { error: 'Почта не настроена: нужны SMTP_HOST/SMTP_USER/SMTP_PASS (и nodemailer в package.json)' };
+  const msg = {
+    from: process.env.MAIL_FROM || process.env.SMTP_USER,
+    to: String(to).slice(0, 200),
+    subject: String(subject || 'iMagnate').slice(0, 300)
+  };
+  if (isHtml) msg.html = String(body || ''); else msg.text = String(body || '');
+  const info = await t.sendMail(msg);
+  return { ok: true, id: info.messageId };
+}
+
+function checkToken(req, url) {
+  const auth = req.headers.authorization || ('Bearer ' + (url.searchParams.get('token') || ''));
+  return auth === 'Bearer ' + STORE_TOKEN;
+}
+function readBody(req, cb) {
+  let raw = '';
+  req.on('data', ch => { raw += ch; if (raw.length > 200000) req.destroy(); });
+  req.on('end', () => { let b = {}; try { b = JSON.parse(raw || '{}'); } catch (e) {} cb(b); });
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -179,6 +247,52 @@ const server = http.createServer((req, res) => {
       sendJson(res, 200, { leads: db.leads.filter(l => l.id > since), db: 'file' });
     })();
     return;
+  }
+
+  /* ---- Уведомление в Telegram (из ERP, по токену) ---- */
+  if (req.method === 'POST' && url.pathname === '/api/notify') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return readBody(req, async b => {
+      if (!b.text) return sendJson(res, 400, { error: 'Нужен text' });
+      const r = await tgSend(b.text);
+      console.log('[telegram]', b.text.slice(0, 80), JSON.stringify(r).slice(0, 200));
+      sendJson(res, r.ok ? 200 : 500, r);
+    });
+  }
+
+  /* ---- Подсказка: узнать chat_id (напишите боту что-нибудь и откройте этот адрес) ---- */
+  if (req.method === 'GET' && url.pathname === '/api/telegram/chats') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    if (!TG_TOKEN) return sendJson(res, 500, { error: 'TELEGRAM_BOT_TOKEN не задан' });
+    (async () => {
+      try {
+        const r = await fetch('https://api.telegram.org/bot' + TG_TOKEN + '/getUpdates');
+        const j = await r.json();
+        const chats = {};
+        (j.result || []).forEach(u => {
+          const c = u.message && u.message.chat;
+          if (c) chats[c.id] = (c.first_name || '') + ' ' + (c.last_name || '') + (c.username ? ' @' + c.username : '');
+        });
+        sendJson(res, 200, { ok: true, chats, hint: 'Возьмите нужный chat_id и впишите в TELEGRAM_CHAT_IDS на Render' });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    })();
+    return;
+  }
+
+  /* ---- Реальная отправка письма клиенту (из ERP, по токену) ---- */
+  if (req.method === 'POST' && url.pathname === '/api/send-mail') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return readBody(req, async b => {
+      if (!b.to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(b.to))) return sendJson(res, 400, { error: 'Некорректный адрес получателя' });
+      try {
+        const r = await mailSend(b.to, b.subject, b.body, b.isHtml);
+        console.log('[почта]', b.to, (b.subject || '').slice(0, 60), r.ok ? 'ok' : r.error);
+        sendJson(res, r.ok ? 200 : 500, r);
+      } catch (e) {
+        console.error('[почта] ошибка:', e.message);
+        sendJson(res, 500, { error: e.message });
+      }
+    });
   }
 
   sendJson(res, 404, { error: 'Неизвестный запрос' });
