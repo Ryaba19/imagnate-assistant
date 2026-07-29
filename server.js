@@ -8,6 +8,8 @@
    • POST /api/notify    — уведомление в Telegram владельцу (по токену)
    • GET  /api/telegram/chats — подсказка: показать chat_id (по токену)
    • POST /api/send-mail — реальная отправка письма клиенту (по токену)
+   • GET  /api/lead-test — создать ТЕСТОВУЮ заявку одной ссылкой (по токену):
+     проверка всего боевого пути «сайт → база → ERP → Telegram»
    • GET/POST /api/state — облачная копия базы ERP (по токену): данные
      системы живут и на компе владельца, и здесь — побеждает свежий снимок
    • GET  /api/health  — проверка: жив ли сервер и подключена ли БД
@@ -336,6 +338,36 @@ const server = http.createServer((req, res) => {
         sendJson(res, 500, { error: e.message });
       }
     });
+  }
+
+  /* ---- Тестовая заявка одной ссылкой (по токену): полный боевой путь ---- */
+  if (req.method === 'GET' && url.pathname === '/api/lead-test') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    const topic = ['buy', 'tradein', 'repair', 'question'].includes(url.searchParams.get('topic')) ? url.searchParams.get('topic') : 'buy';
+    const stamp = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
+    const lead = {
+      name: 'ТЕСТ ' + (topic === 'repair' ? 'Ремонт' : 'Заказ'),
+      phone: '+7 900 000-00-00',
+      topic,
+      item: topic === 'repair' ? 'Тестовое устройство' : 'Тестовый товар',
+      comment: 'Тестовая заявка (создана ссылкой /api/lead-test, ' + stamp + ') — можно удалить',
+      page: 'test',
+      ip: 'test'
+    };
+    (async () => {
+      try {
+        if (pool) {
+          const r = await dbAddLead(lead);
+          console.log('[тест-заявка → БД]', r.id, topic);
+          return sendJson(res, 200, { ok: true, id: r.id, topic, hint: 'Заявка в базе. В течение минуты появится в системе (' + (topic === 'repair' ? 'Сервис' : 'Заказы') + ') и придёт уведомление в Telegram.' });
+        }
+        const db = readDb();
+        const rec = Object.assign({ id: db.nextId++, at: new Date().toISOString() }, lead);
+        db.leads.push(rec); writeDb(db);
+        sendJson(res, 200, { ok: true, id: rec.id, topic });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    })();
+    return;
   }
 
   /* ---- Облачная база ERP: отдать снимок (по токену) ---- */
