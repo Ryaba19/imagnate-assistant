@@ -7747,10 +7747,18 @@ function renderIntegrationsTab(){
       field('Опрос', creds?'каждые 15 секунд':'—')+
       ((st&&st.stores&&st.stores.length)?field('Аккаунты точек', st.stores.map(s=>((STORE_DATA[s]||{}).storeName)||s).join(', ')):'')+
     '</div>';
+    const imp=st&&st.importStatus;
+    if(imp && (imp.running||imp.done)){
+      html+='<div class="tsub" style="margin-top:6px;">⇊ Импорт переписки: чатов '+(imp.chats||0)+', новых сообщений '+(imp.msgs||0)+
+        (imp.errors?', недоступных чатов '+imp.errors:'')+
+        (imp.running?' — идёт…':' — завершён')+
+        (imp.note?' <span style="color:var(--warning);">('+escHtml(imp.note)+')</span>':'')+'</div>';
+    }
     if(isOwner){
       html+='<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">'+
         '<button class="btn btn-sm btn-primary" data-ch-check="'+ch+'">'+ic('refresh')+' Проверить связь</button>'+
         '<button class="btn btn-sm" data-setup-ch="'+ch+'">Как подключить</button>'+
+        (ch==='avito'?'<button class="btn btn-sm" data-avito-import="1">⇊ Импорт всей переписки</button>':'')+
       '</div>';
     }
     html+='</div>';
@@ -8001,6 +8009,9 @@ function importChannelMessages(list){
       return;
     }
     if(!l){
+      /* старое сообщение (архив/догон) — не повод создавать заявку:
+         переписка хранится на сервере и подтянется, если клиент напишет снова */
+      if(m.tsMs && m.tsMs < Date.now()-3*86400000) return;
       const lid=(target.leads.length?Math.max(...target.leads.map(x=>x.id||0)):7300)+1;
       l={id:lid, channel:m.channel, externalId:m.key, chatKey:ck, chatId:String(m.chatId), sourceUrl:'', source:'sync',
         name:(m.name||'').trim()||('Клиент '+((CHANNELS[m.channel]||{}).label||m.channel)),
@@ -8009,6 +8020,7 @@ function importChannelMessages(list){
         notes:[{date:DATA.today, text:'Заявка пришла из канала '+((CHANNELS[m.channel]||{}).label||m.channel)}]};
       target.leads.unshift(l);
       added++;
+      channelHistoryMerge(l);   /* подтянуть в диалог всю прошлую переписку этого чата из архива на сервере */
     }
     const mid=(l.msgs.length?Math.max(...l.msgs.map(x=>x.id||0)):0)+1;
     const d=m.tsMs?new Date(m.tsMs):new Date();
@@ -8048,6 +8060,100 @@ function tgWatchNewChannelLeads(){
   }catch(e){}
 }
 
+/* ============================================================
+   «ДИАЛОГИ» — архив всей переписки (только владелец).
+   Список чатов и переписка читаются с сервера (там они вечные),
+   на воронку не влияют.
+============================================================ */
+async function loadDialogArchive(c){
+  const box=document.getElementById('dlgArch');
+  if(!box) return;
+  const creds=erpServerCreds();
+  if(!creds){ box.innerHTML='<div class="card"><div class="empty"><b>Сервер не подключён</b><span>Заполните адрес API и токен в шестерёнке раздела «Заказы».</span></div></div>'; return; }
+  try{
+    const r=await fetch(creds.api+'/channels/chats', {headers:{'Authorization':'Bearer '+creds.token}});
+    const j=await r.json();
+    if(!j || !j.ok){ box.innerHTML='<div class="card"><div class="tsub" style="color:var(--negative);">Сервер: '+escHtml((j&&j.error)||'нет ответа')+'</div></div>'; return; }
+    if(!(j.chats||[]).length){ box.innerHTML='<div class="card"><div class="empty"><b>Архив пока пуст</b><span>Сообщения начнут копиться по мере переписки. Старую историю Авито можно затянуть кнопкой «⇊ Импорт всей переписки» на вкладке Интеграции.</span></div></div>'; return; }
+    box.innerHTML='<div class="card" style="padding:0;">'+j.chats.map(ch=>{
+      const d=ch.lastTs?new Date(ch.lastTs):null;
+      const when=d?(ruDateStr(d)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')):'—';
+      return '<div class="hist-row" style="cursor:pointer;padding:10px 14px;" data-arch-chat="'+escAttr(ch.channel)+'|'+escAttr(ch.chatId)+'">'+
+        '<div style="min-width:0;flex:1;">'+
+          '<div class="h-main">'+channelBadge(ch.channel)+' <b>'+escHtml(ch.name||'Клиент')+'</b>'+(ch.item?' <span class="tsub">· '+escHtml(ch.item)+'</span>':'')+'</div>'+
+          '<div class="h-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(ch.lastDir==='out'?'↦ ':'')+escHtml((ch.lastText||'').slice(0,90))+'</div>'+
+        '</div>'+
+        '<div class="h-sub mono" style="text-align:right;flex-shrink:0;">'+when+'<br>'+ch.cnt+' сообщ.</div>'+
+      '</div>';
+    }).join('')+'</div>';
+    box.querySelectorAll('[data-arch-chat]').forEach(el=>el.addEventListener('click',()=>{
+      const p=el.dataset.archChat.split('|');
+      openArchiveChatModal(p[0], p.slice(1).join('|'), c);
+    }));
+  }catch(e){ box.innerHTML='<div class="card"><div class="tsub" style="color:var(--negative);">Нет связи с сервером: '+escHtml(e.message)+'</div></div>'; }
+}
+
+async function openArchiveChatModal(channel, chatId, c){
+  const creds=erpServerCreds();
+  if(!creds) return;
+  openModal('Переписка — загрузка…', channelBadge(channel), '<div class="tsub">Читаю архив с сервера…</div>', []);
+  try{
+    const r=await fetch(creds.api+'/channels/history?channel='+encodeURIComponent(channel)+'&chatId='+encodeURIComponent(chatId), {headers:{'Authorization':'Bearer '+creds.token}});
+    const j=await r.json();
+    if(!j || !j.ok) throw new Error((j&&j.error)||'нет ответа');
+    const msgs=(j.messages||[]).slice().sort((a,b)=>(a.tsMs||0)-(b.tsMs||0));
+    const name=(msgs.filter(m=>m.dir==='in'&&m.name).map(m=>m.name)[0])||'Клиент';
+    const item=(msgs.filter(m=>m.item).map(m=>m.item)[0])||'';
+    let body=(item?'<div class="tsub" style="margin-bottom:8px;">Интересовался: <b>'+escHtml(item)+'</b></div>':'');
+    body+='<div class="ld-msgs" style="max-height:52vh;">'+
+      (msgs.length? msgs.map(m=>{
+        const d=m.tsMs?new Date(m.tsMs):null;
+        const when=d?(ruDateStr(d)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')):'';
+        return '<div class="ld-msg '+(m.dir==='in'?'in':'out')+'">'+escHtml(m.text||'')+'<span class="t">'+(m.dir==='in'?escHtml(name):'мы')+' · '+when+'</span></div>';
+      }).join('') : '<div class="ld-sys">Пусто</div>')+
+    '</div>';
+    /* если по этому чату есть активная заявка — быстрый переход */
+    let leadBtn=[];
+    let lead=null;
+    Object.values(STORE_DATA).forEach(d=>{ (d.leads||[]).forEach(x=>{ if(x.chatKey===channel+'_'+chatId && !['won','lost'].includes(x.stage)) lead=x; }); });
+    if(lead){ const lid=lead.id; leadBtn=[{label:'Открыть заявку', cls:'btn-primary', action:()=>{ closeModal(); openLeadDialog(lid, c||document.getElementById('pageContent')); }}]; }
+    openModal('Переписка — '+escHtml(name), channelBadge(channel)+' архив · '+msgs.length+' сообщ.', body, leadBtn);
+    const bx=document.querySelector('#modalBox .ld-msgs');
+    if(bx) bx.scrollTop=bx.scrollHeight;
+  }catch(e){
+    openModal('Переписка', channelBadge(channel), '<div class="tsub" style="color:var(--negative);">Не удалось прочитать архив: '+escHtml(e.message)+'</div>', []);
+  }
+}
+
+/* Архив переписки: при появлении заявки подтягиваем в диалог всю
+   прошлую переписку этого чата, сохранённую на сервере */
+async function channelHistoryMerge(l){
+  try{
+    const creds=erpServerCreds();
+    if(!creds || !l || !l.chatId) return;
+    const r=await fetch(creds.api+'/channels/history?channel='+encodeURIComponent(l.channel)+'&chatId='+encodeURIComponent(l.chatId), {headers:{'Authorization':'Bearer '+creds.token}});
+    const j=await r.json();
+    if(!j || !j.ok || !Array.isArray(j.messages)) return;
+    let addedH=0;
+    j.messages.forEach(m=>{
+      if(!m || !m.key) return;
+      if(l.msgs.some(x=>x.key===m.key)) return;
+      const txt=String(m.text||'');
+      if(m.dir==='out' && l.msgs.some(x=>x.dir==='out' && x.text===txt)) return;
+      const d=m.tsMs?new Date(m.tsMs):new Date();
+      l.msgs.push({id:(l.msgs.length?Math.max(...l.msgs.map(x=>x.id||0)):0)+1, dir:(m.dir==='out'?'out':'in'), text:txt,
+        at:ruDateStr(d)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'),
+        status:(m.dir==='out'?'sent':'received'), key:m.key, tsMs:m.tsMs||0});
+      addedH++;
+    });
+    if(addedH){
+      l.msgs.sort((a,b)=>(a.tsMs||0)-(b.tsMs||0));
+      try{ fullSave(); }catch(e){}
+      if(STATE.page==='crm'){ try{ refreshCrm(document.getElementById('pageContent')); }catch(e){} }
+    }
+  }catch(e){}
+}
+
 /* Ответ клиенту в его канал (через сервер, где лежат ключи) */
 async function channelReply(l, text){
   const creds=erpServerCreds();
@@ -8068,6 +8174,22 @@ function wireIntegrations(c){
   c.querySelectorAll('[data-ch-check]').forEach(el=>el.addEventListener('click',()=>{
     toast('Опрашиваю каналы через сервер…','info');
     channelsSyncNow(true).then(()=>{ try{ renderCrm(c); }catch(e){} });
+  }));
+  c.querySelectorAll('[data-avito-import]').forEach(el=>el.addEventListener('click',()=>{
+    const body='<div class="tsub" style="line-height:1.6;">Сервер обойдёт <b>все чаты Авито</b> и сохранит всю их переписку в нашу базу навсегда. '+
+      'Работает в фоне, займёт от пары минут до получаса (бережно к лимитам Авито). Прогресс — на карточке Авито.<br><br>'+
+      'В воронку старые диалоги не падают — они хранятся в базе и автоматически подтягиваются в диалог, когда клиент пишет снова.<br><br>'+
+      '<b>Честно:</b> без подписки Авито часть старых чатов может ответить отказом (402) — они посчитаются как «недоступные», всё остальное сохранится.</div>';
+    openModal('⇊ Импорт всей переписки Авито','',body,[{label:'Запустить импорт', cls:'btn-primary', action:async()=>{
+      closeModal();
+      const creds=erpServerCreds();
+      if(!creds){ toast('Сервер не подключён','error'); return; }
+      try{
+        const r=await fetch(creds.api+'/avito/import-all',{method:'POST',headers:{'Authorization':'Bearer '+creds.token}});
+        const j=await r.json();
+        toast(j&&j.ok?(j.hint||'Импорт запущен'):'Ошибка: '+((j&&j.error)||'нет ответа'), j&&j.ok?'success':'error');
+      }catch(e){ toast('Нет связи с сервером: '+e.message,'error'); }
+    }}]);
   }));
 }
 
@@ -8453,6 +8575,7 @@ function renderCrm(c){
     '<div class="chip-tab '+(STATE.crmTab==='funnel'?'active':'')+'" data-crmtab="funnel">Воронка</div>'+
     '<div class="chip-tab '+(STATE.crmTab==='integrations'?'active':'')+'" data-crmtab="integrations">Интеграции'+
       (broken?' <span style="color:var(--negative);">('+broken+')</span>':' ('+connectedChannels().length+')')+'</div>'+
+    (isBossRole()?'<div class="chip-tab '+(STATE.crmTab==='dialogs'?'active':'')+'" data-crmtab="dialogs">💬 Диалоги</div>':'')+
     '<div class="chip-tab '+(STATE.crmTab==='ai'?'active':'')+'" data-crmtab="ai">🤖 ИИ-агент</div>'+
   '</div></div>';
 
@@ -8469,6 +8592,16 @@ function renderCrm(c){
       DATA.aiAgent.stopWords=document.getElementById('aiStop').value.split(',').map(x=>x.trim()).filter(Boolean);
       toast('Настройки ИИ-агента сохранены', 'success');
     });
+    return;
+  }
+  if(STATE.crmTab==='dialogs' && isBossRole()){
+    html+='<div class="card" style="margin-bottom:12px;">'+
+      '<div class="tsub" style="line-height:1.55;">Архив всей переписки со всех каналов — хранится на нашем сервере навсегда, виден только владельцу. '+
+      'Сюда попадает каждое сообщение (и клиентов, и сотрудников), независимо от воронки. Кнопка «⇊ Импорт всей переписки» на карточке Авито добирает старую историю.</div></div>'+
+      '<div id="dlgArch"><div class="tsub">Загружаю архив с сервера…</div></div>';
+    c.innerHTML=html;
+    c.querySelectorAll('[data-crmtab]').forEach(el=>el.addEventListener('click',()=>{ STATE.crmTab=el.dataset.crmtab; renderCrm(c); }));
+    loadDialogArchive(c);
     return;
   }
   if(STATE.crmTab==='integrations'){
@@ -17642,7 +17775,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-18';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-22';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];

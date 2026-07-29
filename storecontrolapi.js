@@ -615,6 +615,64 @@ async function channelsPollAll(deep) {
 }
 const CH_SENDSET = { avito: avitoSend, telegram: tgSendSet, vk: vkSendSet, max: maxSendSet };
 
+/* ---------- ПОЛНЫЙ ИМПОРТ ПЕРЕПИСКИ АВИТО (фоновая задача) ----------
+   Постранично обходит ВСЕ чаты и ВСЮ глубину истории каждого чата,
+   складывает в нашу базу (дедупликация по key). Бережно к лимитам:
+   пауза между запросами. Прогресс виден в /api/channels/status.
+   Без подписки Авито часть чатов ответит 402 — посчитаем в errors. */
+let avitoImport = null;
+async function avitoImportAll() {
+  if (avitoImport && avitoImport.running) return;
+  const sets = envSets(CH_ENV_NAMES.avito);
+  avitoImport = { running: true, chats: 0, msgs: 0, errors: 0, done: false, note: sets.length ? '' : 'нет ключей' };
+  chState.avito.importStatus = avitoImport;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  try {
+    for (const set of sets) {
+      const uid = await avitoUid(set);
+      for (let offset = 0; offset < 2000; offset += 50) {
+        const j = await avitoApi(set, '/messenger/v2/accounts/' + uid + '/chats?limit=50&offset=' + offset);
+        const chats = j.chats || [];
+        if (!chats.length) break;
+        for (const chat of chats) {
+          avitoImport.chats++;
+          const other = (chat.users || []).find(u => u.id !== uid) || {};
+          const item = (chat.context && chat.context.value && chat.context.value.title) || '';
+          try {
+            for (let mo = 0; mo < 5000; mo += 100) {
+              const mj = await avitoApi(set, '/messenger/v3/accounts/' + uid + '/chats/' + chat.id + '/messages/?limit=100&offset=' + mo);
+              const msgs = Array.isArray(mj) ? mj : (mj.messages || []);
+              if (!msgs.length) break;
+              for (const m of msgs) {
+                const dir = (m.author_id === uid) ? 'out' : 'in';
+                const text = (m.content && (m.content.text ||
+                  (m.content.link && m.content.link.url) ||
+                  (m.content.location && 'Геолокация') ||
+                  (m.content.call && 'Звонок'))) || (m.type === 'image' ? '[изображение]' : '');
+                if (!text) continue;
+                if (await chStore({ key: 'av_' + m.id, store: set.store, channel: 'avito', chatId: String(chat.id), dir,
+                  name: dir === 'in' ? (other.name || 'Клиент Авито') : '', contact: '', item: String(item).slice(0, 120),
+                  text: String(text).slice(0, 2000), tsMs: (m.created || 0) * 1000 })) avitoImport.msgs++;
+              }
+              if (msgs.length < 100) break;
+              await sleep(350);
+            }
+          } catch (e) {
+            avitoImport.errors++;
+            avitoImport.note = String(e.message || e).slice(0, 140);
+          }
+          await sleep(350);
+        }
+        if (chats.length < 50) break;
+        await sleep(350);
+      }
+    }
+  } catch (e) { avitoImport.note = String(e.message || e).slice(0, 140); }
+  avitoImport.running = false;
+  avitoImport.done = true;
+  console.log('[импорт авито] чатов ' + avitoImport.chats + ', новых сообщений ' + avitoImport.msgs + ', недоступных чатов ' + avitoImport.errors);
+}
+
 /* ============================================================
    ВЕБХУКИ: платформы САМИ присылают новые сообщения мгновенно.
    Опрос остаётся страховкой — дедупликация по key исключает дубли.
@@ -684,7 +742,7 @@ const server = http.createServer((req, res) => {
 
   /* ---- Страницы ---- */
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return sendFile(res, 'index.html');
-  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-21' });
+  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-22' });
 
   /* ---- Сайт отправляет заявку (публично) ---- */
   if (req.method === 'POST' && url.pathname === '/api/lead') {
@@ -1003,6 +1061,71 @@ const server = http.createServer((req, res) => {
         sendJson(res, 500, { error: String(e.message || e).slice(0, 300) });
       }
     });
+  }
+
+  /* ---- Полный импорт переписки Авито: запуск фоновой задачи (по токену) ---- */
+  if (req.method === 'POST' && url.pathname === '/api/avito/import-all') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    if (avitoImport && avitoImport.running) return sendJson(res, 200, { ok: true, started: false, hint: 'Импорт уже идёт' });
+    avitoImportAll().catch(e => console.error('[импорт авито]', e.message));
+    return sendJson(res, 200, { ok: true, started: true, hint: 'Импорт запущен в фоне — прогресс на карточке Авито' });
+  }
+
+  /* ---- Архив: список всех чатов со всеми каналами (по токену) ---- */
+  if (req.method === 'GET' && url.pathname === '/api/channels/chats') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    (async () => {
+      try {
+        let chats;
+        if (pool) {
+          const r = await pool.query(
+            "SELECT channel, chat_id AS \"chatId\", max(ts_ms) AS \"lastTs\", count(*) AS cnt, " +
+            "(array_agg(name ORDER BY ts_ms DESC) FILTER (WHERE dir='in' AND name<>''))[1] AS name, " +
+            "(array_agg(item ORDER BY ts_ms DESC) FILTER (WHERE item<>''))[1] AS item, " +
+            "(array_agg(text_ ORDER BY ts_ms DESC))[1] AS \"lastText\", " +
+            "(array_agg(dir ORDER BY ts_ms DESC))[1] AS \"lastDir\", " +
+            "(array_agg(store ORDER BY ts_ms DESC))[1] AS store " +
+            'FROM channel_msgs GROUP BY channel, chat_id ORDER BY max(ts_ms) DESC LIMIT 300');
+          chats = r.rows.map(x => Object.assign({}, x, { lastTs: Number(x.lastTs), cnt: Number(x.cnt) }));
+        } else {
+          const by = {};
+          chFile().forEach(m => {
+            const k = m.channel + '|' + m.chatId;
+            const c = by[k] = by[k] || { channel: m.channel, chatId: String(m.chatId), lastTs: 0, cnt: 0, name: '', item: '', lastText: '', lastDir: '', store: m.store };
+            c.cnt++;
+            if ((m.tsMs || 0) >= c.lastTs) { c.lastTs = m.tsMs || 0; c.lastText = m.text || ''; c.lastDir = m.dir; if (m.store) c.store = m.store; }
+            if (m.dir === 'in' && m.name) c.name = m.name;
+            if (m.item) c.item = m.item;
+          });
+          chats = Object.values(by).sort((a, b) => b.lastTs - a.lastTs).slice(0, 300);
+        }
+        sendJson(res, 200, { ok: true, count: chats.length, chats });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    })();
+    return;
+  }
+
+  /* ---- Вся сохранённая переписка одного чата (по токену) ---- */
+  if (req.method === 'GET' && url.pathname === '/api/channels/history') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    const ch = url.searchParams.get('channel') || '';
+    const cid = url.searchParams.get('chatId') || '';
+    if (!ch || !cid) return sendJson(res, 400, { error: 'Нужны channel и chatId' });
+    (async () => {
+      try {
+        let msgs;
+        if (pool) {
+          const r = await pool.query(
+            'SELECT key, channel, chat_id AS "chatId", dir, name, contact, item, text_ AS text, ts_ms AS "tsMs" FROM channel_msgs WHERE channel=$1 AND chat_id=$2 ORDER BY ts_ms LIMIT 500',
+            [ch, cid]);
+          msgs = r.rows.map(x => Object.assign({}, x, { tsMs: Number(x.tsMs) }));
+        } else {
+          msgs = chFile().filter(x => x.channel === ch && String(x.chatId) === cid).slice(0, 500);
+        }
+        sendJson(res, 200, { ok: true, count: msgs.length, messages: msgs });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    })();
+    return;
   }
 
   /* ---- Каналы воронки: последние собранные сообщения — диагностика (по токену) ---- */
