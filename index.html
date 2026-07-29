@@ -7700,7 +7700,7 @@ function renderIntegrationsTab(){
 
   ['avito','telegram','vk','max','whatsapp'].forEach(ch=>{
     const meta=CHANNELS[ch];
-    const leadsCount=((home.leads)||[]).filter(l=>l.channel===ch && l.chatKey).length;
+    const leadsCount=Object.values(STORE_DATA).reduce((s,d)=>s+((d.leads||[]).filter(l=>l.channel===ch && l.chatKey).length),0);
 
     if(ch==='whatsapp'){
       html+='<div class="card" style="opacity:.75;">'+
@@ -7744,6 +7744,7 @@ function renderIntegrationsTab(){
     html+='<div class="field-grid" style="margin-top:10px;">'+
       field('Заявок из канала', String(leadsCount))+
       field('Опрос', creds?'каждые 15 секунд':'—')+
+      ((st&&st.stores&&st.stores.length)?field('Аккаунты точек', st.stores.map(s=>((STORE_DATA[s]||{}).storeName)||s).join(', ')):'')+
     '</div>';
     if(isOwner){
       html+='<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">'+
@@ -7892,6 +7893,9 @@ setInterval(()=>{ try{ strapiRepairsSync(true); }catch(e){} }, SITE_POLL_MS);
 /* слежение за изменениями статусов на сайте */
 setTimeout(()=>{ try{ strapiStatusRefresh(); }catch(e){} }, 5000);
 setInterval(()=>{ try{ strapiStatusRefresh(); }catch(e){} }, 60000);
+/* полная сверка активных заказов с сайтом: сразу после запуска и раз в 10 минут */
+setTimeout(()=>{ try{ strapiStatusFullSweep(); }catch(e){} }, 8000);
+setInterval(()=>{ try{ strapiStatusFullSweep(); }catch(e){} }, 600000);
 
 /* ============================================================
    КАНАЛЫ ВОРОНКИ (боевые): Авито / Telegram-личка / ВК / MAX.
@@ -7914,7 +7918,7 @@ async function channelsSyncNow(manual){
     const home=chHomeStore();
     const r=await fetch(creds.api+'/channels/poll', {method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+creds.token},
-      body:JSON.stringify({sinceMs: home.chCursorMs||0})});
+      body:JSON.stringify({sinceMs: home.chCursorMs||0, deep:!!manual})});
     const j=await r.json();
     if(!j || !j.ok){ if(manual) toast('Сервер каналов: '+((j&&j.error)||'нет ответа'),'error'); return 0; }
     window._chSrvStatus=j.status||{};
@@ -7939,16 +7943,19 @@ function importChannelMessages(list){
     if((m.tsMs||0)>maxTs) maxTs=m.tsMs;
     if(seen[m.key]) return;
     seen[m.key]=m.tsMs||1;
+    /* франшиза: сообщение помечено магазином — заявка падает в свою точку */
+    const target=(m.store && STORE_DATA[m.store]) ? STORE_DATA[m.store] : home;
+    target.leads=target.leads||[];
     const ck=m.channel+'_'+m.chatId;
-    let l=home.leads.find(x=>x.chatKey===ck && !['won','lost'].includes(x.stage));
+    let l=target.leads.find(x=>x.chatKey===ck && !['won','lost'].includes(x.stage));
     if(!l){
-      const lid=(home.leads.length?Math.max(...home.leads.map(x=>x.id||0)):7300)+1;
+      const lid=(target.leads.length?Math.max(...target.leads.map(x=>x.id||0)):7300)+1;
       l={id:lid, channel:m.channel, externalId:m.key, chatKey:ck, chatId:String(m.chatId), sourceUrl:'', source:'sync',
         name:(m.name||'').trim()||('Клиент '+((CHANNELS[m.channel]||{}).label||m.channel)),
         contact:(m.contact||'').trim(), topic:'none', item:m.item||'', stage:'new', owner:null,
         createdAt:DATA.today, lastTouch:DATA.today, msgs:[], unread:0,
         notes:[{date:DATA.today, text:'Заявка пришла из канала '+((CHANNELS[m.channel]||{}).label||m.channel)}]};
-      home.leads.unshift(l);
+      target.leads.unshift(l);
       added++;
     }
     const mid=(l.msgs.length?Math.max(...l.msgs.map(x=>x.id||0)):0)+1;
@@ -7974,11 +7981,12 @@ function tgWatchNewChannelLeads(){
   try{
     if(!DATA || !DATA.settings || !DATA.settings.tgEnabled) return;
     if(!erpServerCreds()) return;
-    const home=chHomeStore();
-    (home.leads||[]).forEach(l=>{
-      if(!l.chatKey || l.tgNotified) return;
-      l.tgNotified=true;
-      tgNotify('Поступила новая заявка ✅\nКанал: '+((CHANNELS[l.channel]||{}).label||l.channel)+'\nДата: '+(l.createdAt||DATA.today)+' '+nowTime());
+    Object.values(STORE_DATA).forEach(d=>{
+      (d.leads||[]).forEach(l=>{
+        if(!l.chatKey || l.tgNotified) return;
+        l.tgNotified=true;
+        tgNotify('Поступила новая заявка ✅\nКанал: '+((CHANNELS[l.channel]||{}).label||l.channel)+'\nДата: '+(l.createdAt||DATA.today)+' '+nowTime());
+      });
     });
   }catch(e){}
 }
@@ -7988,9 +7996,10 @@ async function channelReply(l, text){
   const creds=erpServerCreds();
   if(!creds) return {error:'Сервер не подключён (Заказы → шестерёнка)'};
   try{
+    const sid=Object.keys(STORE_DATA).find(k=>((STORE_DATA[k]||{}).leads||[]).indexOf(l)>=0)||null;
     const r=await fetch(creds.api+'/channels/reply', {method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+creds.token},
-      body:JSON.stringify({channel:l.channel, chatId:l.chatId, text})});
+      body:JSON.stringify({channel:l.channel, chatId:l.chatId, text, store:sid})});
     const j=await r.json();
     return (j&&j.ok)?{ok:true}:{error:(j&&j.error)||'сервер не ответил'};
   }catch(e){ return {error:e.message}; }
@@ -13045,6 +13054,99 @@ async function strapiRepairsSync(quiet){
    «Отказ» -> Отменён/архив. Заказы, уже взятые в работу продавцом,
    не трогаем — своя работа дороже.
 ============================================================ */
+/* Отметка времени сайта в наш формат */
+function siteStamp(iso){
+  const d=new Date(iso||Date.now());
+  const p=n=>String(n).padStart(2,'0');
+  return p(d.getDate())+'.'+p(d.getMonth()+1)+'.'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes());
+}
+/* Применить статус сайта к нашему заказу. Работает для ЛЮБОГО активного
+   заказа (новый, ждём товар, готов) — если панель сайта говорит «Выполнен»
+   или «Отказ», сайт главнее. Уже закрытые в ERP заказы не трогаем.
+   Деньги в кассе ERP при закрытии через сайт НЕ двигаются (cashPosted='site'). */
+function applySiteOrderStatus(o, rawSt, stamp){
+  if(!o || ['done','cancel'].includes(o.status)) return false;
+  const st=String(rawSt||'').toLowerCase();
+  const from=o.status;
+  const whOf=(imei)=>[...DATA.warehouse.tech, ...DATA.warehouse.tradein].find(x=>x.imei===imei);
+  if(st==='done' || /complete|vypoln|выполн/.test(st)){
+    (o.items||[]).forEach(it=>{
+      if(it.imei && it.imei!=='—' && it.imei!=='нет в наличии'){
+        const wh=whOf(it.imei);
+        if(wh && wh.status==='reserved') wh.status='sold';   /* резерв стал продажей */
+      }
+    });
+    o.status='done'; o.closedAt=stamp; o.archived=true; o.saleRecorded=true; o.cashPosted='site';
+    (o.statusHistory=o.statusHistory||[]).push({from, to:'done', at:stamp, by:'Статус сайта'});
+    (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'status', comment:'Сайт: заказ отмечен «Выполнен» — закрыт в архив «Выдан» (деньги в кассе ERP не двигались)'});
+    return true;
+  }
+  if(/cancel|otkaz|отказ|reject|возврат|return/.test(st)){
+    (o.items||[]).forEach(it=>{
+      if(it.imei && it.imei!=='—' && it.imei!=='нет в наличии'){
+        const wh=whOf(it.imei);
+        if(wh && wh.status==='reserved') wh.status='instock';   /* резерв снят */
+      }
+    });
+    o.status='cancel'; o.closedAt=stamp; o.cancelReason='Отменён на сайте'; o.archived=true;
+    (o.statusHistory=o.statusHistory||[]).push({from, to:'cancel', at:stamp, by:'Статус сайта'});
+    (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'status', comment:'Сайт: заказ отменён — резервы со склада сняты'});
+    return true;
+  }
+  return false;
+}
+function applySiteRepairStatus(t, rawSt){
+  if(!t || ['done','archive'].includes(t.status)) return false;
+  const st=String(rawSt||'').toLowerCase();
+  if(st==='done' || /complete|vypoln|выполн/.test(st)){
+    t.status='done'; (t.history=t.history||[]).push({date:DATA.today+' '+nowTime(), text:'Выполнен (статус сайта)'});
+    return true;
+  }
+  if(/reject|otkaz|отказ|cancel/.test(st)){
+    t.status='archive'; (t.history=t.history||[]).push({date:DATA.today+' '+nowTime(), text:'Отказ (статус сайта)'});
+    return true;
+  }
+  return false;
+}
+/* ПОЛНАЯ сверка активных заказов/ремонтов с сайтом — раз в 10 минут.
+   Ловит: изменения, сделанные пока ERP была закрыта, и заказы, которые
+   уже двигали в ERP (быстрая проверка по updatedAt их раньше пропускала). */
+let _sweepBusy=false;
+async function strapiStatusFullSweep(){
+  if(_sweepBusy) return;
+  _sweepBusy=true;
+  try{
+    if(!apiToken()) return;
+    let changed=0;
+    const act=(DATA.orders||[]).filter(o=>/^strapi_/.test(String(o.externalId||'')) && !['done','cancel'].includes(o.status));
+    for(let i=0;i<act.length;i+=40){
+      const chunk=act.slice(i,i+40);
+      const q=chunk.map((o,k)=>'filters[id][$in]['+k+']='+String(o.externalId).replace('strapi_','')).join('&');
+      const j=await strapiReq('/api/zakazies?status=draft&'+q+'&pagination[pageSize]=50&fields[0]=id&fields[1]=order_status&fields[2]=updatedAt');
+      (j.data||[]).forEach(z=>{
+        const o=chunk.find(x=>x.externalId==='strapi_'+z.id);
+        if(applySiteOrderStatus(o, z.order_status, siteStamp(z.updatedAt))) changed++;
+      });
+    }
+    const ract=(DATA.service||[]).filter(t=>/^strapi_r_/.test(String(t.externalId||'')) && !['done','archive'].includes(t.status));
+    for(let i=0;i<ract.length;i+=40){
+      const chunk=ract.slice(i,i+40);
+      const q=chunk.map((t,k)=>'filters[id][$in]['+k+']='+String(t.externalId).replace('strapi_r_','')).join('&');
+      const j=await strapiReq('/api/remonts?status=draft&'+q+'&pagination[pageSize]=50&fields[0]=id&fields[1]=order_status');
+      (j.data||[]).forEach(z=>{
+        const t=chunk.find(x=>x.externalId==='strapi_r_'+z.id);
+        if(applySiteRepairStatus(t, z.order_status)) changed++;
+      });
+    }
+    if(changed){
+      toast('Сайт: статусы обновлены — '+changed,'info');
+      if(['orders','service'].includes(STATE.page)) renderPage();
+      try{ fullSave(); }catch(e){}
+    }
+  }catch(e){}
+  finally{ _sweepBusy=false; }
+}
+
 async function strapiStatusRefresh(){
   try{
     if(!apiToken()) return;
@@ -13057,19 +13159,7 @@ async function strapiStatusRefresh(){
       const j=await strapiReq('/api/zakazies?status=draft&filters[updatedAt][$gt]='+encodeURIComponent(since)+'&pagination[pageSize]=50&fields[0]=id&fields[1]=order_status&fields[2]=updatedAt');
       (j.data||[]).forEach(z=>{
         const o=(DATA.orders||[]).find(x=>x.externalId==='strapi_'+z.id);
-        if(!o || o.status!=='new') return;   /* обновляем только нетронутые */
-        const st=String(z.order_status||'').toLowerCase();
-        const stamp=(function(){ const d=new Date(z.updatedAt||Date.now()); const p=n=>String(n).padStart(2,'0');
-          return p(d.getDate())+'.'+p(d.getMonth()+1)+'.'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes()); })();
-        if(st==='done' || /complete|vypoln|выполн/.test(st)){
-          o.status='done'; o.closedAt=stamp; o.archived=true; o.saleRecorded=true; o.cashPosted='site';
-          (o.statusHistory=o.statusHistory||[]).push({from:'new', to:'done', at:stamp, by:'Статус сайта'});
-          changed++;
-        } else if(/cancel|otkaz|отказ|reject/.test(st)){
-          o.status='cancel'; o.closedAt=stamp; o.cancelReason='Отменён на сайте'; o.archived=true;
-          (o.statusHistory=o.statusHistory||[]).push({from:'new', to:'cancel', at:stamp, by:'Статус сайта'});
-          changed++;
-        }
+        if(applySiteOrderStatus(o, z.order_status, siteStamp(z.updatedAt))) changed++;
       });
     }catch(e){}
     /* ремонты */
@@ -13077,13 +13167,7 @@ async function strapiStatusRefresh(){
       const j=await strapiReq('/api/remonts?status=draft&filters[updatedAt][$gt]='+encodeURIComponent(since)+'&pagination[pageSize]=50&fields[0]=id&fields[1]=order_status');
       (j.data||[]).forEach(z=>{
         const t=(DATA.service||[]).find(x=>x.externalId==='strapi_r_'+z.id);
-        if(!t || t.status!=='new') return;
-        const st=String(z.order_status||'').toLowerCase();
-        if(st==='done' || /complete|vypoln|выполн/.test(st)){
-          t.status='done'; (t.history=t.history||[]).push({date:DATA.today+' '+nowTime(), text:'Выполнен (статус сайта)'}); changed++;
-        } else if(/reject|otkaz|отказ|cancel/.test(st)){
-          t.status='archive'; (t.history=t.history||[]).push({date:DATA.today+' '+nowTime(), text:'Отказ (статус сайта)'}); changed++;
-        }
+        if(applySiteRepairStatus(t, z.order_status)) changed++;
       });
     }catch(e){}
     if(changed){
@@ -17502,7 +17586,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-11';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-12';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
