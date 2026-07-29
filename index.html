@@ -7930,6 +7930,10 @@ async function integrationsHeartbeat(){
 }
 setTimeout(()=>{ try{ integrationsHeartbeat(); }catch(e){} }, 2000);
 setInterval(()=>{ try{ integrationsHeartbeat(); }catch(e){} }, HEARTBEAT_MS);
+/* сообщения каналов забираем чаще всех — каждые 5 секунд: вебхук кладёт их
+   на сервер мгновенно, забор лёгкий (платформы сервер опрашивает сам, не
+   чаще раза в 20 секунд, повторные вызовы просто читают базу) */
+setInterval(()=>{ try{ channelsSyncNow(false); }catch(e){} }, 5000);
 
 /* ============================================================
    КАНАЛЫ ВОРОНКИ (боевые): Авито / Telegram-личка / ВК / MAX.
@@ -7941,6 +7945,15 @@ setInterval(()=>{ try{ integrationsHeartbeat(); }catch(e){} }, HEARTBEAT_MS);
    точки не плодили дубликаты.
 ============================================================ */
 const CH_POLL_MS=15000;
+/* Автоопределение темы заявки из канала: товар из объявления → «Устройство»,
+   слова про ремонт/обмен в переписке — соответствующая тема */
+function channelGuessTopic(item, text){
+  const t=String(text||'').toLowerCase();
+  if(/ремонт|почин|разбит|не включает|не работает|замен(а|ить) (экрана|дисплея|батаре|аккум|стекла)/.test(t)) return 'repair';
+  if(/трейд|trade|обмен|сдать (телефон|техник)|выкуп/.test(t)) return 'tradein';
+  if(item) return 'device';
+  return 'none';
+}
 function chHomeStore(){ return STORE_DATA['store_lunnaya'] || STORE_DATA[Object.keys(STORE_DATA)[0]] || DATA; }   /* главная точка — Лунная 4 */
 let _chBusy=false;
 async function channelsSyncNow(manual, catchup){
@@ -8016,7 +8029,7 @@ function importChannelMessages(list){
       const lid=(target.leads.length?Math.max(...target.leads.map(x=>x.id||0)):7300)+1;
       l={id:lid, channel:m.channel, externalId:m.key, chatKey:ck, chatId:String(m.chatId), sourceUrl:'', source:'sync',
         name:(m.name||'').trim()||('Клиент '+((CHANNELS[m.channel]||{}).label||m.channel)),
-        contact:(m.contact||'').trim(), topic:'none', item:m.item||'', stage:'new', owner:null,
+        contact:(m.contact||'').trim(), topic:channelGuessTopic(m.item, m.text), item:m.item||'', stage:'new', owner:null,
         createdAt:DATA.today, lastTouch:DATA.today, msgs:[], unread:0,
         notes:[{date:DATA.today, text:'Заявка пришла из канала '+((CHANNELS[m.channel]||{}).label||m.channel)}]};
       target.leads.unshift(l);
@@ -8036,9 +8049,25 @@ function importChannelMessages(list){
       (l.notes=l.notes||[]).unshift({date:DATA.today, text:'Клиент ответил — заявка возвращена в «Общение»'});
     }
     if(m.item && !l.item) l.item=m.item;
+    if((l.topic||'none')==='none'){ const g=channelGuessTopic(l.item, m.text); if(g!=='none') l.topic=g; }
     appended++;
   });
   if(maxTs>(home.chCursorMs||0)) home.chCursorMs=maxTs;
+  /* если диалог этой заявки сейчас открыт — дорисовать переписку немедленно,
+     сохранив недописанный текст продавца */
+  try{
+    if(appended && window._openLeadId && document.getElementById('ldMsgs')){
+      let touched=null;
+      Object.values(STORE_DATA).forEach(d=>{ (d.leads||[]).forEach(x=>{ if(x.id===window._openLeadId) touched=x; }); });
+      if(touched && (list||[]).some(m=>m && touched.chatKey===String(m.channel)+'_'+String(m.chatId))){
+        const inp=document.getElementById('ldInput');
+        const draft=inp?inp.value:'';
+        openLeadDialog(window._openLeadId, document.getElementById('pageContent'));
+        const inp2=document.getElementById('ldInput');
+        if(inp2 && draft){ inp2.value=draft; inp2.focus(); inp2.selectionStart=inp2.selectionEnd=draft.length; }
+      }
+    }
+  }catch(e){}
   /* словарь виденных сообщений не растёт бесконечно */
   const ks=Object.keys(seen);
   if(ks.length>4000) ks.sort((a,b)=>(seen[a]||0)-(seen[b]||0)).slice(0, ks.length-3000).forEach(k=>delete seen[k]);
@@ -17776,7 +17805,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-23';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-25';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -18526,6 +18555,7 @@ function openLeadDialog(id, c){
 
   openModal('Диалог — '+escHtml(l.name), channelBadge(l.channel)+' '+ch.label+' · '+clientCheckHTML(l, true), body, actions);
   document.getElementById('modalBox').classList.add('modal-wide');
+  window._openLeadId=l.id;   /* живое обновление: новые сообщения дорисуются без переключения */
 
   const box=document.getElementById('ldMsgs');
   if(box) box.scrollTop=box.scrollHeight;
@@ -19492,6 +19522,13 @@ if(_fullLoaded) updateStoreSelector();
     });
     /* починка импорта: прочерк вместо пустоты делал позиции «привязанными» —
        активным заказам с сайта возвращаем непривязанное состояние */
+    /* заявки из каналов с товаром, но темой «Не определена» — доопределяем */
+    Object.values(STORE_DATA).forEach(d=>{
+      if(!d) return;
+      (d.leads||[]).forEach(l=>{
+        if(l.chatKey && (l.topic||'none')==='none' && l.item) l.topic='device';
+      });
+    });
     Object.keys(STORE_DATA).forEach(sid=>{
       const d=STORE_DATA[sid]; if(!d) return;
       if(d._imeiFixDone) return;   /* одноразово: иначе стирали бы подтверждение аксессуаров ('—') */
