@@ -7687,8 +7687,9 @@ function renderIntegrationsTab(){
       '<b>Заказы с сайта сюда не попадают</b> — они падают сразу в раздел «Заказы».<br><br>'+
       'Ключи каналов хранятся <b>только на сервере</b> (Render → Environment) — в браузере их нет. '+
       (creds
-        ? 'Сервер подключён — статусы ниже настоящие, обновляются каждые 15 секунд.'
+        ? 'Сервер подключён — статусы ниже настоящие.'
         : '<span style="color:var(--negative);">Сервер не подключён: заполните адрес API и токен в шестерёнке раздела «Заказы».</span>')+
+      '<br><br>⏱ <b>Автопроверка всех интеграций — каждые 15 секунд</b> (сайт, Strapi, каналы; раз в 10 минут — полная сверка и догон истории). Последняя: <span class="mono" id="hbStamp">'+(window._hbLastAt?(String(window._hbLastAt.getHours()).padStart(2,'0')+':'+String(window._hbLastAt.getMinutes()).padStart(2,'0')+':'+String(window._hbLastAt.getSeconds()).padStart(2,'0')):'ещё не было')+'</span>'+
     '</div></div>';
 
   if(!isOwner){
@@ -7882,20 +7883,45 @@ async function siteSyncNow(quiet){
     return 0;
   }
 }
-/* Автоопрос каждые 15 секунд, пока канал подключён; первый — сразу при запуске */
-setTimeout(()=>{ try{ siteSyncNow(true); }catch(e){} }, 1500);
-setInterval(()=>{ try{ siteSyncNow(true); }catch(e){} }, SITE_POLL_MS);
-/* прямые каналы из базы сайта (Strapi): заказы + заявки на ремонт */
-setTimeout(()=>{ try{ strapiOrdersSync(true); }catch(e){} }, 2500);
-setInterval(()=>{ try{ strapiOrdersSync(true); }catch(e){} }, SITE_POLL_MS);
-setTimeout(()=>{ try{ strapiRepairsSync(true); }catch(e){} }, 3500);
-setInterval(()=>{ try{ strapiRepairsSync(true); }catch(e){} }, SITE_POLL_MS);
-/* слежение за изменениями статусов на сайте */
-setTimeout(()=>{ try{ strapiStatusRefresh(); }catch(e){} }, 5000);
-setInterval(()=>{ try{ strapiStatusRefresh(); }catch(e){} }, 60000);
-/* полная сверка активных заказов с сайтом: сразу после запуска и раз в 10 минут */
-setTimeout(()=>{ try{ strapiStatusFullSweep(); }catch(e){} }, 8000);
-setInterval(()=>{ try{ strapiStatusFullSweep(); }catch(e){} }, 600000);
+/* ============================================================
+   ЕДИНАЯ АВТОПРОВЕРКА ИНТЕГРАЦИЙ — каждые 15 секунд, всё в одном пульсе:
+   • сайт (Render-заявки)  • Strapi: новые заказы и ремонты
+   • каналы воронки (Авито / Telegram / ВК / MAX)
+   Раз в минуту — статусы заказов на сайте; раз в 10 минут — полная
+   сверка активных заказов и автодогон истории каналов (то, что раньше
+   делала только кнопка «Проверить связь»).
+   Защита: если прошлый пульс ещё работает — тик пропускается;
+   на каждый шаг таймаут 12 секунд, ошибка одного шага не мешает другим.
+============================================================ */
+const HEARTBEAT_MS=15000;
+let _hbTick=0, _hbBusy=false;
+window._hbLastAt=null;
+window._hbLastResult={};
+async function integrationsHeartbeat(){
+  if(_hbBusy) return;
+  _hbBusy=true;
+  _hbTick++;
+  const res={};
+  const step=async(name, fn)=>{
+    try{
+      res[name]=await Promise.race([fn(), new Promise((_,rej)=>setTimeout(()=>rej(new Error('таймаут 12с')), 12000))]);
+    }catch(e){ res[name]='ошибка: '+(e&&e.message||e); }
+  };
+  await step('site',          ()=>siteSyncNow(true));
+  await step('strapiOrders',  ()=>strapiOrdersSync(true));
+  await step('strapiRepairs', ()=>strapiRepairsSync(true));
+  await step('channels',      ()=>channelsSyncNow(false));
+  if(_hbTick%4===0)   await step('siteStatuses',    ()=>strapiStatusRefresh());
+  if(_hbTick%40===1)  await step('fullSweep',       ()=>strapiStatusFullSweep());
+  if(_hbTick%40===20) await step('channelsCatchup', ()=>channelsSyncNow(false, true));
+  window._hbLastAt=new Date();
+  window._hbLastResult=res;
+  const el=document.getElementById('hbStamp');
+  if(el){ const d=new Date(); el.textContent=nowTime()+':'+String(d.getSeconds()).padStart(2,'0'); }
+  _hbBusy=false;
+}
+setTimeout(()=>{ try{ integrationsHeartbeat(); }catch(e){} }, 2000);
+setInterval(()=>{ try{ integrationsHeartbeat(); }catch(e){} }, HEARTBEAT_MS);
 
 /* ============================================================
    КАНАЛЫ ВОРОНКИ (боевые): Авито / Telegram-личка / ВК / MAX.
@@ -7909,7 +7935,7 @@ setInterval(()=>{ try{ strapiStatusFullSweep(); }catch(e){} }, 600000);
 const CH_POLL_MS=15000;
 function chHomeStore(){ return STORE_DATA['store_lunnaya'] || STORE_DATA[Object.keys(STORE_DATA)[0]] || DATA; }   /* главная точка — Лунная 4 */
 let _chBusy=false;
-async function channelsSyncNow(manual){
+async function channelsSyncNow(manual, catchup){
   if(_chBusy) return 0;
   const creds=erpServerCreds();
   if(!creds){ if(manual) toast('Сначала подключите сервер: Заказы → шестерёнка → адрес API и токен','error'); return 0; }
@@ -7918,7 +7944,7 @@ async function channelsSyncNow(manual){
     const home=chHomeStore();
     const r=await fetch(creds.api+'/channels/poll', {method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+creds.token},
-      body:JSON.stringify({sinceMs: (manual?0:(home.chCursorMs||0)), deep:!!manual})});   /* ручная проверка: берём всю историю за 7 дней — догоняет старые ответы, дубли отсекаются */
+      body:JSON.stringify({sinceMs: ((manual||catchup)?0:(home.chCursorMs||0)), deep:!!manual})});   /* ручная проверка/догон: вся история за 7 дней, дубли отсекаются */
     const j=await r.json();
     if(!j || !j.ok){ if(manual) toast('Сервер каналов: '+((j&&j.error)||'нет ответа'),'error'); return 0; }
     window._chSrvStatus=j.status||{};
@@ -8035,8 +8061,7 @@ async function channelReply(l, text){
     return (j&&j.ok)?{ok:true}:{error:(j&&j.error)||'сервер не ответил'};
   }catch(e){ return {error:e.message}; }
 }
-setTimeout(()=>{ try{ channelsSyncNow(false); }catch(e){} }, 4500);
-setInterval(()=>{ try{ channelsSyncNow(false); }catch(e){} }, CH_POLL_MS);
+/* автоопрос каналов идёт в общем пульсе интеграций (integrationsHeartbeat) */
 
 function wireIntegrations(c){
   c.querySelectorAll('[data-setup-ch]').forEach(el=>el.addEventListener('click',()=>openChannelSetupModal(el.dataset.setupCh, c)));
@@ -17617,7 +17642,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-16';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-18';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];

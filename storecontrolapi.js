@@ -247,6 +247,15 @@ async function mailSend(to, subject, body, isHtml) {
    своей точки. Ответ продавца уходит через комплект ключей его точки.
 ============================================================ */
 const DEFAULT_STORE = process.env.CHANNELS_DEFAULT_STORE || 'store_lunnaya';
+/* Авито/ВК отдают время в unix-секундах, но на всякий случай приводим:
+   значение похоже на миллисекунды -> делим. Плюс лечение испорченного
+   курсора: если он "из будущего", сбрасываем и перечитываем заново. */
+function toSec(v) { v = Number(v) || 0; return v > 100000000000 ? Math.floor(v / 1000) : v; }
+function saneCursor(v) {
+  v = toSec(parseInt(v) || 0);
+  if (v > Math.floor(Date.now() / 1000) + 86400) return 0;   /* курсор из будущего — сброс */
+  return v;
+}
 
 /* Собрать комплекты ключей канала: базовый + по точкам (суффикс __store) */
 function envSets(names) {
@@ -373,13 +382,13 @@ async function avitoUid(set) {
    Плюс перекрытие 15 минут назад + дедупликация по key — ничего не теряется. */
 async function avitoPollSet(set, deep) {
   const kvKey = 'avito_cursor' + set.key;
-  const saved = parseInt(await kvGet(kvKey)) || 0;
+  const saved = saneCursor(await kvGet(kvKey));
   const cur = deep ? 0 : saved;
   const uid = await avitoUid(set);
   const j = await avitoApi(set, '/messenger/v2/accounts/' + uid + '/chats?limit=30');
   const chats = (j.chats || [])
-    .filter(c => (c.updated || 0) > Math.max(0, cur - 900))
-    .sort((a, b) => (a.updated || 0) - (b.updated || 0));
+    .filter(c => toSec(c.updated) > Math.max(0, cur - 900))
+    .sort((a, b) => toSec(a.updated) - toSec(b.updated));
   let newCursor = saved, added = 0;
   for (const chat of chats) {
     try {
@@ -402,7 +411,7 @@ async function avitoPollSet(set, deep) {
           text: String(text).slice(0, 2000), tsMs: (m.created || 0) * 1000 })) added++;
       }
       try { await avitoApi(set, '/messenger/v1/accounts/' + uid + '/chats/' + chat.id + '/read', { method: 'POST' }); } catch (e) {}
-      if ((chat.updated || 0) > newCursor) newCursor = chat.updated;
+      if (toSec(chat.updated) > newCursor) newCursor = toSec(chat.updated);
     } catch (e) {
       console.error('[авито' + set.key + '] чат ' + chat.id + ':', e.message);
       break;   /* не перепрыгиваем упавший чат — доберём следующим опросом */
@@ -468,7 +477,7 @@ async function vkApi(set, method, params) {
 }
 async function vkPollSet(set, deep) {
   const kvKey = 'vk_cursor' + set.key;
-  const saved = parseInt(await kvGet(kvKey)) || 0;
+  const saved = saneCursor(await kvGet(kvKey));
   const cur = deep ? 0 : saved;
   const resp = await vkApi(set, 'messages.getConversations', { count: 20, filter: 'all' });
   let added = 0, newCursor = saved;
@@ -614,7 +623,7 @@ const server = http.createServer((req, res) => {
 
   /* ---- Страницы ---- */
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return sendFile(res, 'index.html');
-  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-15' });
+  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-17' });
 
   /* ---- Сайт отправляет заявку (публично) ---- */
   if (req.method === 'POST' && url.pathname === '/api/lead') {
@@ -835,7 +844,14 @@ const server = http.createServer((req, res) => {
   /* ---- Каналы воронки: состояние (по токену) ---- */
   if (req.method === 'GET' && url.pathname === '/api/channels/status') {
     if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
-    return sendJson(res, 200, { ok: true, status: chState });
+    (async () => {
+      const cursors = {};
+      try {
+        for (const k of ['avito_cursor', 'tg_offset', 'vk_cursor', 'max_marker']) cursors[k] = await kvGet(k);
+      } catch (e) {}
+      sendJson(res, 200, { ok: true, status: chState, cursors, nowSec: Math.floor(Date.now() / 1000) });
+    })();
+    return;
   }
 
   sendJson(res, 404, { error: 'Неизвестный запрос' });
