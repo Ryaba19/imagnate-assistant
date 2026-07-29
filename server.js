@@ -448,7 +448,10 @@ async function tgPollSet(set) {
   const cur = parseInt(await kvGet(kvKey)) || 0;
   const r = await fetch('https://api.telegram.org/bot' + tok + '/getUpdates?timeout=0' + (cur ? ('&offset=' + (cur + 1)) : ''));
   const j = await r.json();
-  if (!j.ok) throw new Error('Telegram: ' + (j.description || 'ошибка'));
+  if (!j.ok) {
+    if (/webhook|conflict/i.test(j.description || '')) return 0;   /* работает вебхук — опрос не нужен */
+    throw new Error('Telegram: ' + (j.description || 'ошибка'));
+  }
   let added = 0, maxU = cur;
   for (const u of (j.result || [])) {
     if (u.update_id > maxU) maxU = u.update_id;
@@ -611,6 +614,52 @@ async function channelsPollAll(deep) {
   }
 }
 const CH_SENDSET = { avito: avitoSend, telegram: tgSendSet, vk: vkSendSet, max: maxSendSet };
+
+/* ============================================================
+   ВЕБХУКИ: платформы САМИ присылают новые сообщения мгновенно.
+   Опрос остаётся страховкой — дедупликация по key исключает дубли.
+   Адрес сервера Render определяет сам (RENDER_EXTERNAL_URL).
+============================================================ */
+const EXT_URL = String(process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL || 'https://imagnate-assistant.onrender.com').replace(/\/+$/, '');
+async function registerWebhooks() {
+  /* Авито */
+  for (const set of envSets(CH_ENV_NAMES.avito)) {
+    try {
+      await avitoApi(set, '/messenger/v3/webhook', { method: 'POST', body: JSON.stringify({ url: EXT_URL + '/api/hooks/avito' }) });
+      chState.avito.webhook = 'включён';
+      console.log('[вебхук авито' + set.key + '] зарегистрирован: ' + EXT_URL + '/api/hooks/avito');
+    } catch (e) {
+      chState.avito.webhook = 'ошибка: ' + String(e.message || e).slice(0, 120);
+      console.error('[вебхук авито' + set.key + ']', e.message);
+    }
+  }
+  /* Telegram */
+  for (const set of envSets(CH_ENV_NAMES.telegram)) {
+    try {
+      const r = await fetch('https://api.telegram.org/bot' + set.env.TELEGRAM_BOT_TOKEN + '/setWebhook', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: EXT_URL + '/api/hooks/telegram/' + set.env.TELEGRAM_BOT_TOKEN.split(':')[0], allowed_updates: ['message'] })
+      });
+      const j = await r.json();
+      chState.telegram.webhook = j.ok ? 'включён' : ('ошибка: ' + (j.description || '').slice(0, 120));
+      console.log('[вебхук telegram' + set.key + ']', j.ok ? 'зарегистрирован' : (j.description || 'ошибка'));
+    } catch (e) { chState.telegram.webhook = 'ошибка: ' + String(e.message || e).slice(0, 120); }
+  }
+  /* MAX */
+  for (const set of envSets(CH_ENV_NAMES.max)) {
+    try {
+      await fetch('https://botapi.max.ru/subscriptions?access_token=' + encodeURIComponent(set.env.MAX_BOT_TOKEN), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: EXT_URL + '/api/hooks/max' })
+      });
+      chState.max.webhook = 'включён';
+      console.log('[вебхук max' + set.key + '] подписка отправлена');
+    } catch (e) { chState.max.webhook = 'ошибка: ' + String(e.message || e).slice(0, 120); }
+  }
+  /* ВК регистрируется вручную в настройках сообщества (Callback API) —
+     приёмник /api/hooks/vk готов, строка подтверждения в env VK_CONFIRMATION */
+  if (envSets(CH_ENV_NAMES.vk).length) chState.vk.webhook = process.env.VK_CONFIRMATION ? 'приёмник готов' : 'нужен VK_CONFIRMATION';
+}
 async function channelSend(ch, store, chatId, text) {
   const sets = envSets(CH_ENV_NAMES[ch]);
   if (!sets.length) throw new Error('Ключи канала не заданы на сервере');
@@ -635,7 +684,7 @@ const server = http.createServer((req, res) => {
 
   /* ---- Страницы ---- */
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return sendFile(res, 'index.html');
-  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-19' });
+  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-20' });
 
   /* ---- Сайт отправляет заявку (публично) ---- */
   if (req.method === 'POST' && url.pathname === '/api/lead') {
@@ -803,6 +852,122 @@ const server = http.createServer((req, res) => {
     });
   }
 
+  /* ---- ВЕБХУК АВИТО: Авито присылает каждое новое сообщение мгновенно ---- */
+  if (req.method === 'POST' && url.pathname === '/api/hooks/avito') {
+    return readBody(req, async b => {
+      try {
+        const v = b && b.payload && b.payload.value;
+        if (b && b.payload && b.payload.type === 'message' && v && v.chat_id) {
+          const sets = envSets(CH_ENV_NAMES.avito);
+          /* чей комплект: сверяем id аккаунта; author == владелец -> исходящее */
+          let set = sets[0] || null;
+          for (const s of sets) { const a = avitoAuth[s.key]; if (a && a.uid === v.user_id) { set = s; break; } }
+          const dir = (v.author_id === v.user_id) ? 'out' : 'in';
+          const text = (v.content && (v.content.text ||
+            (v.content.link && v.content.link.url) ||
+            (v.content.location && 'Геолокация') ||
+            (v.content.call && 'Звонок'))) || (v.type === 'image' ? '[изображение]' : '');
+          let name = '', item = '';
+          if (dir === 'in' && set) {
+            name = 'Клиент Авито';
+            try {
+              const cj = await avitoApi(set, '/messenger/v2/accounts/' + v.user_id + '/chats/' + v.chat_id);
+              const other = (cj.users || []).find(u => u.id !== v.user_id) || {};
+              name = other.name || name;
+              item = (cj.context && cj.context.value && cj.context.value.title) || '';
+            } catch (e) {}
+          }
+          if (text) {
+            const isNew = await chStore({ key: 'av_' + v.id, store: set ? set.store : DEFAULT_STORE, channel: 'avito',
+              chatId: String(v.chat_id), dir, name, contact: '', item: String(item).slice(0, 120),
+              text: String(text).slice(0, 2000), tsMs: (v.created || 0) * 1000 });
+            if (isNew) console.log('[вебхук авито] ' + dir + ' сообщение, чат ' + v.chat_id);
+          }
+        }
+      } catch (e) { console.error('[вебхук авито]', e.message); }
+      sendJson(res, 200, { ok: true });
+    });
+  }
+
+  /* ---- ВЕБХУК TELEGRAM: путь содержит id бота ---- */
+  if (req.method === 'POST' && url.pathname.indexOf('/api/hooks/telegram/') === 0) {
+    const botId = url.pathname.split('/').pop();
+    return readBody(req, async u => {
+      try {
+        const set = envSets(CH_ENV_NAMES.telegram).find(s => s.env.TELEGRAM_BOT_TOKEN.split(':')[0] === botId);
+        const m = u && u.message;
+        if (set && m && m.chat && m.chat.type === 'private') {
+          const cid = String(m.chat.id);
+          const text = m.text || m.caption || '';
+          if (!TG_CHATS.includes(cid) && text && text.indexOf('/start') !== 0) {
+            const name = (((m.from && m.from.first_name) || '') + ' ' + ((m.from && m.from.last_name) || '')).trim();
+            const isNew = await chStore({ key: 'tg' + set.key + '_' + u.update_id, store: set.store, channel: 'telegram',
+              chatId: cid, dir: 'in', name: name || 'Клиент Telegram',
+              contact: (m.from && m.from.username) ? ('tg: @' + m.from.username) : '',
+              item: '', text: String(text).slice(0, 2000), tsMs: (m.date || 0) * 1000 });
+            if (isNew) console.log('[вебхук telegram] сообщение из чата ' + cid);
+          }
+        }
+      } catch (e) { console.error('[вебхук telegram]', e.message); }
+      sendJson(res, 200, { ok: true });
+    });
+  }
+
+  /* ---- ВЕБХУК MAX ---- */
+  if (req.method === 'POST' && url.pathname === '/api/hooks/max') {
+    return readBody(req, async b => {
+      try {
+        const ups = Array.isArray(b && b.updates) ? b.updates : [b];
+        const set = envSets(CH_ENV_NAMES.max)[0] || null;
+        for (const u of ups) {
+          const m = u && u.message;
+          if (!m) continue;
+          const cid = String((m.recipient && m.recipient.chat_id) || '');
+          const text = (m.body && m.body.text) || '';
+          if (!cid || !text) continue;
+          await chStore({ key: 'mx' + (set ? set.key : '') + '_' + ((m.body && m.body.mid) || (cid + '_' + u.timestamp)),
+            store: set ? set.store : DEFAULT_STORE, channel: 'max', chatId: cid, dir: 'in',
+            name: (m.sender && m.sender.name) || 'Клиент MAX',
+            contact: (m.sender && m.sender.username) ? ('max: ' + m.sender.username) : '',
+            item: '', text: String(text).slice(0, 2000), tsMs: u.timestamp || Date.now() });
+        }
+      } catch (e) { console.error('[вебхук max]', e.message); }
+      sendJson(res, 200, { ok: true });
+    });
+  }
+
+  /* ---- ВЕБХУК ВКОНТАКТЕ (Callback API): подтверждение + message_new ---- */
+  if (req.method === 'POST' && url.pathname === '/api/hooks/vk') {
+    return readBody(req, async b => {
+      try {
+        if (b && b.type === 'confirmation') {
+          res.writeHead(200, { 'Content-Type': 'text/plain' });
+          return res.end(String(process.env.VK_CONFIRMATION || ''));
+        }
+        if (b && b.type === 'message_new') {
+          const m = (b.object && (b.object.message || b.object)) || {};
+          const set = envSets(CH_ENV_NAMES.vk)[0] || null;
+          const peer = m.peer_id || (m.from_id > 0 ? m.from_id : null);
+          if (peer && !m.out) {
+            let name = 'Клиент ВКонтакте';
+            if (set && m.from_id > 0) {
+              try {
+                const us = await vkApi(set, 'users.get', { user_ids: m.from_id });
+                if (us && us[0]) name = ((us[0].first_name || '') + ' ' + (us[0].last_name || '')).trim() || name;
+              } catch (e) {}
+            }
+            await chStore({ key: 'vk' + (set ? set.key : '') + '_' + peer + '_' + (m.id || m.conversation_message_id || m.date),
+              store: set ? set.store : DEFAULT_STORE, channel: 'vk', chatId: String(peer), dir: 'in',
+              name, contact: 'vk.com/id' + (m.from_id || peer), item: '',
+              text: String(m.text || '[вложение]').slice(0, 2000), tsMs: (m.date || 0) * 1000 });
+          }
+        }
+      } catch (e) { console.error('[вебхук вк]', e.message); }
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('ok');
+    });
+  }
+
   /* ---- Каналы воронки: опрос и выдача новых сообщений (по токену) ---- */
   if (req.method === 'POST' && url.pathname === '/api/channels/poll') {
     if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
@@ -872,6 +1037,8 @@ const server = http.createServer((req, res) => {
 dbInit()
   .catch(e => { console.error('БД недоступна (' + e.message + ') — работаю в файловом режиме'); pool = null; })
   .then(() => server.listen(PORT, () => {
+    setTimeout(() => { registerWebhooks().catch(e => console.error('вебхуки:', e.message)); }, 5000);
+    setInterval(() => { registerWebhooks().catch(e => console.error('вебхуки:', e.message)); }, 24 * 3600 * 1000);
     console.log('Store Control запущен на порту ' + PORT);
     console.log('ERP: /   Форма: /form   API: /api   Хранение: ' + (pool ? 'PostgreSQL' : 'файл leads.json'));
     if (STORE_TOKEN.indexOf('ПОМЕНЯЙТЕ') !== -1) console.log('!!! Задайте STORE_TOKEN в переменных окружения !!!');
