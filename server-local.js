@@ -7,6 +7,8 @@
    • Бэкапы:                 папка backups/ — автоматически, последние 30
    • Каталог сайта:          GET /api/site-catalog (прокси к admin.imagnate.ru,
                              чтобы браузер не упирался в CORS)
+   • Strapi-прокси:          POST /api/strapi — чтение/запись цен в базе сайта
+                             штатным API Strapi (токен передаёт система)
    • Проверка:               GET /api/health
 
    Как запустить: положить рядом index.html и запустить start.bat
@@ -146,6 +148,33 @@ const server = http.createServer((req, res) => {
         sendJson(res, 502, { error: 'Сайт не ответил: ' + e.message });
       }
     })();
+    return;
+  }
+
+  /* Прокси к Strapi сайта: чтение и запись цен штатным API.
+     Пускаем ТОЛЬКО пути /api/... на admin.imagnate.ru — ничего другого. */
+  if (req.method === 'POST' && url.pathname === '/api/strapi') {
+    let raw = '';
+    req.on('data', ch => { raw += ch; if (raw.length > 5 * 1024 * 1024) req.destroy(); });
+    req.on('end', async () => {
+      let b = {};
+      try { b = JSON.parse(raw || '{}'); } catch (e) { return sendJson(res, 400, { error: 'Неверный JSON' }); }
+      const p = String(b.path || '');
+      const method = (b.method === 'PUT' || b.method === 'POST') ? b.method : 'GET';
+      if (!p.startsWith('/api/')) return sendJson(res, 400, { error: 'Путь должен начинаться с /api/' });
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (b.token) headers['Authorization'] = 'Bearer ' + String(b.token);
+        const opts = { method, headers };
+        if (b.body && method !== 'GET') opts.body = JSON.stringify(b.body);
+        const r = await fetch('https://admin.imagnate.ru' + p, opts);
+        const text = await r.text();
+        let j = null; try { j = JSON.parse(text); } catch (e) { j = { raw: text.slice(0, 500) }; }
+        sendJson(res, 200, { ok: r.ok, status: r.status, data: j });
+      } catch (e) {
+        sendJson(res, 502, { error: 'Сайт не ответил: ' + e.message });
+      }
+    });
     return;
   }
 

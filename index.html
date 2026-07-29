@@ -7675,71 +7675,81 @@ function connectedChannels(){
 
 function renderIntegrationsTab(){
   const isOwner=isBossRole();
+  const srv=window._chSrvStatus||null;
+  const creds=erpServerCreds();
+  const home=chHomeStore();
 
   let html='<div class="card" style="margin-bottom:14px;border-color:var(--accent);">'+
     '<div class="kpi-label">'+ic('alert')+' Как это работает</div>'+
     '<div class="tsub" style="margin-top:6px;line-height:1.5;">'+
-      'Подключённые каналы <b>сами присылают заявки</b> в воронку — по мере поступления сообщений. '+
-      '<b>Заказы с сайта сюда не попадают</b> — они падают сразу в раздел «Заказы» (настройка связи — там, в шестерёнке). '+
-      'Двигать карточки между столбцами вы будете руками: это работа продавца, автоматика тут не нужна.<br><br>'+
-      '<b>Для реального подключения нужен сервер.</b> Токены нельзя хранить в браузере — их увидит кто угодно, '+
-      'а вебхуки должны приходить на публичный адрес. Ниже — точный список того, что понадобится от каждой платформы.'+
+      'Сообщения клиентов из подключённых каналов <b>сами падают в воронку</b>: новое обращение — карточка в «Новых заявках», '+
+      'продолжение переписки — в диалог той же заявки. Ответ из диалога уходит клиенту обратно в его канал. '+
+      '<b>Заказы с сайта сюда не попадают</b> — они падают сразу в раздел «Заказы».<br><br>'+
+      'Ключи каналов хранятся <b>только на сервере</b> (Render → Environment) — в браузере их нет. '+
+      (creds
+        ? 'Сервер подключён — статусы ниже настоящие, обновляются каждые 15 секунд.'
+        : '<span style="color:var(--negative);">Сервер не подключён: заполните адрес API и токен в шестерёнке раздела «Заказы».</span>')+
     '</div></div>';
 
   if(!isOwner){
     html+='<div class="card"><div class="empty"><b>Только владелец может управлять подключениями</b>'+
-      '<span>Вы видите текущий статус каналов, но подключать и отключать их может только владелец.</span></div></div>';
+      '<span>Вы видите текущий статус каналов, но управлять ими может только владелец.</span></div></div>';
   }
 
   html+='<div class="grid grid-2" style="grid-template-columns:1fr;gap:12px;">';
 
-  Object.entries(CHANNELS).forEach(([ch, meta])=>{
-    if(ch==='phone'||ch==='store'||ch==='site') return;  // сайт → раздел «Заказы» (настройка в шестерёнке), phone/store не требуют API
-    const int=integrationFor(ch);
-    const status=int?int.status:'disconnected';
-    const st=INT_STATUS[status];
-    const setup=CHANNEL_SETUP[ch];
-    const leadsCount=(DATA.leads||[]).filter(l=>l.channel===ch).length;
+  ['avito','telegram','vk','max','whatsapp'].forEach(ch=>{
+    const meta=CHANNELS[ch];
+    const leadsCount=((home.leads)||[]).filter(l=>l.channel===ch && l.chatKey).length;
 
-    html+='<div class="card"'+(status==='error'?' style="border-color:var(--negative);"':(status==='disconnected'?' style="opacity:.7;"':''))+'>'+
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">'+
+    if(ch==='whatsapp'){
+      html+='<div class="card" style="opacity:.75;">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">'+
+          '<div style="display:flex;align-items:center;gap:10px;">'+
+            '<span class="ch-badge" style="background:'+meta.color+'22;color:'+meta.color+';border-color:'+meta.color+'55;font-size:12px;padding:4px 8px;">'+meta.short+'</span>'+
+            '<div class="tname" style="font-size:14.5px;">'+meta.label+'</div>'+
+          '</div>'+
+          '<span class="badge b-grey">Пока не подключается</span>'+
+        '</div>'+
+        '<div class="tsub" style="margin-top:8px;line-height:1.55;">У WhatsApp нет бесплатного официального API: подключение — только через '+
+        'платных провайдеров (WABA) или официальный Cloud API Meta с верифицированным бизнесом. Если канал важен — скажите, посчитаем варианты. '+
+        'Пока клиенты WhatsApp заводятся в воронку вручную кнопкой «Новая заявка».</div>'+
+      '</div>';
+      return;
+    }
+
+    const st=srv?srv[ch]:null;
+    let badge, note='';
+    if(!creds){ badge=['Нет связи с сервером','b-grey']; }
+    else if(!st){ badge=['Проверяется…','b-grey']; note='Статус придёт с первым опросом (до 15 сек).'; }
+    else if(!st.configured){
+      badge=['Нет ключей на сервере','b-grey'];
+      note='Добавьте ключи в Render → Environment — инструкция по кнопке ниже.';
+    }
+    else if(st.ok===false){ badge=['Ошибка','b-cancel']; note=st.error||''; }
+    else { badge=['Подключён','b-done']; note=(st.ok===null?'Ключи заданы, ждём первый опрос…':''); }
+
+    html+='<div class="card"'+(badge[1]==='b-cancel'?' style="border-color:var(--negative);"':(badge[1]==='b-grey'?' style="opacity:.8;"':''))+'>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">'+
         '<div style="display:flex;align-items:center;gap:10px;">'+
           '<span class="ch-badge" style="background:'+meta.color+'22;color:'+meta.color+';border-color:'+meta.color+'55;font-size:12px;padding:4px 8px;">'+meta.short+'</span>'+
           '<div>'+
             '<div class="tname" style="font-size:14.5px;">'+meta.label+'</div>'+
-            '<div class="tsub">'+(int&&int.account?escHtml(int.account):'—')+'</div>'+
+            '<div class="tsub">'+(ch==='telegram'?'клиенты пишут боту магазина':'официальный API')+'</div>'+
           '</div>'+
         '</div>'+
-        '<span class="badge '+st[1]+'">'+st[0]+'</span>'+
+        '<span class="badge '+badge[1]+'">'+badge[0]+'</span>'+
       '</div>';
-
-    if(status==='error' && int.error){
-      html+='<div class="tsub" style="margin-top:8px;color:var(--negative);">'+ic('alert')+' '+escHtml(int.error)+'</div>';
-    }
-
-    if(status==='connected'||status==='error'){
-      html+='<div class="field-grid" style="margin-top:10px;">'+
-        field('Подключён', int.connectedAt||'—')+
-        field('Последняя синхронизация', int.lastSync||'—')+
-        field('Заявок из канала', String(leadsCount))+
-      '</div>';
-    } else {
-      html+='<div class="tsub" style="margin-top:8px;">'+escHtml(setup.docs)+'</div>';
-    }
-
+    if(note) html+='<div class="tsub" style="margin-top:8px;'+(badge[1]==='b-cancel'?'color:var(--negative);':'')+'">'+escHtml(note)+'</div>';
+    html+='<div class="field-grid" style="margin-top:10px;">'+
+      field('Заявок из канала', String(leadsCount))+
+      field('Опрос', creds?'каждые 15 секунд':'—')+
+    '</div>';
     if(isOwner){
-      html+='<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">';
-      if(status==='connected'){
-        html+='<button class="btn btn-sm" data-sync-ch="'+ch+'">'+ic('refresh')+' Синхронизировать</button>'+
-              '<button class="btn btn-sm" data-setup-ch="'+ch+'">Настройки</button>'+
-              '<button class="btn btn-sm btn-danger" data-disconnect-ch="'+ch+'">Отключить</button>';
-      } else if(status==='error'){
-        html+='<button class="btn btn-sm btn-primary" data-setup-ch="'+ch+'">Переподключить</button>'+
-              '<button class="btn btn-sm btn-danger" data-disconnect-ch="'+ch+'">Отключить</button>';
-      } else {
-        html+='<button class="btn btn-sm btn-primary" data-setup-ch="'+ch+'">'+ic('plus')+' Подключить</button>';
-      }
-      html+='</div>';
+      html+='<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">'+
+        '<button class="btn btn-sm btn-primary" data-ch-check="'+ch+'">'+ic('refresh')+' Проверить связь</button>'+
+        '<button class="btn btn-sm" data-setup-ch="'+ch+'">Как подключить</button>'+
+      '</div>';
     }
     html+='</div>';
   });
@@ -7883,87 +7893,157 @@ setInterval(()=>{ try{ strapiRepairsSync(true); }catch(e){} }, SITE_POLL_MS);
 setTimeout(()=>{ try{ strapiStatusRefresh(); }catch(e){} }, 5000);
 setInterval(()=>{ try{ strapiStatusRefresh(); }catch(e){} }, 60000);
 
+/* ============================================================
+   КАНАЛЫ ВОРОНКИ (боевые): Авито / Telegram-личка / ВК / MAX.
+   Ключи платформ живут на сервере (Render → Environment), в браузере
+   их нет. ERP каждые 15 секунд просит сервер опросить каналы и
+   забирает новые сообщения: новое обращение → заявка в «Новые заявки»,
+   продолжение переписки → в диалог той же заявки.
+   Все заявки каналов падают в ГЛАВНУЮ точку (первую), чтобы обе
+   точки не плодили дубликаты.
+============================================================ */
+const CH_POLL_MS=15000;
+function chHomeStore(){ return STORE_DATA['store_lunnaya'] || STORE_DATA[Object.keys(STORE_DATA)[0]] || DATA; }   /* главная точка — Лунная 4 */
+let _chBusy=false;
+async function channelsSyncNow(manual){
+  if(_chBusy) return 0;
+  const creds=erpServerCreds();
+  if(!creds){ if(manual) toast('Сначала подключите сервер: Заказы → шестерёнка → адрес API и токен','error'); return 0; }
+  _chBusy=true;
+  try{
+    const home=chHomeStore();
+    const r=await fetch(creds.api+'/channels/poll', {method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+creds.token},
+      body:JSON.stringify({sinceMs: home.chCursorMs||0})});
+    const j=await r.json();
+    if(!j || !j.ok){ if(manual) toast('Сервер каналов: '+((j&&j.error)||'нет ответа'),'error'); return 0; }
+    window._chSrvStatus=j.status||{};
+    const n=importChannelMessages(j.messages||[]);
+    if(n){
+      try{ fullSave(); }catch(e){}
+      if(STATE.page==='crm'){ try{ refreshCrm(document.getElementById('pageContent')); }catch(e){} }
+    }
+    if(manual) toast(n?('Каналы: новых сообщений — '+n):'Каналы: новых сообщений нет','success');
+    return n;
+  }catch(e){ if(manual) toast('Нет связи с сервером: '+e.message,'error'); return 0; }
+  finally{ _chBusy=false; }
+}
+
+function importChannelMessages(list){
+  const home=chHomeStore();
+  home.leads=home.leads||[];
+  const seen=home.chSeen=home.chSeen||{};
+  let added=0, appended=0, maxTs=home.chCursorMs||0;
+  (list||[]).forEach(m=>{
+    if(!m || !m.key || m.chatId==null || !m.channel) return;
+    if((m.tsMs||0)>maxTs) maxTs=m.tsMs;
+    if(seen[m.key]) return;
+    seen[m.key]=m.tsMs||1;
+    const ck=m.channel+'_'+m.chatId;
+    let l=home.leads.find(x=>x.chatKey===ck && !['won','lost'].includes(x.stage));
+    if(!l){
+      const lid=(home.leads.length?Math.max(...home.leads.map(x=>x.id||0)):7300)+1;
+      l={id:lid, channel:m.channel, externalId:m.key, chatKey:ck, chatId:String(m.chatId), sourceUrl:'', source:'sync',
+        name:(m.name||'').trim()||('Клиент '+((CHANNELS[m.channel]||{}).label||m.channel)),
+        contact:(m.contact||'').trim(), topic:'none', item:m.item||'', stage:'new', owner:null,
+        createdAt:DATA.today, lastTouch:DATA.today, msgs:[], unread:0,
+        notes:[{date:DATA.today, text:'Заявка пришла из канала '+((CHANNELS[m.channel]||{}).label||m.channel)}]};
+      home.leads.unshift(l);
+      added++;
+    }
+    const mid=(l.msgs.length?Math.max(...l.msgs.map(x=>x.id||0)):0)+1;
+    const d=m.tsMs?new Date(m.tsMs):new Date();
+    l.msgs.push({id:mid, dir:'in', text:String(m.text||''),
+      at:ruDateStr(d)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'),
+      status:'received', key:m.key});
+    l.unread=(l.unread||0)+1;
+    l.lastTouch=DATA.today;
+    if(m.item && !l.item) l.item=m.item;
+    appended++;
+  });
+  if(maxTs>(home.chCursorMs||0)) home.chCursorMs=maxTs;
+  /* словарь виденных сообщений не растёт бесконечно */
+  const ks=Object.keys(seen);
+  if(ks.length>4000) ks.sort((a,b)=>(seen[a]||0)-(seen[b]||0)).slice(0, ks.length-3000).forEach(k=>delete seen[k]);
+  if(added) tgWatchNewChannelLeads();
+  return appended;
+}
+
+/* Уведомление о новой заявке из канала — тот же краткий формат, что для заказов */
+function tgWatchNewChannelLeads(){
+  try{
+    if(!DATA || !DATA.settings || !DATA.settings.tgEnabled) return;
+    if(!erpServerCreds()) return;
+    const home=chHomeStore();
+    (home.leads||[]).forEach(l=>{
+      if(!l.chatKey || l.tgNotified) return;
+      l.tgNotified=true;
+      tgNotify('Поступила новая заявка ✅\nКанал: '+((CHANNELS[l.channel]||{}).label||l.channel)+'\nДата: '+(l.createdAt||DATA.today)+' '+nowTime());
+    });
+  }catch(e){}
+}
+
+/* Ответ клиенту в его канал (через сервер, где лежат ключи) */
+async function channelReply(l, text){
+  const creds=erpServerCreds();
+  if(!creds) return {error:'Сервер не подключён (Заказы → шестерёнка)'};
+  try{
+    const r=await fetch(creds.api+'/channels/reply', {method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+creds.token},
+      body:JSON.stringify({channel:l.channel, chatId:l.chatId, text})});
+    const j=await r.json();
+    return (j&&j.ok)?{ok:true}:{error:(j&&j.error)||'сервер не ответил'};
+  }catch(e){ return {error:e.message}; }
+}
+setTimeout(()=>{ try{ channelsSyncNow(false); }catch(e){} }, 4500);
+setInterval(()=>{ try{ channelsSyncNow(false); }catch(e){} }, CH_POLL_MS);
+
 function wireIntegrations(c){
   c.querySelectorAll('[data-setup-ch]').forEach(el=>el.addEventListener('click',()=>openChannelSetupModal(el.dataset.setupCh, c)));
-  c.querySelectorAll('[data-disconnect-ch]').forEach(el=>el.addEventListener('click',()=>{
-    const ch=el.dataset.disconnectCh;
-    const meta=CHANNELS[ch];
-    const leadsCount=(DATA.leads||[]).filter(l=>l.channel===ch).length;
-    const body='<div class="tsub">Канал <b>'+meta.label+'</b> будет отключён. Новые заявки перестанут поступать.</div>'+
-      (leadsCount?'<div class="tsub" style="margin-top:8px;">Уже полученные заявки ('+leadsCount+' шт.) останутся в воронке.</div>':'');
-    openModal('Отключить '+meta.label,'',body,[{label:'Отключить', cls:'btn-danger', action:()=>{
-      const int=integrationFor(ch);
-      if(int){ int.status='disconnected'; int.error=null; int.lastSync=null; int.account=null; int.creds=null; }
-      closeModal(); renderCrm(c); toast(meta.label+' отключён','info');
-    }}]);
-  }));
-  c.querySelectorAll('[data-sync-ch]').forEach(el=>el.addEventListener('click',()=>{
-    const ch=el.dataset.syncCh;
-    if(ch==='site'){
-      toast('Сайт: запрашиваю заявки…','info');
-      siteSyncNow(false).then(()=>renderCrm(c));
-      return;
-    }
-    const int=integrationFor(ch);
-    if(int){ int.lastSync=DATA.today+' '+nowTime(); }
-    renderCrm(c);
-    toast(CHANNELS[ch].label+': синхронизировано','success');
+  c.querySelectorAll('[data-ch-check]').forEach(el=>el.addEventListener('click',()=>{
+    toast('Опрашиваю каналы через сервер…','info');
+    channelsSyncNow(true).then(()=>{ try{ renderCrm(c); }catch(e){} });
   }));
 }
 
 function openChannelSetupModal(ch, c){
   const meta=CHANNELS[ch];
-  const setup=CHANNEL_SETUP[ch];
-  const int=integrationFor(ch);
-  const creds=(int&&int.creds)||{};
-  const defs=CRED_DEFAULTS[ch]||{};
-
-  let body='<div class="tsub" style="margin-bottom:12px;">'+escHtml(setup.docs)+'</div>';
-  body+=setup.fields.map(f=>
-    '<div class="field" style="margin-bottom:10px;"><label>'+f.label+'</label>'+
-    '<input class="input-mini" data-cred="'+f.k+'" type="'+(f.secret?'password':'text')+'" style="width:100%;" value="'+escAttr(creds[f.k]||defs[f.k]||'')+'" placeholder="'+escAttr(f.hint)+'">'+
-    '<div class="tsub" style="margin-top:2px;">'+escHtml(f.hint)+'</div></div>'
-  ).join('');
-
-  body+='<div class="field" style="margin-top:10px;"><label>Название аккаунта (для вас)</label>'+
-    '<input class="input-mini" id="chAccount" style="width:100%;" value="'+escAttr((int&&int.account)||'')+'" placeholder="Как отображать в списке"></div>';
-
-  body+= ch==='site'
-    ? '<div class="card" style="margin-top:12px;background:var(--glass-2);">'+
-      '<div class="tsub"><b>Как подключить:</b></div>'+
-      '<div class="tsub" style="margin-top:4px;line-height:1.6;">1. Сервер уже развёрнут на Render: <span class="mono">imagnate-assistant.onrender.com</span> — форма заявки живёт на странице <span class="mono">/form</span>.<br>2. Здесь укажите адрес API и секретный токен (STORE_TOKEN из настроек Render → Environment).<br>3. Заявки начнут приходить автоматически, проверка раз в минуту. Если ERP открыта прямо с Render — адрес API можно оставить <span class="mono">/api</span>.</div>'+
-    '</div>'
-    : '<div class="card" style="margin-top:12px;background:var(--glass-2);">'+
-      '<div class="tsub"><b>Вебхук для этого канала:</b></div>'+
-      '<div class="mono tsub" style="margin-top:4px;word-break:break-all;">https://ваш-сервер/webhook/'+ch+'</div>'+
-      '<div class="tsub" style="margin-top:6px;">Этот адрес нужно указать в кабинете платформы. Пока нет сервера — подключение работает в демо-режиме.</div>'+
-    '</div>';
-
-  openModal('Подключить '+meta.label, channelBadge(ch), body, [{label:'Подключить', cls:'btn-primary', action:()=>{
-    const newCreds={};
-    let missing=false;
-    document.querySelectorAll('[data-cred]').forEach(inp=>{
-      const v=inp.value.trim();
-      if(!v) missing=true;
-      newCreds[inp.dataset.cred]=v;
-    });
-    if(missing){ toast('Заполните все поля','error'); return; }
-    let int=integrationFor(ch);
-    if(!int){ int={channel:ch}; DATA.integrations.push(int); }
-    int.status='connected';
-    int.creds=newCreds;
-    int.account=document.getElementById('chAccount').value.trim()||meta.label;
-    int.connectedAt=DATA.today;
-    int.lastSync=DATA.today+' '+nowTime();
-    int.error=null;
+  const box=(t)=>'<div class="card" style="margin-top:10px;background:var(--glass-2);"><div class="tsub" style="line-height:1.7;">'+t+'</div></div>';
+  let steps='';
+  if(ch==='avito'){
+    steps=box('<b>Авито — официальный Messenger API:</b><br>'+
+      '1. Зайдите на Авито под аккаунтом магазина → <b>avito.ru/professionals/api</b> (раздел «Для профессионалов» → Интеграции).<br>'+
+      '2. Получите <span class="mono">Client ID</span> и <span class="mono">Client Secret</span>.<br>'+
+      '3. Render → ваш сервис → Environment → добавьте две переменные:<br>'+
+      '<span class="mono">AVITO_CLIENT_ID</span> и <span class="mono">AVITO_CLIENT_SECRET</span>.<br>'+
+      '4. Сервис перезапустится сам (~минута) → «Проверить связь».<br>'+
+      'После этого сообщения из чатов Авито будут падать в воронку, а ответы из диалога — уходить клиенту в Авито.');
+  } else if(ch==='telegram'){
+    steps=box('<b>Telegram — уже почти готов:</b> используется наш бот '+
+      '<span class="mono">@iMagnate_Asistentbot</span> (токен уже на сервере).<br>'+
+      '1. Разместите ссылку на бота на сайте/в профиле: клиент пишет боту — сообщение падает в воронку.<br>'+
+      '2. Личные сообщения владельца и директоров (чьи chat_id вписаны в <span class="mono">TELEGRAM_CHAT_IDS</span>) заявками НЕ считаются.<br>'+
+      '3. Нажмите «Проверить связь» — и напишите боту с ЛИЧНОГО телефона кого-то вне списка, заявка появится в «Новых».');
+  } else if(ch==='vk'){
+    steps=box('<b>ВКонтакте — сообщения сообщества:</b><br>'+
+      '1. Ваше сообщество → Управление → Настройки → <b>Работа с API</b> → «Ключи доступа» → Создать ключ с правом <b>«Сообщения сообщества»</b>.<br>'+
+      '2. Там же в «Сообщениях» проверьте, что сообщения сообщества включены.<br>'+
+      '3. Render → Environment → добавьте <span class="mono">VK_GROUP_TOKEN</span> = этот ключ.<br>'+
+      '4. После перезапуска — «Проверить связь».');
+  } else if(ch==='max'){
+    steps=box('<b>MAX — бот магазина:</b><br>'+
+      '1. В приложении MAX найдите <span class="mono">@MasterBot</span> → создайте бота магазина → получите токен.<br>'+
+      '2. Render → Environment → добавьте <span class="mono">MAX_BOT_TOKEN</span> = токен.<br>'+
+      '3. После перезапуска — «Проверить связь». Клиенты пишут вашему боту в MAX — сообщения падают в воронку.');
+  } else {
+    steps=box('Канал настраивается на сервере.');
+  }
+  steps+=box('<b>Важно:</b> ключи вписываются ТОЛЬКО на сервере (Render → Environment) — в систему и в переписку их не вставляйте. '+
+    'После добавления переменной Render перезапускает сервис около минуты, затем жмите «Проверить связь».');
+  openModal('Как подключить '+meta.label, channelBadge(ch), steps, [{label:'Проверить связь', cls:'btn-primary', action:()=>{
     closeModal();
-    if(ch==='site'){
-      toast('Сайт подключён — проверяю связь…','success');
-      siteSyncNow(false).then(()=>renderCrm(c));
-    } else {
-      renderCrm(c);
-      toast(meta.label+' подключён','success');
-    }
+    toast('Опрашиваю каналы через сервер…','info');
+    channelsSyncNow(true).then(()=>{ try{ renderCrm(c); }catch(e){} });
   }}]);
 }
 
@@ -12819,6 +12899,7 @@ async function cleanStartImport(){
     if(d.attention) Object.keys(d.attention).forEach(k=>{ if(Array.isArray(d.attention[k])) d.attention[k]=[]; });
     if(d.courierWallets) d.courierWallets={};
     d.siteLastZakazId=null; d.siteLastRemontId=null; d.siteLastLeadId=999999999;
+    d.chSeen={}; d.chCursorMs=Date.now();   /* каналы: историю переписок заново не тянем */
   });
   /* 2) история заказов с сайта */
   toast('Загружаю историю заказов с сайта…','info');
@@ -17421,7 +17502,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-10';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-11';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -18109,7 +18190,7 @@ function openLeadDialog(id, c){
 
   /* Переписка */
   body+='<div class="ld-msgs" id="ldMsgs">'+
-    ((l.msgs&&l.msgs.length)? l.msgs.map(m=>'<div class="ld-msg '+(m.dir==='in'?'in':'out')+'">'+escHtml(m.text)+'<span class="t">'+(m.dir==='in'?escHtml(l.name):(l.owner?escHtml(l.owner):'мы'))+' · '+m.at+'</span></div>').join('')
+    ((l.msgs&&l.msgs.length)? l.msgs.map(m=>'<div class="ld-msg '+(m.dir==='in'?'in':'out')+'">'+escHtml(m.text)+'<span class="t">'+(m.dir==='in'?escHtml(l.name):(l.owner?escHtml(l.owner):'мы'))+' · '+m.at+'<span id="ldmst'+m.id+'" style="color:'+(m.status==='error'?'var(--negative)':'inherit')+';">'+(m.status==='error'?' · ⚠ не доставлено':(m.status==='pending'?' · отправляется…':''))+'</span></span></div>').join('')
       : '<div class="ld-sys">Переписки пока нет — напишите клиенту первым</div>')+
   '</div>';
   body+='<div class="ld-compose"><input class="input-mini" id="ldInput" style="flex:1;" placeholder="Написать клиенту…"><button class="btn btn-primary" id="ldSend" style="padding:11px 18px;">➤</button></div>';
@@ -18177,10 +18258,21 @@ function openLeadDialog(id, c){
   const sendMsg=()=>{
     const inp=document.getElementById('ldInput');
     const v=(inp.value||'').trim(); if(!v) return;
-    l.msgs.push({id:(l.msgs.length?Math.max(...l.msgs.map(m=>m.id)):0)+1, dir:'out', text:v, at:DATA.today+' '+nowTime(), status:'sent'});
+    const real=!!(l.chatKey && l.chatId);   /* настоящий канал: ответ уйдёт клиенту */
+    const msg={id:(l.msgs.length?Math.max(...l.msgs.map(m=>m.id)):0)+1, dir:'out', text:v, at:DATA.today+' '+nowTime(), status:(real?'pending':'sent')};
+    l.msgs.push(msg);
     l.lastTouch=DATA.today;
     l.callbackDue=false;
     if(!l.owner){ l.owner=me; if(l.stage==='new'){ l.stage='working'; l.workingSince=DATA.today+' '+nowTime(); } l.fellBack=false; }
+    if(real){
+      channelReply(l, v).then(r=>{
+        msg.status=r.ok?'sent':'error';
+        const el=document.getElementById('ldmst'+msg.id);
+        if(el){ el.textContent=r.ok?'':' · ⚠ не доставлено'; if(!r.ok) el.style.color='var(--negative)'; }
+        if(!r.ok) toast('Не доставлено в '+((CHANNELS[l.channel]||{}).label||l.channel)+': '+r.error,'error');
+        try{ fullSave(); }catch(e){}
+      });
+    }
     openLeadDialog(l.id, c);   /* перерисовать окно с новым сообщением */
   };
   const sb=document.getElementById('ldSend');
@@ -19276,6 +19368,7 @@ setInterval(()=>{ if(processReviewMailQueue() && STATE.page!=='archive') renderP
 /* сторож уведомлений: внутренняя проверка новых заявок с сайта */
 tgWatchNewSiteItems();
 setInterval(tgWatchNewSiteItems, 10000);
+setInterval(()=>{ try{ tgWatchNewChannelLeads(); }catch(e){} }, 12000);
 if(_fullLoaded) toast('Восстановлены данные прошлой сессии','success');
 if(loaded && DATA.siteCatalog.length){
   toast('Восстановлено: '+DATA.siteCatalog.length+' товаров каталога', 'success');
