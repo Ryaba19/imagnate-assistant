@@ -3837,6 +3837,18 @@ function renderArchive(c){
    любое другое значение = привязан к конкретному серийнику.
 ============================================================ */
 function itemRequiresSerial(it){ return it.imei !== '—'; }
+/* Аксессуар / расходник: серийного учёта нет. Наличие подтверждается визуально
+   (галочкой в «Товар пришёл» или авто-находкой на складе аксессуаров) —
+   после подтверждения imei ставится '—' и скан при выдаче не требуется. */
+const ACC_NAME_RE=/чехол|кейс|бампер|кабел|шнур|провод|стекло|плёнк|пленк|заря[дж]|адаптер|переходник|блок питания|ремеш|брасл|брелок|защит|держател|подставк|док-?станц|салфет|стилус|карта памяти|картридер|наклейк|попсокет|ланъярд|ланьярд|кольцо|крепле|органайзер/i;
+function itemIsAccessory(it){
+  if(!it) return false;
+  if(it.sourceType==='service') return false;   /* услуги и так '—' */
+  const nm=String(it.name||'');
+  if(ACC_NAME_RE.test(nm)) return true;
+  try{ if((DATA.warehouse.accessories||[]).some(a=>a.model===nm)) return true; }catch(e){}
+  return false;
+}
 function itemIsBound(it){ return itemRequiresSerial(it) && !!it.imei && it.imei !== 'нет в наличии'; }
 function orderFullyBound(o){ return o.items.every(it=>!itemRequiresSerial(it) || itemIsBound(it)); }
 
@@ -3891,7 +3903,7 @@ function recomputeOrderFulfillment(o){
     setOrderStatus(o,'awaiting_stock');
     (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'status', comment:'Не все товары в наличии в выбранном магазине — заказ переведён в «Ждём поступление»'});
   } else if(!anyUnavailable && stillNeedsBinding && o.status==='awaiting_stock'){
-    setOrderStatus(o,'waiting');
+    setOrderStatus(o,'deferred');
     (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'status', comment:'Товар появился в наличии — заказ переведён в «В ожидании», ожидает привязки серийника'});
   } else if(!stillNeedsBinding){
     const newStatus='ready';
@@ -4197,8 +4209,23 @@ function openOrderSettingsModal(){
     '<p class="tsub">Для работы на сервере должны быть заданы TELEGRAM_BOT_TOKEN / SMTP-переменные — см. файл «НАСТРОЙКА-УВЕДОМЛЕНИЙ.md».</p>'+
     '<div class="drill-divider"></div><div class="drill-block-label">Локальный сервер данных (база на компьютере владельца)</div>'+
     '<div class="field"><label>Адрес локального сервера</label><input class="input-mini" id="setLocalApi" style="width:100%;" placeholder="http://192.168.1.10:8787 (пусто = автоматически)" value="'+escAttr(DATA.settings.localApiUrl||'')+'"></div>'+
+    '<div class="drill-divider"></div><div class="drill-block-label">Переход на чистовую</div>'+
+    '<div class="field" style="margin:6px 0;"><label>Токен базы сайта (Strapi API Token) — сейчас: '+(apiToken()?'<b style="color:var(--positive);">задан ('+escHtml(apiToken().slice(0,4))+'…)</b>':'<b style="color:var(--negative);">НЕ задан</b>')+'</label>'+
+    '<input class="input-mini" id="setStrapiToken" type="password" style="width:100%;" placeholder="вставьте токен ERP из админки Strapi (Settings → API Tokens)"></div>'+
+    '<p class="tsub">Это ДРУГОЙ токен, не STORE_TOKEN. Хранится только в этом браузере — на каждом компьютере вводится один раз. Вставьте и нажмите «Сохранить и проверить» внизу.</p>'+
+    '<button class="btn btn-sm btn-danger" id="cleanStartBtn" type="button" style="margin:6px 0;">🧹 Чистый старт: удалить демо и загрузить реальные заказы с сайта</button>'+
+    '<p class="tsub">Сотрёт демо-данные (заказы, заявки, клиенты, кассы, склад) и заполнит систему историей сайта: завершённые заказы лягут в архив, свежие — в работу, клиенты соберутся из заказов. Команда, график и настройки останутся. Отменить нельзя.</p>'+
     '<div class="toggle-row" style="margin:8px 0;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="setCloudSync" '+(DATA.settings.cloudSyncEnabled===false?'':'checked')+'> Облачная копия базы на сервере (Render) — связывает магазин и дом, побеждает свежий снимок</label></div>'+
     '<p class="tsub">Если ERP открыта прямо с сервера-компа (адрес с :8787) — ничего указывать не нужно, найдётся сам. Статус: '+(window._localSync&&window._localSync.status==='ok'?'<b style="color:var(--positive);">подключён</b>':(localSyncUrl()?'<b style="color:var(--warning);">'+escHtml(window._localSync.status||'')+'</b>':'не используется'))+'</p>';
+  setTimeout(()=>{
+    const cb=document.getElementById('cleanStartBtn');
+    if(cb) cb.addEventListener('click', ()=>{
+      if(!isBossRole()){ toast('Только владелец или директор', 'error'); return; }
+      openModal('Чистый старт — вы уверены?','',
+        '<div class="tsub" style="line-height:1.7;">Будут УДАЛЕНЫ все демо-данные: заказы, заявки CRM, клиенты, ремонты, задачи, закуп, кассы (обнулятся), склад (опустеет). Вместо них загрузится реальная история сайта. Команда, график смен и настройки сохранятся.<br><br><b>Отменить операцию будет нельзя.</b></div>',
+        [{label:'Удалить демо и загрузить реальные данные', cls:'btn-danger', action:()=>{ cleanStartImport(); }}]);
+    });
+  },0);
   openModal('Настройки заказов', '', body, [{label:'Сохранить и проверить', cls:'btn-primary', action:()=>{
     const v=parseInt(document.getElementById('setLeadDays').value);
     if(isNaN(v)||v<0){ toast('Введите корректное число дней', 'error'); return; }
@@ -4209,6 +4236,8 @@ function openOrderSettingsModal(){
     const mrC=document.getElementById('setMailReal'); if(mrC) DATA.settings.mailRealSend=mrC.checked;
     const laC=document.getElementById('setLocalApi'); if(laC) DATA.settings.localApiUrl=laC.value.trim();
     const csC=document.getElementById('setCloudSync'); if(csC) DATA.settings.cloudSyncEnabled=csC.checked;
+    const stT=document.getElementById('setStrapiToken');
+    if(stT && stT.value.trim()){ try{ localStorage.setItem('erp_api_token', stT.value.trim()); toast('Токен базы сайта сохранён','success'); }catch(e){} }
     const apiUrl=document.getElementById('setSiteUrl').value.trim();
     const apiToken=document.getElementById('setSiteToken').value.trim();
     let i2=integrationFor('site');
@@ -4625,6 +4654,11 @@ function openPriceConfirmModal(id, c){
         if(itemRequiresSerial(it) && !itemIsBound(it)){
           const wh=[...DATA.warehouse.tech, ...DATA.warehouse.tradein].find(x=>x.model===it.name && (x.status==='free'||x.status==='instock') && !o.items.some(i2=>i2.imei===x.imei));
           if(wh){ it.imei=wh.imei; wh.status='reserved'; (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'bind', comment:'Авто-привязка со склада: '+wh.imei+' → «'+it.name+'»'}); }
+          else if(itemIsAccessory(it)){
+            /* аксессуар: серийника нет — достаточно наличия на складе аксессуаров */
+            const acc=(DATA.warehouse.accessories||[]).find(a=>a.model===it.name && (a.qty||0)>0 && a.status!=='out');
+            if(acc){ it.imei='—'; (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'bind', comment:'Аксессуар «'+it.name+'» есть на складе ('+acc.qty+' шт) — без серийного учёта'}); }
+          }
         }
       });
       if(orderFullyBound(o)){
@@ -4966,6 +5000,7 @@ function openOrderModal(id, c){
   body+='<div class="drill-divider"></div><div class="drill-block-label">Документы</div>';
   body+='<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
     '<button class="btn btn-sm btn-primary" data-print-order="'+o.id+'">'+ic('docs')+' Бланк заказа</button>'+
+    '<button class="btn btn-sm" data-print-war="'+o.id+'">'+ic('docs')+' Гарантийный талон</button>'+
     '<button class="btn btn-sm" data-print-bu="'+o.id+'">'+ic('docs')+' Акт передачи Б/У</button>'+
   '</div>';
 
@@ -4987,6 +5022,8 @@ function openOrderModal(id, c){
   if(pob) pob.addEventListener('click', ()=>printOrderBlank(o.id));
   const pbu=document.querySelector('[data-print-bu]');
   if(pbu) pbu.addEventListener('click', ()=>printUsedDeviceAct(o.id));
+  const pwar=document.querySelector('[data-print-war]');
+  if(pwar) pwar.addEventListener('click', ()=>printWarrantyCard(o.id));
 }
 
 /* Изменить дату выдачи заказа в ожидании */
@@ -5015,10 +5052,12 @@ function openGoodsArrivedModal(id, c){
   const o=findOrder(id);
   if(!o) return;
   const unbound=o.items.map((it,i)=>({it,i})).filter(x=>itemRequiresSerial(x.it) && !itemIsBound(x.it));
-  let body='<div class="tsub" style="margin-bottom:10px;">Укажите IMEI пришедших устройств. После привязки заказ перейдёт в «Готов к выдаче».</div>';
-  body+=unbound.map(x=>
-    '<div class="field"><label>'+escHtml(x.it.name)+'</label>'+
-    '<input class="input-mini" data-arr-imei="'+x.i+'" style="width:100%;" placeholder="IMEI / серийный номер"></div>'
+  let body='<div class="tsub" style="margin-bottom:10px;">Технике укажите IMEI, аксессуары подтвердите галочкой. После этого заказ перейдёт в «Готов к выдаче».</div>';
+  body+=unbound.map(x=> itemIsAccessory(x.it)
+    ? '<div class="check-row" style="justify-content:space-between;align-items:center;gap:10px;"><span>'+escHtml(x.it.name)+'</span>'+
+      '<label style="display:flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap;"><input type="checkbox" data-arr-acc="'+x.i+'"> Пришёл, проверен</label></div>'
+    : '<div class="field"><label>'+escHtml(x.it.name)+'</label>'+
+      '<input class="input-mini" data-arr-imei="'+x.i+'" style="width:100%;" placeholder="IMEI / серийный номер"></div>'
   ).join('');
   if(!unbound.length) body='<div class="tsub">Все товары уже привязаны.</div>';
 
@@ -5030,7 +5069,11 @@ function openGoodsArrivedModal(id, c){
       if(!v){ ok=false; return; }
       o.items[parseInt(inp.dataset.arrImei)].imei=v;
     });
-    if(!ok && unbound.length){ toast('Заполните IMEI всех устройств','error'); return; }
+    document.querySelectorAll('[data-arr-acc]').forEach(cb=>{
+      if(!cb.checked){ ok=false; return; }
+      o.items[parseInt(cb.dataset.arrAcc)].imei='—';   /* без серийного учёта — наличие подтверждено */
+    });
+    if(!ok && unbound.length){ toast('Заполните IMEI устройств и отметьте аксессуары','error'); return; }
     setOrderStatus(o,'ready');
     o.callLog.unshift({date:DATA.today, time:nowTime(), action:'note', comment:'Товар поступил от поставщика. Заказ готов к выдаче.'});
     // Закрываем связанные заявки
@@ -5138,6 +5181,74 @@ function printOrderBlank(id){
   toast('Бланк заказа №'+o.id+' сформирован','success');
 }
 
+/* ГАРАНТИЙНЫЙ ТАЛОН — выдаётся клиенту вместе с товаром: позиции с
+   серийниками и сроком гарантии, условия, порядок обращения, подписи */
+function printWarrantyCard(id){
+  const o=findOrder(id);
+  if(!o) return;
+  const e=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const w=window.open('','_blank','width=800,height=1100');
+  if(!w){toast('Разрешите всплывающие окна','error');return;}
+  const saleDate=o.closedAt||o.issuedAt||DATA.today;
+  const rows=o.items.map((it,i)=>{
+    const acc=(it.imei==='—')||itemIsAccessory(it);
+    const sn=(it.imei && it.imei!=='—' && it.imei!=='нет в наличии')?it.imei:'—';
+    return '<tr><td>'+(i+1)+'</td><td>'+e(it.name)+'</td><td style="font-family:monospace;">'+e(sn)+'</td>'+
+      '<td style="text-align:center;">'+(acc?'1 месяц':'12 месяцев')+'</td></tr>';
+  }).join('');
+  w.document.write('<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>Гарантийный талон №'+o.id+'</title><style>'+printCSS()+'</style></head><body>'+
+    printBtn()+printHeader('ГАРАНТИЙНЫЙ<br>ТАЛОН', o.id)+
+
+    '<div class="sec"><div class="st">Покупатель и покупка</div>'+
+      '<div class="g2">'+
+        '<div><div class="r"><div class="lbl">ФИО:</div><div class="val">'+e(o.name)+'</div></div>'+
+          '<div class="r"><div class="lbl">Телефон:</div><div class="val">'+e(o.phone)+'</div></div></div>'+
+        '<div><div class="r"><div class="lbl">Дата продажи:</div><div class="val">'+e(saleDate)+'</div></div>'+
+          '<div class="r"><div class="lbl">Магазин:</div><div class="val">'+e(o.store||'—')+'</div></div></div>'+
+      '</div>'+
+    '</div>'+
+
+    '<div class="sec"><div class="st">Товар на гарантии</div>'+
+      '<table><thead><tr><th>№</th><th>Наименование</th><th>IMEI / S/N</th><th>Срок гарантии</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+      '<div style="font-size:10.5px;color:#666;">Срок гарантии исчисляется с даты продажи. Новая техника — 12 месяцев, аксессуары — 1 месяц.</div>'+
+    '</div>'+
+
+    '<div class="g2">'+
+      '<div class="sec"><div class="st">Условия гарантии</div>'+
+        '<div class="imp"><b>Бесплатный ремонт при подтверждении заводского недостатка</b></div>'+
+        '<div style="font-size:10px;color:#666;line-height:1.5;margin-top:4px;">'+
+          '<b>Гарантия не распространяется на:</b><br>'+
+          '✕ механические повреждения; ✕ попадание влаги;<br>'+
+          '✕ последствия неправильной эксплуатации;<br>'+
+          '✕ самостоятельное вскрытие или ремонт; ✕ повреждение серийного номера.</div>'+
+      '</div>'+
+      '<div class="sec"><div class="st">Как обратиться по гарантии</div>'+
+        '<ul style="font-size:11px;line-height:1.6;padding-left:16px;">'+
+          '<li>Принесите товар и этот талон в магазин покупки.</li>'+
+          '<li>Мастер проведёт диагностику и определит гарантийность случая.</li>'+
+          '<li>Срок рассмотрения обращения — до 20 дней.</li>'+
+          '<li>Сохраняйте талон до конца гарантийного срока.</li>'+
+        '</ul>'+
+      '</div>'+
+    '</div>'+
+
+    '<div class="sigs">'+
+      '<div class="sig"><div class="sig-t">Продавец</div>'+
+        '<div class="r"><div class="lbl">ФИО:</div><div class="val">_________________</div></div>'+
+        '<div class="sig-l"></div><div class="sig-s">Подпись</div></div>'+
+      '<div class="sig"><div class="sig-t">Покупатель</div>'+
+        '<div class="r"><div class="lbl">ФИО:</div><div class="val">'+e(o.name)+'</div></div>'+
+        '<div class="sig-l"></div><div class="sig-s">Подпись</div>'+
+        '<div style="font-size:10px;margin-top:6px;">Дата: «____» _______________ 20____ г.</div></div>'+
+    '</div>'+
+
+    '<div class="foot"><span>Store Control</span></div>'+
+    '<div class="thanks"><b>БЛАГОДАРИМ ЗА ДОВЕРИЕ!</b><br>Мы всегда готовы помочь по вопросам гарантии, настройки и эксплуатации приобретённого товара.</div>'+
+    '</body></html>');
+  w.document.close();
+  toast('Гарантийный талон №'+o.id+' сформирован','success');
+}
+
 /* АКТ ПЕРЕДАЧИ Б/У УСТРОЙСТВА — по образцу iMagnate:
    данные клиента, устройство (IMEI, аккумулятор, комплектность),
    описание состояния, чек-лист подтверждения покупателя,
@@ -5226,21 +5337,34 @@ function openIssueModal(id){
     return;
   }
   let scanState=o.items.map(it=>({matched:null}));
-  let body='<p style="color:var(--text-2);font-size:13px;margin-top:0;">Перед выдачей каждая позиция должна быть отсканирована и сверена по модели, памяти, цвету, SIM и серийному номеру. При несовпадении выдача невозможна.</p>';
+  const needScan=o.items.some(it=>it.imei!=='—');
+  let body='<p style="color:var(--text-2);font-size:13px;margin-top:0;">'+(needScan
+    ? 'Позиции с серийным учётом сканируются и сверяются по модели и серийному номеру — при несовпадении выдача невозможна. Аксессуары и услуги подтверждаются визуально, скан не нужен.'
+    : 'В заказе только позиции без серийного учёта — проверьте товар визуально и подтвердите выдачу.')+'</p>';
   body+='<div id="scanItems">';
   o.items.forEach((it,i)=>{
+    const scanIt=it.imei!=='—';
     body+='<div class="check-row" id="scanRow'+i+'" style="flex-direction:column;align-items:stretch;gap:8px;">'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;">'+
-        '<div><b style="color:var(--text-0);">'+it.name+'</b><div class="tsub mono">Ожидаемый код: '+it.imei+'</div></div>'+
-        '<span class="wait" id="scanStatus'+i+'">'+ic('alert')+' Не отсканировано</span>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">'+
+        '<div><b style="color:var(--text-0);">'+escHtml(it.name)+'</b>'+(scanIt?'<div class="tsub mono">Ожидаемый код: '+it.imei+'</div>':'')+'</div>'+
+        (scanIt
+          ? '<span class="wait" id="scanStatus'+i+'">'+ic('alert')+' Не отсканировано</span>'
+          : '<span class="ok" id="scanStatus'+i+'">'+ic('check')+' Проверяется визуально</span>')+
       '</div>'+
-      (it.imei!=='—' ?
-        '<input class="input-mini" id="scanInput'+i+'" data-scan-target="'+i+'" placeholder="Наведите Bluetooth-сканер на код — поле подтвердится само" style="width:100%;">'
-        : '<div class="tsub">Без серийного учёта — подтверждается визуально</div>')+
+      (scanIt
+        ? '<input class="input-mini" id="scanInput'+i+'" data-scan-target="'+i+'" placeholder="Наведите Bluetooth-сканер на код — поле подтвердится само" style="width:100%;">'
+        : '<div class="tsub">Без серийного учёта — скан не требуется</div>')+
     '</div>';
   });
   body+='</div>';
-  body+='<div class="tsub" style="margin-top:6px;">Сканер должен быть подключён как Bluetooth-клавиатура (HID) в настройках устройства — после этого поле заполняется само, без касаний экрана. Демо: код можно ввести и вручную, подтверждение — по Enter.</div>';
+  if(needScan) body+='<div class="tsub" style="margin-top:6px;">Сканер должен быть подключён как Bluetooth-клавиатура (HID) в настройках устройства — после этого поле заполняется само, без касаний экрана. Демо: код можно ввести и вручную, подтверждение — по Enter.</div>';
+  /* Печатные документы клиенту — прямо из окна выдачи */
+  body+='<div class="drill-divider"></div><div class="drill-block-label">Документы для клиента</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+      '<button class="btn btn-sm" id="issuePrintBlank">'+ic('docs')+' Бланк заказа</button>'+
+      '<button class="btn btn-sm" id="issuePrintWarranty">'+ic('docs')+' Гарантийный талон</button>'+
+    '</div>'+
+    '<div class="tsub" style="margin-top:4px;">Распечатайте и передайте клиенту вместе с товаром. Оба документа доступны и после выдачи — в карточке заказа.</div>';
 
   /* Письмо-оценка (модуль писем): продавец видит, что произойдёт после выдачи */
   try{
@@ -5266,6 +5390,10 @@ function openIssueModal(id){
   }}];
 
   openModal('Выдача заказа №'+o.id, 'Сканирование и проверка перед выдачей', body, footActions);
+  const ipb=document.getElementById('issuePrintBlank');
+  if(ipb) ipb.addEventListener('click', ()=>printOrderBlank(o.id));
+  const ipw=document.getElementById('issuePrintWarranty');
+  if(ipw) ipw.addEventListener('click', ()=>printWarrantyCard(o.id));
 
   /* --- готовность к Bluetooth-сканеру (выбранное оборудование) ---
      Bluetooth-сканеры штрих-кодов в режиме HID подключаются к устройству
@@ -5331,6 +5459,7 @@ function openIssueModal(id){
     });
   });
   focusNextUnscanned();
+  updateConfirmState();   /* заказ из одних аксессуаров/услуг: сканировать нечего — кнопка активна сразу */
 
   function updateConfirmState(){
     const allOk = scanState.every(s=>s.matched===true);
@@ -7624,7 +7753,7 @@ function renderIntegrationsTab(){
    ERP -> GET /api/leads?since=N (+токен) -> новые лиды в воронку.
 ============================================================ */
 const SITE_TOPICS={buy:'Покупка', tradein:'Трейд-ин', repair:'Ремонт', question:'Вопрос'};
-const SITE_POLL_MS=60000;
+const SITE_POLL_MS=15000;   /* заявки с сайта подтягиваются каждые 15 секунд */
 
 
 /* ============================================================
@@ -7639,14 +7768,14 @@ function tgWatchNewSiteItems(){
     if(!DATA || !DATA.settings || !DATA.settings.tgEnabled) return;
     if(!erpServerCreds()) return;
     (DATA.orders||[]).forEach(o=>{
-      if(!o.externalId || String(o.externalId).indexOf('site_')!==0 || o.tgNotified) return;
+      if(!o.externalId || !/^(site|strapi)_/.test(String(o.externalId)) || o.tgNotified) return;
       o.tgNotified=true;
       tgNotify('Поступил новый заказ ✅\n'+
         'Номер заказа: №'+o.id+'\n'+
         'Дата оформления: '+(o.date||DATA.today)+' '+nowTime());
     });
     (DATA.service||[]).forEach(t=>{
-      if(!t.externalId || String(t.externalId).indexOf('site_')!==0 || t.tgNotified) return;
+      if(!t.externalId || !/^(site|strapi)_/.test(String(t.externalId)) || t.tgNotified) return;
       t.tgNotified=true;
       tgNotify('Поступила новая заявка на ремонт ✅\n'+
         'Номер заявки: №'+t.id+'\n'+
@@ -7699,7 +7828,7 @@ function importSiteLeads(arr){
       clientComment:[topicLabel, s.comment?String(s.comment).slice(0,1000):''].filter(Boolean).join(': '),
       sellerComment:'Заказ с сайта — создан автоматически'+(s.page?' · страница: '+String(s.page).slice(0,200):''),
       discount:'—', promo:'', payment:'—', status:'new',
-      items:[{name: s.item? String(s.item).slice(0,90) : 'Товар по заявке с сайта', imei:'—', price: (parseInt(s.price)||0)}],
+      items:[{name: s.item? String(s.item).slice(0,90) : 'Товар по заявке с сайта', imei:'', price: (parseInt(s.price)||0)}],
       callLog:[{date:DATA.today, time:nowTime(), action:'note', comment:'Заявка с сайта ('+topicLabel+'). Позвонить клиенту и подтвердить заказ.'}],
     });
     const nid=parseInt(s.id);
@@ -7742,8 +7871,17 @@ async function siteSyncNow(quiet){
     return 0;
   }
 }
-/* Автоопрос раз в минуту, пока канал подключён */
+/* Автоопрос каждые 15 секунд, пока канал подключён; первый — сразу при запуске */
+setTimeout(()=>{ try{ siteSyncNow(true); }catch(e){} }, 1500);
 setInterval(()=>{ try{ siteSyncNow(true); }catch(e){} }, SITE_POLL_MS);
+/* прямые каналы из базы сайта (Strapi): заказы + заявки на ремонт */
+setTimeout(()=>{ try{ strapiOrdersSync(true); }catch(e){} }, 2500);
+setInterval(()=>{ try{ strapiOrdersSync(true); }catch(e){} }, SITE_POLL_MS);
+setTimeout(()=>{ try{ strapiRepairsSync(true); }catch(e){} }, 3500);
+setInterval(()=>{ try{ strapiRepairsSync(true); }catch(e){} }, SITE_POLL_MS);
+/* слежение за изменениями статусов на сайте */
+setTimeout(()=>{ try{ strapiStatusRefresh(); }catch(e){} }, 5000);
+setInterval(()=>{ try{ strapiStatusRefresh(); }catch(e){} }, 60000);
 
 function wireIntegrations(c){
   c.querySelectorAll('[data-setup-ch]').forEach(el=>el.addEventListener('click',()=>openChannelSetupModal(el.dataset.setupCh, c)));
@@ -12582,34 +12720,392 @@ function pricingDbHTML(){
 
 async function dbTestConnection(){
   try{
-    const r=await fetch(siteApiBase()+'/api/produkties/price-list?limit=1',{headers:apiHeaders()});
-    if(r.status===401||r.status===403) { toast('Связь есть, но токен не принят ('+r.status+') — проверь токен/права', 'error'); return; }
-    if(!r.ok){ toast('Сервер ответил: HTTP '+r.status+' — возможно, эндпоинт ещё не задеплоен', 'error'); return; }
-    toast('✅ Связь с базой есть, токен принят', 'success');
+    await strapiReq('/api/produkties?pagination[pageSize]=1&fields[0]=documentId');
+    toast('✅ Связь с базой сайта есть, токен принят', 'success');
   }catch(e){
-    toast('Нет связи: '+(e.message||'ошибка')+'. Если ЕРП открыт как файл — это CORS, нужен поддомен', 'error');
+    if(/401|403/.test(e.message)) toast('Связь есть, но токен не принят ('+e.message+') — проверьте токен и его права', 'error');
+    else toast('Нет связи: '+(e.message||'ошибка'), 'error');
   }
 }
+
+/* Запрос к базе сайта (Strapi) штатным API. Через локальный сервер-прокси
+   (CORS не мешает); без него — напрямую (для https-версии). */
+
+/* ============================================================
+   ЗАКАЗЫ ПРЯМО ИЗ БАЗЫ САЙТА (Strapi, 29.07). Перехватчик не нужен:
+   сайт складывает заказы в свою базу, система забирает их оттуда
+   штатным API (с токеном, через локальный прокси). Первая проверка
+   только запоминает последний заказ — историю (1600+) не тащим.
+============================================================ */
+
+/* Заявки на ремонт — прямо из базы сайта (коллекция remonts).
+   Поля сайта: name, phone, comment, phone_model, phone_status,
+   work_plan, summary, phone_password, order_status. */
+
+/* ============================================================
+   ЧИСТЫЙ СТАРТ (29.07): удалить демо-данные и заполнить систему
+   РЕАЛЬНОЙ историей с сайта (заказы + заявки на ремонт).
+   Завершённые заказы -> архив «Выдан»; незавершённые свежие (14 дн)
+   -> «Новый»; старые незавершённые -> «Отменён» с пометкой.
+   Клиенты собираются из заказов (без дублей по телефону).
+   Склад и кассы обнуляются — реальные остатки вносятся руками.
+============================================================ */
+function mapZakazToOrder(z, oid, forHistory){
+  const items=[];
+  (z.items||[]).forEach(it=>{
+    const n=Math.min(20, Math.max(1, parseInt(it.count)||1));
+    for(let k=0;k<n;k++) items.push({name:String(it.name||'Товар').slice(0,90), imei:'', price:Math.round(parseFloat(it.price)||0)});
+  });
+  if(!items.length) items.push({name:'Состав не передан (заказ сайта №'+(z.identificator||z.id)+')', imei:'', price:Math.round(parseFloat(String(z.summary||'0').replace(/\s/g,''))||0)});
+  const created=(z.createdAt? String(z.createdAt).slice(0,10).split('-').reverse().join('.') : DATA.today);
+  const closedStamp=(function(){
+    const src=z.updatedAt||z.createdAt;
+    if(!src) return DATA.today+' 12:00';
+    const d=new Date(src);
+    const p=n=>String(n).padStart(2,'0');
+    return p(d.getDate())+'.'+p(d.getMonth()+1)+'.'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes());
+  })();
+  const ageDays=z.createdAt? Math.floor((Date.now()-new Date(z.createdAt).getTime())/86400000) : 0;
+  /* статус сайта живёт в order_status: done=Выполнен, in_progress=В работе, new=Новый */
+  const st=String(z.order_status||'').toLowerCase();
+  const isDone = z.completed===true || st==='done' || /complete|vypoln|выполн|finish|success/.test(st);
+  const isCancel = /cancel|otmen|отмен|reject|return|возврат/.test(st);
+  let status='new', archivedFlag=false, cancelReason=null;
+  if(isDone){ status='done'; archivedFlag=!!forHistory; }
+  else if(isCancel){ status='cancel'; cancelReason='Отменён на сайте'; }
+  else if(forHistory && ageDays>14){ status='cancel'; cancelReason='Импорт истории: заказ не был завершён на сайте — статус уточните'; }
+  const o={
+    id:oid, externalId:'strapi_'+z.id, siteOrderNo:String(z.identificator||z.id),
+    name:String(z.name||'Без имени').slice(0,80),
+    phone:String(z.phone||'').slice(0,30),
+    email:z.email||'', date:created, desiredDate:'',
+    method:'Сайт', store:'', delivery:z.deliveryType||'—',
+    payment:z.payment||'—',
+    clientComment:[z.userInfoComment, z.deliveryComment].filter(Boolean).join(' · ').slice(0,500),
+    sellerComment:('Заказ с сайта №'+(z.identificator||z.id)+
+      (z.summary?' · сумма сайта: '+z.summary+' ₽':'')+
+      (z.sale && z.sale!=='0'?' · скидка: '+z.sale+' ₽':'')+
+      (z.seller_content?' · '+String(z.seller_content).slice(0,300):'')+
+      (z.file_link?' · PDF: '+z.file_link:'')).slice(0,900),
+    discount:'—', promo:'', status:status, items:items,
+    callLog:[{date:created, time:'12:00', action:'note', comment: z.completed?'Импорт истории сайта: заказ завершён':'Заказ с сайта'}],
+  };
+  if(status==='done'){
+    o.closedAt=closedStamp; o.archived=archivedFlag; o.saleRecorded=true; o.cashPosted='history';
+    o.statusHistory=[{from:'new', to:'done', at:closedStamp, by:'Импорт с сайта'}];
+    o.callLog.push({date:closedStamp.split(' ')[0], time:closedStamp.split(' ')[1]||'12:00', action:'issued', comment:'Выдан (статус сайта «Выполнен», дата — по сайту)'});
+  }
+  if(cancelReason){
+    o.closedAt=closedStamp; o.cancelReason=cancelReason; o.archived=true;
+    o.statusHistory=[{from:'new', to:'cancel', at:closedStamp, by:'Импорт с сайта'}];
+  }
+  if(z.tgNotifiedSkip!==false) o.tgNotified=true;   /* история не бомбит бота */
+  return o;
+}
+async function cleanStartImport(){
+  if(!apiToken()){ toast('Сначала подключите токен сайта (Цены → База знаний)', 'error'); return; }
+  toast('Чистый старт: удаляю демо-данные…','info');
+  /* 1) очистка демо во ВСЕХ точках */
+  Object.keys(STORE_DATA).forEach(sid=>{
+    const d=STORE_DATA[sid]; if(!d) return;
+    ['orders','leads','customers','service','purchaseRequests','cashOps','financeOps','salesLog',
+     'notifications','reviewMailQueue','receivingHistory','courierDebts','courierEarnings','handoffs',
+     'serviceHandoffs','tasks','taskIdeas','taskPayouts','expenseClaims','loans','moneyTransfers',
+     'cashHandovers','fines','explanations','timeOffRequests','shiftSwaps','shipments','promos','competitorPrices']
+      .forEach(k=>{ if(k in d) d[k]=[]; });
+    if(d.warehouse){ ['tech','tradein','accessories','parts'].forEach(k=>{ if(d.warehouse[k]) d.warehouse[k]=[]; }); }
+    if(d.assets){ (d.assets.cashByStore||[]).forEach(c=>c.amount=0); d.assets.cashless=0; if(d.assets.collection) d.assets.collection.cash=0; }
+    if(d.collection){ d.collection.cash=0; d.collection.goods=0; d.collection.devicesBought=0; d.collection.totalPurchases=0; d.collection.history=[]; }
+    if(d.attention) Object.keys(d.attention).forEach(k=>{ if(Array.isArray(d.attention[k])) d.attention[k]=[]; });
+    if(d.courierWallets) d.courierWallets={};
+    d.siteLastZakazId=null; d.siteLastRemontId=null; d.siteLastLeadId=999999999;
+  });
+  /* 2) история заказов с сайта */
+  toast('Загружаю историю заказов с сайта…','info');
+  let page=1, pageCount=1, all=[];
+  try{
+    while(page<=pageCount && page<=40){
+      const j=await strapiReq('/api/zakazies?status=draft&sort=id:asc&pagination[page]='+page+'&pagination[pageSize]=100&populate=*');
+      (j.data||[]).forEach(z=>all.push(z));
+      pageCount=(j.meta&&j.meta.pagination&&j.meta.pagination.pageCount)||1;
+      page++;
+    }
+  }catch(e){ toast('Ошибка загрузки заказов: '+e.message, 'error'); return; }
+  let oid=10000, maxId=0, cntDone=0, cntNew=0, cntCancel=0;
+  const orders=[];
+  const custByPhone=new Map();
+  all.forEach(z=>{
+    if(z.id>maxId) maxId=z.id;
+    const o=mapZakazToOrder(z, ++oid, true);
+    orders.push(o);
+    if(o.status==='done') cntDone++; else if(o.status==='new') cntNew++; else cntCancel++;
+    const np=normPhone(o.phone);
+    if(np){
+      const c=custByPhone.get(np)||{id:custByPhone.size+1, name:o.name, phones:[o.phone], consent:false, source:'Сайт', orders:[], totalSpent:0};
+      c.orders.push(o.id);
+      if(o.status==='done') c.totalSpent+=o.items.reduce((s,i2)=>s+i2.price,0);
+      custByPhone.set(np, c);
+    }
+  });
+  DATA.orders=orders.reverse();
+  DATA.customers=Array.from(custByPhone.values());
+  DATA.siteLastZakazId=maxId;
+  /* 3) история заявок на ремонт */
+  toast('Загружаю заявки на ремонт…','info');
+  try{
+    let rp=1, rpc=1, rAll=[];
+    while(rp<=rpc && rp<=20){
+      const j=await strapiReq('/api/remonts?status=draft&sort=id:asc&pagination[page]='+rp+'&pagination[pageSize]=100');
+      (j.data||[]).forEach(z=>rAll.push(z));
+      rpc=(j.meta&&j.meta.pagination&&j.meta.pagination.pageCount)||1;
+      rp++;
+    }
+    let sid=3000, rMax=0, rAct=0;
+    const svc=[];
+    rAll.forEach(z=>{
+      if(z.id>rMax) rMax=z.id;
+      const ageDays=z.createdAt? Math.floor((Date.now()-new Date(z.createdAt).getTime())/86400000) : 0;
+      const rst=String(z.order_status||'new').toLowerCase();
+      const rDone=/^done$|complete|vypoln|выполн/.test(rst);
+      const rRej=/reject|otkaz|отказ|cancel/.test(rst);
+      const active=!rDone && !rRej && ageDays<=30;
+      const created=(z.createdAt? String(z.createdAt).slice(0,10).split('-').reverse().join('.') : DATA.today);
+      if(active) rAct++;
+      svc.push({
+        id:++sid, externalId:'strapi_r_'+z.id, tgNotified:true,
+        device:String(z.phone_model||'Устройство с сайта').slice(0,90),
+        client:String(z.name||'Без имени').slice(0,80),
+        phone:String(z.phone||'—').slice(0,30),
+        issue:String(z.comment||'Заявка с сайта').slice(0,500),
+        clientWords:z.comment?('«'+String(z.comment).slice(0,300)+'»'):'',
+        agreedWorks:String(z.work_plan||'').slice(0,300),
+        devicePassword:String(z.phone_password||'').slice(0,60),
+        imei:'', accountRemoved:'no',
+        condition:{body:[],display:[],power:[],wifi:[],bt:[]},
+        conditionExtras:z.phone_status?('Состояние со слов клиента: '+String(z.phone_status).slice(0,200)):'',
+        costLabor:0, costParts:0, cost:(parseFloat(String(z.summary||'').replace(/\s/g,''))||null),
+        estDays:'', due:null, master:null, urgency:'normal',
+        status:active?'new':(rRej?'archive':'done'), accepted:created,
+        history:[{date:created+' 12:00', text:active?'Заявка на ремонт с сайта':(rRej?'Отказ (статус сайта)':'Выполнен (статус сайта)')}],
+        parts:[],
+      });
+    });
+    /* сервис живёт на Лунной */
+    const lun=STORE_DATA['store_lunnaya']||DATA;
+    lun.service=svc.reverse();
+    Object.keys(STORE_DATA).forEach(sid2=>{ STORE_DATA[sid2].siteLastRemontId=rMax; });
+    toast('Ремонты: '+svc.length+' (в работе: '+rAct+')','info');
+  }catch(e){ console.warn('Импорт ремонтов:', e.message); }
+  /* 4) сохранить и показать */
+  DATA._cleanStartAt=DATA.today+' '+nowTime();
+  try{ fullSave(); }catch(e){}
+  closeModal();
+  renderSidebar(); renderPage();
+  toast('✅ Чистый старт: '+orders.length+' заказов ('+cntDone+' выдано, '+cntNew+' в работе, '+cntCancel+' отменено-старых), клиентов: '+custByPhone.size, 'success');
+}
+
+async function strapiRepairsSync(quiet){
+  try{
+    if(!apiToken()) return 0;
+    if(DATA.siteLastRemontId==null){
+      const j0=await strapiReq('/api/remonts?status=draft&sort=id:desc&pagination[pageSize]=1&fields[0]=id');
+      DATA.siteLastRemontId=(j0.data&&j0.data[0]&&j0.data[0].id)||0;
+      console.log('Strapi-ремонты: старт с id '+DATA.siteLastRemontId);
+      return 0;
+    }
+    const j=await strapiReq('/api/remonts?status=draft&filters[id][$gt]='+DATA.siteLastRemontId+'&sort=id:asc&pagination[pageSize]=25');
+    let added=0;
+    (j.data||[]).forEach(z=>{
+      if(z.id>DATA.siteLastRemontId) DATA.siteLastRemontId=z.id;
+      const ext='strapi_r_'+z.id;
+      if((DATA.service||[]).some(t=>t.externalId===ext)) return;
+      const sid=((DATA.service||[]).length?Math.max(...DATA.service.map(t=>t.id)):3000)+1;
+      const rst=String(z.order_status||'new').toLowerCase();
+      const rDone=/^done$|complete|vypoln|выполн/.test(rst);
+      const rRej=/reject|otkaz|отказ|cancel/.test(rst);
+      DATA.service.unshift({
+        id:sid, externalId:ext,
+        device: String(z.phone_model||'Устройство с сайта').slice(0,90),
+        client: String(z.name||'Без имени').slice(0,80),
+        phone: String(z.phone||'—').slice(0,30),
+        issue: String(z.comment||'Заявка на ремонт с сайта — уточнить проблему').slice(0,500),
+        clientWords: z.comment? ('«'+String(z.comment).slice(0,300)+'»') : '',
+        agreedWorks: String(z.work_plan||'').slice(0,300),
+        devicePassword: String(z.phone_password||'').slice(0,60),
+        imei:'', accountRemoved:'no',
+        condition:{body:[],display:[],power:[],wifi:[],bt:[]},
+        conditionExtras: z.phone_status? ('Состояние со слов клиента: '+String(z.phone_status).slice(0,200)) : '',
+        costLabor:0, costParts:0,
+        cost: (parseFloat(String(z.summary||'').replace(/\s/g,''))||null),
+        estDays:'', due:null, master:null, urgency:'normal',
+        status:rDone?'done':(rRej?'archive':'new'), accepted:DATA.today,
+        history:[{date:DATA.today+' '+nowTime(), text:rDone?'Выполнен (статус сайта)':(rRej?'Отказ (статус сайта)':'Заявка на ремонт с сайта — позвонить клиенту и принять устройство')}],
+        parts:[],
+        tgNotified:(rDone||rRej)?true:undefined,
+      });
+      added++;
+    });
+    if(added){
+      tgWatchNewSiteItems();
+      updateBellBadge();
+      if(!quiet) toast('Сайт: +'+added+' заявк(и) на ремонт','success');
+      if(STATE.page==='service') renderPage();
+      if(typeof fullSave==='function') try{ fullSave(); }catch(e){}
+    }
+    return added;
+  }catch(e){ return 0; }
+}
+
+
+/* ============================================================
+   СЛЕЖЕНИЕ ЗА СТАТУСАМИ САЙТА (29.07): раз в минуту проверяем,
+   что изменилось (по дате изменения updatedAt), и обновляем СВОИ
+   нетронутые записи: «Выполнен» на сайте -> Выдан/архив у нас,
+   «Отказ» -> Отменён/архив. Заказы, уже взятые в работу продавцом,
+   не трогаем — своя работа дороже.
+============================================================ */
+async function strapiStatusRefresh(){
+  try{
+    if(!apiToken()) return;
+    if(!DATA._siteStatusCheckedAt){ DATA._siteStatusCheckedAt=new Date().toISOString(); return; }
+    const since=DATA._siteStatusCheckedAt;
+    DATA._siteStatusCheckedAt=new Date().toISOString();
+    let changed=0;
+    /* заказы */
+    try{
+      const j=await strapiReq('/api/zakazies?status=draft&filters[updatedAt][$gt]='+encodeURIComponent(since)+'&pagination[pageSize]=50&fields[0]=id&fields[1]=order_status&fields[2]=updatedAt');
+      (j.data||[]).forEach(z=>{
+        const o=(DATA.orders||[]).find(x=>x.externalId==='strapi_'+z.id);
+        if(!o || o.status!=='new') return;   /* обновляем только нетронутые */
+        const st=String(z.order_status||'').toLowerCase();
+        const stamp=(function(){ const d=new Date(z.updatedAt||Date.now()); const p=n=>String(n).padStart(2,'0');
+          return p(d.getDate())+'.'+p(d.getMonth()+1)+'.'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes()); })();
+        if(st==='done' || /complete|vypoln|выполн/.test(st)){
+          o.status='done'; o.closedAt=stamp; o.archived=true; o.saleRecorded=true; o.cashPosted='site';
+          (o.statusHistory=o.statusHistory||[]).push({from:'new', to:'done', at:stamp, by:'Статус сайта'});
+          changed++;
+        } else if(/cancel|otkaz|отказ|reject/.test(st)){
+          o.status='cancel'; o.closedAt=stamp; o.cancelReason='Отменён на сайте'; o.archived=true;
+          (o.statusHistory=o.statusHistory||[]).push({from:'new', to:'cancel', at:stamp, by:'Статус сайта'});
+          changed++;
+        }
+      });
+    }catch(e){}
+    /* ремонты */
+    try{
+      const j=await strapiReq('/api/remonts?status=draft&filters[updatedAt][$gt]='+encodeURIComponent(since)+'&pagination[pageSize]=50&fields[0]=id&fields[1]=order_status');
+      (j.data||[]).forEach(z=>{
+        const t=(DATA.service||[]).find(x=>x.externalId==='strapi_r_'+z.id);
+        if(!t || t.status!=='new') return;
+        const st=String(z.order_status||'').toLowerCase();
+        if(st==='done' || /complete|vypoln|выполн/.test(st)){
+          t.status='done'; (t.history=t.history||[]).push({date:DATA.today+' '+nowTime(), text:'Выполнен (статус сайта)'}); changed++;
+        } else if(/reject|otkaz|отказ|cancel/.test(st)){
+          t.status='archive'; (t.history=t.history||[]).push({date:DATA.today+' '+nowTime(), text:'Отказ (статус сайта)'}); changed++;
+        }
+      });
+    }catch(e){}
+    if(changed){
+      if(STATE.page==='orders'||STATE.page==='service') renderPage();
+      try{ fullSave(); }catch(e){}
+    }
+  }catch(e){}
+}
+
+async function strapiOrdersSync(quiet){
+  try{
+    if(!apiToken()) return 0;   /* токен Strapi не настроен — канал молчит */
+    if(DATA.siteLastZakazId==null){
+      const j0=await strapiReq('/api/zakazies?status=draft&sort=id:desc&pagination[pageSize]=1&fields[0]=id');
+      DATA.siteLastZakazId=(j0.data&&j0.data[0]&&j0.data[0].id)||0;
+      console.log('Strapi-заказы: старт с id '+DATA.siteLastZakazId+' — забираем только новые');
+      return 0;
+    }
+    const j=await strapiReq('/api/zakazies?status=draft&filters[id][$gt]='+DATA.siteLastZakazId+'&sort=id:asc&pagination[pageSize]=25&populate=*');
+    let added=0;
+    (j.data||[]).forEach(z=>{
+      if(z.id>DATA.siteLastZakazId) DATA.siteLastZakazId=z.id;
+      const ext='strapi_'+z.id;
+      if((DATA.orders||[]).some(o=>o.externalId===ext)) return;
+      const items=[];
+      (z.items||[]).forEach(it=>{
+        const n=Math.min(20, Math.max(1, parseInt(it.count)||1));
+        for(let k=0;k<n;k++) items.push({name:String(it.name||'Товар').slice(0,90), imei:'', price:Math.round(parseFloat(it.price)||0)});
+      });
+      if(!items.length) items.push({name:'Состав уточняется (заказ сайта №'+(z.identificator||z.id)+')', imei:'', price:Math.round(parseFloat(String(z.summary||'0').replace(/\s/g,''))||0)});
+      const oid=Math.max(10000,...DATA.orders.map(o=>typeof o.id==='number'?o.id:0))+1;
+      DATA.orders.unshift({
+        id:oid, externalId:ext, siteOrderNo:String(z.identificator||z.id),
+        name:String(z.name||'Без имени').slice(0,80),
+        phone:String(z.phone||'').slice(0,30),
+        email:z.email||'', date:DATA.today, desiredDate:'',
+        method:'Сайт', store:'', delivery:z.deliveryType||'—',
+        payment:z.payment||'—',
+        clientComment:[z.userInfoComment, z.deliveryComment].filter(Boolean).join(' · ').slice(0,500),
+        sellerComment:('Заказ с сайта №'+(z.identificator||z.id)+
+          (z.summary?' · сумма сайта: '+z.summary+' ₽':'')+
+          (z.sale && z.sale!=='0'?' · скидка сайта: '+z.sale+' ₽':'')+
+          (z.promoSale && z.promoSale!=='0'?' · промокод: '+z.promoSale+' ₽':'')+
+          (z.deliveryCost && z.deliveryCost!=='0'?' · доставка: '+z.deliveryCost+' ₽':'')+
+          (z.seller_content?' · '+String(z.seller_content).slice(0,300):'')+
+          (z.file_link?' · PDF: '+z.file_link:'')).slice(0,900),
+        discount:'—', promo:'', status:'new',
+        items:items,
+        callLog:[{date:DATA.today, time:nowTime(), action:'note', comment:'Заказ с сайта ('+(z.deliveryType||'—')+', '+(z.payment||'оплата не указана')+') — связаться с клиентом и подтвердить.'}],
+      });
+      added++;
+    });
+    if(added){
+      tgWatchNewSiteItems();
+      updateBellBadge();
+      if(!quiet) toast('Сайт: +'+added+' заказ(ов)','success');
+      if(STATE.page==='orders') renderPage();
+      if(typeof fullSave==='function') try{ fullSave(); }catch(e){}
+    }
+    return added;
+  }catch(e){ return 0; }
+}
+
+async function strapiReq(path, method, body){
+  const lsrv=(typeof localSyncUrl==='function')? localSyncUrl() : '';
+  if(lsrv){
+    const r=await fetch(lsrv+'/api/strapi',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({path, method:method||'GET', token:apiToken(), body:body||null})});
+    const j=await r.json();
+    if(j.error) throw new Error(j.error);
+    if(!j.ok) throw new Error('HTTP '+j.status+(j.data&&j.data.error&&j.data.error.message?' · '+j.data.error.message:''));
+    return j.data;
+  }
+  const opts={method:method||'GET', headers:apiHeaders()};
+  if(body && method!=='GET') opts.body=JSON.stringify(body);
+  const r=await fetch(siteApiBase()+path, opts);
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return await r.json();
+}
+
 async function dbPullPrices(c){
   try{
-    const r=await fetch(siteApiBase()+'/api/produkties/price-list?status=all',{headers:apiHeaders()});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const j=await r.json();
-    const arr=j.data||[];
+    let page=1, pageCount=1, arr=[];
+    while(page<=pageCount && page<=40){
+      const j=await strapiReq('/api/produkties?fields[0]=documentId&fields[1]=current_priced&pagination[page]='+page+'&pagination[pageSize]=100');
+      (j.data||[]).forEach(x=>arr.push(x));
+      pageCount=(j.meta&&j.meta.pagination&&j.meta.pagination.pageCount)||1;
+      page++;
+    }
     const byDoc=new Map(DATA.siteCatalog.map(p=>[p.documentId,p]));
     const byId=new Map(DATA.siteCatalog.map(p=>[p.siteProductId,p]));
     let updated=0;
     arr.forEach(x=>{
       const card=byDoc.get(x.documentId)||byId.get(x.id);
-      if(card && x.current_priced!=null){ card.price=x.current_priced; updated++; }
+      if(card && x.current_priced!=null){ card.price=Math.round(parseFloat(x.current_priced)); updated++; }
     });
     DATA.siteCatalogVersion=(DATA.siteCatalogVersion||0)+1;
     DATA.siteCatalogSyncedAt=DATA.today+' '+nowTime();
     if(typeof lsSave==='function') lsSave();
-    toast('Цены получены: обновлено '+updated+' карточек', 'success');
+    toast('Цены получены с сайта: обновлено '+updated+' карточек (из '+arr.length+')', 'success');
     if(c) renderPricing(c);
   }catch(e){
-    toast('Не удалось забрать цены: '+(e.message||'')+'. Эндпоинт задеплоен? CORS?', 'error');
+    toast('Не удалось забрать цены: '+(e.message||'')+'. Проверьте токен (права на чтение produkties).', 'error');
   }
 }
 /* Сопоставление названия позиции со строкой каталога сайта */
@@ -12633,26 +13129,25 @@ async function pushBatchToSite(batchId, c){
     else unmatched.push(it.productName);
   });
   if(!items.length){ toast('Ни одна позиция пакета не сопоставилась с карточками сайта', 'error'); return; }
-  try{
-    const r=await fetch(siteApiBase()+'/api/produkties/price-sync',{
-      method:'POST', headers:apiHeaders(),
-      body:JSON.stringify({source:'erp', items})});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const j=await r.json();
+  let okCnt=0; const failed=[];
+  toast('Выгружаю '+items.length+' цен на сайт…','info');
+  for(const it of items){
+    try{
+      /* штатный Strapi: обновляем только поле цены, ничего больше не трогаем */
+      await strapiReq('/api/produkties/'+it.documentId, 'PUT', {data:{current_priced: it.price}});
+      okCnt++;
+    }catch(e){ failed.push(it.name+' ('+(e.message||'ошибка')+')'); }
+  }
+  if(okCnt){
     batch.status='uploaded'; batch.uploadedAt=DATA.today+' '+nowTime();
     batch.items.forEach(it=>{ it.status='uploaded'; it.uploadedAt=batch.uploadedAt; });
-    logPricingAction('Цены отправлены в базу сайта', (j.updated||items.length)+' карточек обновлено'+(unmatched.length?', '+unmatched.length+' не сопоставлено':''), 'Пакет №'+batch.batchNumber);
-    toast('✅ В базу записано '+(j.updated||items.length)+' цен'+(unmatched.length?' · не сопоставлено: '+unmatched.length:''), 'success');
-    if(c) renderPricing(c);
-  }catch(e){
-    /* Фоллбек: отдать пакет файлом — программист/бот зальёт вручную */
-    const blob=new Blob([JSON.stringify({source:'erp', items, unmatched}, null, 2)],{type:'application/json'});
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);
-    a.download='price-sync-batch-'+batch.batchNumber+'.json';
-    a.click();
-    toast('Прямая запись не прошла ('+(e.message||'CORS')+') — пакет скачан файлом price-sync-batch-'+batch.batchNumber+'.json, его можно залить на сервере', 'info');
+    logPricingAction('Цены записаны в базу сайта (штатный API)', okCnt+' карточек обновлено'+(failed.length?', ошибок: '+failed.length:'')+(unmatched.length?', не сопоставлено: '+unmatched.length:''), 'Пакет №'+batch.batchNumber);
   }
+  if(failed.length) console.warn('Не записались:', failed);
+  toast((okCnt?('✅ Записано '+okCnt+' цен'):('Не записано ни одной цены'))+
+    (failed.length?' · ошибок: '+failed.length+' (первая: '+failed[0].slice(0,80)+')':'')+
+    (unmatched.length?' · не сопоставлено: '+unmatched.length:''), okCnt?'success':'error');
+  if(c) renderPricing(c);
 }
 
 function siteApiBase(){ return (DATA.settings && DATA.settings.siteApiBase) || 'https://admin.imagnate.ru'; }
@@ -16926,7 +17421,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='28.07-7';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-10';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -18624,6 +19119,23 @@ if(_fullLoaded) updateStoreSelector();
         });
       }
     });
+    /* починка импорта: прочерк вместо пустоты делал позиции «привязанными» —
+       активным заказам с сайта возвращаем непривязанное состояние */
+    Object.keys(STORE_DATA).forEach(sid=>{
+      const d=STORE_DATA[sid]; if(!d) return;
+      if(d._imeiFixDone) return;   /* одноразово: иначе стирали бы подтверждение аксессуаров ('—') */
+      d._imeiFixDone=real;
+      (d.orders||[]).forEach(o=>{
+        if(!/^(site|strapi)_/.test(String(o.externalId||''))) return;
+        if(['done','cancel'].includes(o.status)) return;
+        (o.items||[]).forEach(it=>{ if(it.imei==='—') it.imei=''; });
+        /* если заказ уже успел проскочить в «Готов к выдаче» без товара — вернуть на проверку наличия */
+        if(o.status==='ready' && !o.items.every(it=>!itemRequiresSerial(it)||itemIsBound(it))){
+          o.status='awaiting_stock';
+          (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'note', comment:'Починка: наличие не подтверждено — заказ вернулся в «Ждём товар»'});
+        }
+      });
+    });
     if(STORE_DATA[STATE.activeStoreId]) DATA=STORE_DATA[STATE.activeStoreId];
   }catch(e){ console.warn('ensureRealDates:', e); }
 })();
@@ -18763,7 +19275,7 @@ if(processReviewMailQueue()) renderPage();
 setInterval(()=>{ if(processReviewMailQueue() && STATE.page!=='archive') renderPage(); }, 60000);
 /* сторож уведомлений: внутренняя проверка новых заявок с сайта */
 tgWatchNewSiteItems();
-setInterval(tgWatchNewSiteItems, 30000);
+setInterval(tgWatchNewSiteItems, 10000);
 if(_fullLoaded) toast('Восстановлены данные прошлой сессии','success');
 if(loaded && DATA.siteCatalog.length){
   toast('Восстановлено: '+DATA.siteCatalog.length+' товаров каталога', 'success');
