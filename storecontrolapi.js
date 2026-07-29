@@ -684,7 +684,7 @@ const server = http.createServer((req, res) => {
 
   /* ---- Страницы ---- */
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return sendFile(res, 'index.html');
-  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-20' });
+  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-21' });
 
   /* ---- Сайт отправляет заявку (публично) ---- */
   if (req.method === 'POST' && url.pathname === '/api/lead') {
@@ -1039,6 +1039,9 @@ dbInit()
   .then(() => server.listen(PORT, () => {
     setTimeout(() => { registerWebhooks().catch(e => console.error('вебхуки:', e.message)); }, 5000);
     setInterval(() => { registerWebhooks().catch(e => console.error('вебхуки:', e.message)); }, 24 * 3600 * 1000);
+    /* при каждом запуске (деплой / пробуждение) — глубокая перечитка всех
+       чатов: закрывает пропуски прошлого, дубликаты отсекает дедупликация */
+    setTimeout(() => { channelsPollAll(true).catch(e => console.error('глубокий опрос:', e.message)); }, 9000);
     console.log('Store Control запущен на порту ' + PORT);
     console.log('ERP: /   Форма: /form   API: /api   Хранение: ' + (pool ? 'PostgreSQL' : 'файл leads.json'));
     if (STORE_TOKEN.indexOf('ПОМЕНЯЙТЕ') !== -1) console.log('!!! Задайте STORE_TOKEN в переменных окружения !!!');
