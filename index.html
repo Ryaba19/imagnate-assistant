@@ -6576,6 +6576,105 @@ function openWarehouseCategoryDrill(tabKey){
   renderDrill(WH_TABS[tabKey], 'Последние движения по складу', body);
 }
 
+/* ============================================================
+   ИНВЕНТАРИЗАЦИЯ — первичный завод склада (владелец/директор/старший).
+   Поток: выбрал модель (подсказки из каталога сайта, розничная цена
+   подтянется сама) → вписал закупочную → сканируешь IMEI подряд —
+   каждая единица сразу на складе. Аксессуары — без IMEI, количеством.
+============================================================ */
+const INV={model:'', price:0, purchase:0, acc:false, session:[]};
+function invCatalogPrice(name){
+  const p=(DATA.siteCatalog||[]).find(x=>(x.name||'')===name);
+  return p&&p.price!=null?Math.round(p.price):0;
+}
+function openInventoryModal(c){
+  const loc=(DATA.storeName||'')+', склад';
+  let body='<div class="tsub" style="margin-bottom:10px;">Выберите модель — розничная цена подтянется из каталога сайта ('+((DATA.siteCatalog||[]).length)+' карточек). '+
+    'Затем сканируйте IMEI подряд: каждая единица сразу встаёт на склад. Для аксессуаров — галочка «без IMEI», заводятся количеством.</div>';
+  body+='<div class="field"><label>Модель</label><input class="input-mini" id="invModel" style="width:100%;" placeholder="Начните вводить название…" value="'+escAttr(INV.model)+'"></div>'+
+    '<div id="invSuggest"></div>'+
+    '<div class="field-grid" style="margin-top:8px;">'+
+      '<div class="field"><label>Розничная цена, ₽</label><input class="input-mini" id="invPrice" type="number" style="width:100%;" value="'+(INV.price||'')+'"></div>'+
+      '<div class="field"><label>Закупочная цена, ₽</label><input class="input-mini" id="invPurchase" type="number" style="width:100%;" value="'+(INV.purchase||'')+'"></div>'+
+    '</div>'+
+    '<div class="toggle-row" style="margin:8px 0;"><div class="toggle-switch '+(INV.acc?'on':'')+'" id="invAccTgl"></div>Аксессуар — без IMEI, заводится количеством</div>';
+  body+='<div id="invScanArea">'+(INV.acc
+    ? '<div class="field"><label>Количество, шт</label><input class="input-mini" id="invQty" type="number" min="1" value="1" style="width:100%;"></div>'+
+      '<button class="btn btn-primary" id="invAddAcc" style="margin-top:6px;">Добавить на склад</button>'
+    : '<div class="field"><label>Скан IMEI / серийного номера</label><input class="input-mini" id="invImei" style="width:100%;" placeholder="Наведите сканер — единица добавится сама (или введите и Enter)"></div>')+
+  '</div>';
+  const sum=INV.session.reduce((s,x)=>s+(x.purchase||0)*(x.qty||1),0);
+  const cnt=INV.session.reduce((s,x)=>s+(x.qty||1),0);
+  body+='<div class="drill-divider"></div><div class="drill-block-label">Заведено за сессию: '+cnt+' шт · закупка '+rub(sum)+'</div>'+
+    (INV.session.length?'<div style="max-height:180px;overflow:auto;">'+INV.session.slice(-12).reverse().map(x=>
+      '<div class="hist-row"><div><div class="h-main">'+escHtml(x.model)+(x.qty>1?' × '+x.qty:'')+'</div><div class="h-sub mono">'+(x.imei||'без IMEI')+' · закуп '+rub(x.purchase)+' · розница '+rub(x.price)+'</div></div></div>').join('')+'</div>'
+    :'<div class="tsub">Пока пусто</div>');
+  openModal('📦 Инвентаризация — '+escHtml(DATA.storeName||''), 'Первичный завод склада', body, [{label:'Готово', cls:'btn-primary', action:()=>{ closeModal(); renderWarehouse(c); }}]);
+
+  const mInp=document.getElementById('invModel');
+  const sug=document.getElementById('invSuggest');
+  const showSug=()=>{
+    const q=(mInp.value||'').toLowerCase().trim();
+    if(q.length<2){ sug.innerHTML=''; return; }
+    const toks=q.split(/\s+/);
+    const hits=(DATA.siteCatalog||[]).filter(p=>{ const n=(p.name||'').toLowerCase(); return toks.every(t=>n.includes(t)); }).slice(0,8);
+    sug.innerHTML=hits.map(p=>'<div class="hist-row" style="cursor:pointer;padding:7px 10px;" data-inv-pick="'+escAttr(p.name)+'"><div class="h-main">'+escHtml(p.name)+'</div><div class="h-sub mono">'+(p.price!=null?rub(p.price):'цена не указана')+'</div></div>').join('');
+    sug.querySelectorAll('[data-inv-pick]').forEach(el=>el.addEventListener('click',()=>{
+      INV.model=el.dataset.invPick;
+      INV.price=invCatalogPrice(INV.model);
+      mInp.value=INV.model;
+      document.getElementById('invPrice').value=INV.price||'';
+      sug.innerHTML='';
+      const ii=document.getElementById('invImei'); if(ii) ii.focus();
+      const pp=document.getElementById('invPurchase'); if(pp && !parseFloat(pp.value)) pp.focus();
+    }));
+  };
+  mInp.addEventListener('input', ()=>{ INV.model=mInp.value.trim(); showSug(); });
+  document.getElementById('invPrice').addEventListener('input', e=>{ INV.price=Math.round(parseFloat(e.target.value)||0); });
+  document.getElementById('invPurchase').addEventListener('input', e=>{ INV.purchase=Math.round(parseFloat(e.target.value)||0); });
+  document.getElementById('invAccTgl').addEventListener('click', ()=>{ INV.acc=!INV.acc; openInventoryModal(c); });
+
+  const addUnit=(imei)=>{
+    INV.model=(document.getElementById('invModel').value||'').trim();
+    INV.price=Math.round(parseFloat(document.getElementById('invPrice').value)||0);
+    INV.purchase=Math.round(parseFloat(document.getElementById('invPurchase').value)||0);
+    if(!INV.model){ toast('Сначала выберите модель','error'); return; }
+    if(!INV.purchase){ toast('Впишите закупочную цену — прибыль считается от неё','error'); return; }
+    const clean=String(imei||'').trim();
+    if(!clean || clean.length<6){ toast('Слишком короткий код','error'); return; }
+    if([...DATA.warehouse.tech, ...DATA.warehouse.tradein].some(x=>x.imei===clean)){
+      toast('Этот IMEI уже на складе: '+clean,'error'); try{beep('err');}catch(e){}
+      return;
+    }
+    DATA.warehouse.tech.push({imei:clean, model:INV.model, purchase:INV.purchase, price:INV.price||invCatalogPrice(INV.model), status:'instock', location:loc});
+    INV.session.push({model:INV.model, imei:clean, purchase:INV.purchase, price:INV.price, qty:1});
+    try{beep('ok');}catch(e){}
+    try{ fullSave(); }catch(e){}
+    openInventoryModal(c);   /* перерисовать со счётчиком; фокус вернётся в скан */
+  };
+  const ii=document.getElementById('invImei');
+  if(ii){
+    ii.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addUnit(ii.value); } });
+    if(INV.model && INV.purchase) ii.focus(); else mInp.focus();
+  }
+  const accBtn=document.getElementById('invAddAcc');
+  if(accBtn) accBtn.addEventListener('click', ()=>{
+    INV.model=(document.getElementById('invModel').value||'').trim();
+    INV.price=Math.round(parseFloat(document.getElementById('invPrice').value)||0);
+    INV.purchase=Math.round(parseFloat(document.getElementById('invPurchase').value)||0);
+    const qty=Math.max(1, parseInt(document.getElementById('invQty').value)||1);
+    if(!INV.model){ toast('Сначала выберите модель','error'); return; }
+    if(!INV.purchase){ toast('Впишите закупочную цену','error'); return; }
+    const ex=(DATA.warehouse.accessories||[]).find(a=>a.model===INV.model);
+    if(ex){ ex.qty=(ex.qty||0)+qty; ex.purchase=INV.purchase; if(INV.price) ex.price=INV.price; ex.status='instock'; }
+    else DATA.warehouse.accessories.push({sku:'ACC-'+String(Date.now()).slice(-6), model:INV.model, purchase:INV.purchase, price:INV.price||invCatalogPrice(INV.model), status:'instock', location:loc, qty:qty});
+    INV.session.push({model:INV.model, imei:'', purchase:INV.purchase, price:INV.price, qty:qty});
+    try{ fullSave(); }catch(e){}
+    toast('«'+INV.model+'» +'+qty+' шт на складе','success');
+    openInventoryModal(c);
+  });
+}
+
 function renderWarehouse(c){
   const role=ROLES[STATE.role];
   const type=getCurrentStoreType();
@@ -6590,6 +6689,7 @@ function renderWarehouse(c){
     '</div><div class="topbar-spacer"></div>'+
     (STATE.whFilters.tab==='tech'?'<button class="btn btn-sm" id="whMatrixBtn">'+ic('gear')+' Матрица «всегда на складе»</button>':'')+
     (STATE.whFilters.tab==='tradein'?'<button class="btn btn-sm btn-primary" id="whTradeinBtn">'+ic('plus')+' Принять б/у (трейд-ин / выкуп)</button>':'')+
+    ((isBossRole()||STATE.role==='senior')?'<button class="btn btn-sm btn-primary" id="whInventoryBtn">📦 Инвентаризация</button>':'')+
     (STATE.role!=='master'?'<button class="btn btn-sm" id="whScanBtn">📷 Сканировать поставку</button>':'')+
     '<button class="btn btn-sm btn-primary" id="whReceiveBtn" style="margin-left:8px;">'+ic('truck')+' Принять поставку</button>'+
     '<input class="input-mini" id="whSearch" placeholder="Поиск по модели / IMEI" value="'+STATE.whFilters.q+'" style="width:240px;margin-left:8px;"></div>';
@@ -6674,6 +6774,8 @@ function renderWarehouse(c){
   search.addEventListener('input', ()=>{STATE.whFilters.q=search.value; renderWarehouse(c); document.getElementById('whSearch').focus();});
   const whScan=document.getElementById('whScanBtn');
   if(whScan) whScan.addEventListener('click', openSupplyScanModal);
+  const whInv=document.getElementById('whInventoryBtn');
+  if(whInv) whInv.addEventListener('click', ()=>openInventoryModal(c));
   const recvBtn=document.getElementById('whReceiveBtn');
   if(recvBtn) recvBtn.addEventListener('click', ()=>{
     // Приёмка — это действие над складом, а не отдельный раздел.
@@ -17805,7 +17907,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-25';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-26';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
