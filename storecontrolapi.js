@@ -343,6 +343,7 @@ const chState = {};
 
 /* --- АВИТО (Messenger API), с комплектом ключей на точку --- */
 const avitoAuth = {};   /* set.key -> {tok, exp, uid} */
+const avitoChatFails = {};   /* chat.id -> число неудач подряд (недоступные чаты) */
 async function avitoToken(set) {
   const a = avitoAuth[set.key] = avitoAuth[set.key] || {};
   if (a.tok && Date.now() < a.exp - 60000) return a.tok;
@@ -389,7 +390,7 @@ async function avitoPollSet(set, deep) {
   const chats = (j.chats || [])
     .filter(c => toSec(c.updated) > Math.max(0, cur - 900))
     .sort((a, b) => toSec(a.updated) - toSec(b.updated));
-  let newCursor = saved, added = 0;
+  let newCursor = saved, added = 0, blocked = false;
   for (const chat of chats) {
     try {
       const mj = await avitoApi(set, '/messenger/v3/accounts/' + uid + '/chats/' + chat.id + '/messages/?limit=30');
@@ -411,10 +412,21 @@ async function avitoPollSet(set, deep) {
           text: String(text).slice(0, 2000), tsMs: (m.created || 0) * 1000 })) added++;
       }
       try { await avitoApi(set, '/messenger/v1/accounts/' + uid + '/chats/' + chat.id + '/read', { method: 'POST' }); } catch (e) {}
-      if (toSec(chat.updated) > newCursor) newCursor = toSec(chat.updated);
+      delete avitoChatFails[chat.id];
+      if (!blocked && toSec(chat.updated) > newCursor) newCursor = toSec(chat.updated);
     } catch (e) {
-      console.error('[авито' + set.key + '] чат ' + chat.id + ':', e.message);
-      break;   /* не перепрыгиваем упавший чат — доберём следующим опросом */
+      /* один недоступный чат (заблокированный собеседник и т.п.) НЕ должен
+         останавливать очередь: остальные чаты обрабатываем дальше.
+         Курсор не двигаем, пока чат "свежий" — добираем его следующими
+         опросами; после 3 неудач подряд перестаём его ждать. */
+      avitoChatFails[chat.id] = (avitoChatFails[chat.id] || 0) + 1;
+      chState.avito.note = 'чат ' + chat.id + ': ' + String(e.message || e).slice(0, 140);
+      console.error('[авито' + set.key + '] чат ' + chat.id + ' (попытка ' + avitoChatFails[chat.id] + '):', e.message);
+      if (avitoChatFails[chat.id] >= 3) {
+        if (!blocked && toSec(chat.updated) > newCursor) newCursor = toSec(chat.updated);
+      } else {
+        blocked = true;
+      }
     }
   }
   if (newCursor > saved) await kvSet(kvKey, newCursor);
@@ -480,7 +492,7 @@ async function vkPollSet(set, deep) {
   const saved = saneCursor(await kvGet(kvKey));
   const cur = deep ? 0 : saved;
   const resp = await vkApi(set, 'messages.getConversations', { count: 20, filter: 'all' });
-  let added = 0, newCursor = saved;
+  let added = 0, newCursor = saved, blockedVk = false;
   const names = {};
   const needNames = [];
   const items = (resp.items || [])
@@ -515,10 +527,10 @@ async function vkPollSet(set, deep) {
           contact: dir === 'in' ? ('vk.com/id' + (m.from_id || peer)) : '',
           item: '', text: String(m.text || '[вложение]').slice(0, 2000), tsMs: (m.date || 0) * 1000 })) added++;
       }
-      if ((lm.date || 0) > newCursor) newCursor = lm.date;
+      if (!blockedVk && (lm.date || 0) > newCursor) newCursor = lm.date;
     } catch (e) {
       console.error('[вк' + set.key + '] диалог ' + peer + ':', e.message);
-      break;
+      blockedVk = true;   /* очередь не останавливаем, курсор не прыгает дальше */
     }
   }
   if (newCursor > saved) await kvSet(kvKey, newCursor);
@@ -623,7 +635,7 @@ const server = http.createServer((req, res) => {
 
   /* ---- Страницы ---- */
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return sendFile(res, 'index.html');
-  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-17' });
+  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-19' });
 
   /* ---- Сайт отправляет заявку (публично) ---- */
   if (req.method === 'POST' && url.pathname === '/api/lead') {
