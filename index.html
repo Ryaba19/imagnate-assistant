@@ -7947,7 +7947,32 @@ function importChannelMessages(list){
     const target=(m.store && STORE_DATA[m.store]) ? STORE_DATA[m.store] : home;
     target.leads=target.leads||[];
     const ck=m.channel+'_'+m.chatId;
+    const isOut=(m.dir==='out');
     let l=target.leads.find(x=>x.chatKey===ck && !['won','lost'].includes(x.stage));
+    if(isOut){
+      /* ответ сотрудника из приложения канала (или наш же ответ из ERP,
+         вернувшийся с сервера) — доклеиваем в диалог, заявку не создаём */
+      if(!l) return;
+      const txt=String(m.text||'');
+      if(l.msgs.some(x=>x.dir==='out' && (x.key===m.key || x.text===txt))){
+        const same=l.msgs.find(x=>x.dir==='out' && !x.key && x.text===txt);
+        if(same) same.key=m.key;
+        return;
+      }
+      const omid=(l.msgs.length?Math.max(...l.msgs.map(x=>x.id||0)):0)+1;
+      const od=m.tsMs?new Date(m.tsMs):new Date();
+      l.msgs.push({id:omid, dir:'out', text:txt,
+        at:ruDateStr(od)+' '+String(od.getHours()).padStart(2,'0')+':'+String(od.getMinutes()).padStart(2,'0'),
+        status:'sent', key:m.key});
+      l.lastTouch=DATA.today;
+      /* сотрудник ответил → заявка считается взятой в работу */
+      if(l.stage==='new'){
+        l.stage='working'; l.workingSince=DATA.today+' '+nowTime(); l.fellBack=false;
+        (l.notes=l.notes||[]).unshift({date:DATA.today, text:'Взята в работу: сотрудник ответил клиенту в '+((CHANNELS[l.channel]||{}).label||l.channel)});
+      }
+      appended++;
+      return;
+    }
     if(!l){
       const lid=(target.leads.length?Math.max(...target.leads.map(x=>x.id||0)):7300)+1;
       l={id:lid, channel:m.channel, externalId:m.key, chatKey:ck, chatId:String(m.chatId), sourceUrl:'', source:'sync',
@@ -7965,6 +7990,10 @@ function importChannelMessages(list){
       status:'received', key:m.key});
     l.unread=(l.unread||0)+1;
     l.lastTouch=DATA.today;
+    if(l.stage==='waiting'){
+      l.stage='working'; l.waitingDeadline=null; l.workingSince=DATA.today+' '+nowTime();
+      (l.notes=l.notes||[]).unshift({date:DATA.today, text:'Клиент ответил — заявка возвращена в «Общение»'});
+    }
     if(m.item && !l.item) l.item=m.item;
     appended++;
   });
@@ -17586,7 +17615,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-12';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-13';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];

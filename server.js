@@ -388,7 +388,8 @@ async function avitoPollSet(set, deep) {
       const other = (chat.users || []).find(u => u.id !== uid) || {};
       const item = (chat.context && chat.context.value && chat.context.value.title) || '';
       for (const m of msgs) {
-        if (m.author_id === uid) continue;                  /* наши ответы */
+        /* ответы сотрудников из приложения Авито тоже забираем — dir='out' */
+        const dir = (m.author_id === uid) ? 'out' : 'in';
         if ((m.created || 0) * 1000 < Date.now() - 14 * 86400000) continue;   /* глубже 14 дней не тащим */
         const text = (m.content && (m.content.text ||
           (m.content.link && m.content.link.url) ||
@@ -396,8 +397,8 @@ async function avitoPollSet(set, deep) {
           (m.content.call && 'Звонок'))) ||
           (m.type === 'image' ? '[изображение]' : '');
         if (!text) continue;
-        if (await chStore({ key: 'av_' + m.id, store: set.store, channel: 'avito', chatId: String(chat.id), dir: 'in',
-          name: other.name || 'Клиент Авито', contact: '', item: String(item).slice(0, 120),
+        if (await chStore({ key: 'av_' + m.id, store: set.store, channel: 'avito', chatId: String(chat.id), dir,
+          name: dir === 'in' ? (other.name || 'Клиент Авито') : '', contact: '', item: String(item).slice(0, 120),
           text: String(text).slice(0, 2000), tsMs: (m.created || 0) * 1000 })) added++;
       }
       try { await avitoApi(set, '/messenger/v1/accounts/' + uid + '/chats/' + chat.id + '/read', { method: 'POST' }); } catch (e) {}
@@ -494,13 +495,15 @@ async function vkPollSet(set, deep) {
       let hist = [];
       try {
         const h = await vkApi(set, 'messages.getHistory', { peer_id: peer, count: 20 });
-        hist = (h.items || []).filter(m => (m.date || 0) > Math.max(0, cur - 900) && !m.out);
-      } catch (e) { if (!lm.out) hist = [lm]; }
+        hist = (h.items || []).filter(m => (m.date || 0) > Math.max(0, cur - 900));
+      } catch (e) { hist = [lm]; }
       for (const m of hist) {
         if ((m.date || 0) * 1000 < Date.now() - 14 * 86400000) continue;
         const mid = m.id || m.conversation_message_id || m.date;
-        if (await chStore({ key: 'vk' + set.key + '_' + peer + '_' + mid, store: set.store, channel: 'vk', chatId: String(peer), dir: 'in',
-          name: names[m.from_id] || 'Клиент ВКонтакте', contact: 'vk.com/id' + (m.from_id || peer),
+        const dir = m.out ? 'out' : 'in';   /* ответы сотрудников из ВК тоже видны в ERP */
+        if (await chStore({ key: 'vk' + set.key + '_' + peer + '_' + mid, store: set.store, channel: 'vk', chatId: String(peer), dir,
+          name: dir === 'in' ? (names[m.from_id] || 'Клиент ВКонтакте') : '',
+          contact: dir === 'in' ? ('vk.com/id' + (m.from_id || peer)) : '',
           item: '', text: String(m.text || '[вложение]').slice(0, 2000), tsMs: (m.date || 0) * 1000 })) added++;
       }
       if ((lm.date || 0) > newCursor) newCursor = lm.date;
@@ -787,7 +790,7 @@ const server = http.createServer((req, res) => {
         await channelsPollAll(!!b.deep);
         const sinceMs = Number(b.sinceMs) || (Date.now() - 7 * 86400000);
         const msgs = await chList(sinceMs, 500);
-        sendJson(res, 200, { ok: true, messages: msgs.filter(m => m.dir === 'in'), status: chState });
+        sendJson(res, 200, { ok: true, messages: msgs, status: chState });
       } catch (e) {
         console.error('[каналы] опрос:', e.message);
         sendJson(res, 500, { error: e.message });
