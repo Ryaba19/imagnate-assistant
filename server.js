@@ -3,12 +3,13 @@
 
    Что раздаёт:
    • GET  /            — сама ERP-система (index.html)
-   • GET  /form        — страница с формой заявки для клиентов (form.html)
    • POST /api/lead    — приём заявки с формы (публично)
    • GET  /api/leads   — выдача заявок в ERP (по секретному токену)
    • POST /api/notify    — уведомление в Telegram владельцу (по токену)
    • GET  /api/telegram/chats — подсказка: показать chat_id (по токену)
    • POST /api/send-mail — реальная отправка письма клиенту (по токену)
+   • GET/POST /api/state — облачная копия базы ERP (по токену): данные
+     системы живут и на компе владельца, и здесь — побеждает свежий снимок
    • GET  /api/health  — проверка: жив ли сервер и подключена ли БД
 
    ХРАНЕНИЕ ЗАЯВОК:
@@ -63,7 +64,50 @@ async function dbInit() {
     ' ip TEXT,' +
     ' created_at TIMESTAMPTZ NOT NULL DEFAULT now())'
   );
-  console.log('PostgreSQL подключена — заявки хранятся в таблице site_leads');
+  await pool.query(
+    'CREATE TABLE IF NOT EXISTS erp_state (' +
+    ' id INT PRIMARY KEY CHECK (id=1),' +
+    ' saved_at_ms BIGINT NOT NULL,' +
+    ' saved_by TEXT,' +
+    ' state JSONB NOT NULL,' +
+    ' updated_at TIMESTAMPTZ NOT NULL DEFAULT now())'
+  );
+  await pool.query(
+    'CREATE TABLE IF NOT EXISTS erp_state_history (' +
+    ' id SERIAL PRIMARY KEY,' +
+    ' saved_at_ms BIGINT NOT NULL,' +
+    ' state JSONB NOT NULL,' +
+    ' created_at TIMESTAMPTZ NOT NULL DEFAULT now())'
+  );
+  console.log('PostgreSQL подключена — заявки в site_leads, облачная база ERP в erp_state');
+}
+
+/* Облачная копия базы ERP (файловый запасной режим, если нет PostgreSQL) */
+const STATE_FILE = path.join(process.env.DATA_DIR || __dirname, 'erp-state.json');
+async function stateLoad() {
+  if (pool) {
+    const r = await pool.query('SELECT saved_at_ms, saved_by, state FROM erp_state WHERE id=1');
+    if (!r.rows.length) return null;
+    return { savedAtMs: Number(r.rows[0].saved_at_ms), savedBy: r.rows[0].saved_by, state: r.rows[0].state };
+  }
+  try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch (e) { return null; }
+}
+async function stateSave(obj) {
+  if (pool) {
+    await pool.query(
+      'INSERT INTO erp_state (id, saved_at_ms, saved_by, state) VALUES (1,$1,$2,$3) ' +
+      'ON CONFLICT (id) DO UPDATE SET saved_at_ms=$1, saved_by=$2, state=$3, updated_at=now()',
+      [obj.savedAtMs, obj.savedBy || '', obj.state]
+    );
+    /* история: снимок не чаще раза в 30 минут, храним последние 20 */
+    const h = await pool.query('SELECT created_at FROM erp_state_history ORDER BY id DESC LIMIT 1');
+    if (!h.rows.length || (Date.now() - new Date(h.rows[0].created_at).getTime()) > 30 * 60 * 1000) {
+      await pool.query('INSERT INTO erp_state_history (saved_at_ms, state) VALUES ($1,$2)', [obj.savedAtMs, obj.state]);
+      await pool.query('DELETE FROM erp_state_history WHERE id NOT IN (SELECT id FROM erp_state_history ORDER BY id DESC LIMIT 20)');
+    }
+  } else {
+    fs.writeFileSync(STATE_FILE, JSON.stringify(obj));
+  }
 }
 
 async function dbAddLead(l) {
@@ -177,7 +221,7 @@ function checkToken(req, url) {
 }
 function readBody(req, cb) {
   let raw = '';
-  req.on('data', ch => { raw += ch; if (raw.length > 200000) req.destroy(); });
+  req.on('data', ch => { raw += ch; if (raw.length > 50 * 1024 * 1024) req.destroy(); });
   req.on('end', () => { let b = {}; try { b = JSON.parse(raw || '{}'); } catch (e) {} cb(b); });
 }
 
@@ -188,7 +232,6 @@ const server = http.createServer((req, res) => {
 
   /* ---- Страницы ---- */
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return sendFile(res, 'index.html');
-  if (req.method === 'GET' && (url.pathname === '/form' || url.pathname === '/form.html')) return sendFile(res, 'form.html');
   if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file' });
 
   /* ---- Сайт отправляет заявку (публично) ---- */
@@ -290,6 +333,38 @@ const server = http.createServer((req, res) => {
         sendJson(res, r.ok ? 200 : 500, r);
       } catch (e) {
         console.error('[почта] ошибка:', e.message);
+        sendJson(res, 500, { error: e.message });
+      }
+    });
+  }
+
+  /* ---- Облачная база ERP: отдать снимок (по токену) ---- */
+  if (req.method === 'GET' && url.pathname === '/api/state') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    (async () => {
+      try {
+        const cur = await stateLoad();
+        if (!cur) return sendJson(res, 200, { ok: true, empty: true });
+        sendJson(res, 200, { ok: true, savedAtMs: cur.savedAtMs, savedBy: cur.savedBy, state: cur.state });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    })();
+    return;
+  }
+
+  /* ---- Облачная база ERP: принять снимок (по токену; старое не затирает новое) ---- */
+  if (req.method === 'POST' && url.pathname === '/api/state') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return readBody(req, async b => {
+      if (!b.state || !b.savedAtMs) return sendJson(res, 400, { error: 'Нужны state и savedAtMs' });
+      try {
+        const cur = await stateLoad();
+        if (cur && cur.savedAtMs > b.savedAtMs + 2000) {
+          return sendJson(res, 409, { error: 'На сервере данные новее', serverSavedAtMs: cur.savedAtMs });
+        }
+        await stateSave({ savedAtMs: b.savedAtMs, savedBy: String(b.savedBy || '').slice(0, 80), state: b.state });
+        sendJson(res, 200, { ok: true, savedAtMs: b.savedAtMs });
+      } catch (e) {
+        console.error('[облачная база] ошибка:', e.message);
         sendJson(res, 500, { error: e.message });
       }
     });
