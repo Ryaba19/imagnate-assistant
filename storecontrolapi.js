@@ -614,7 +614,7 @@ const server = http.createServer((req, res) => {
 
   /* ---- Страницы ---- */
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return sendFile(res, 'index.html');
-  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file' });
+  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-15' });
 
   /* ---- Сайт отправляет заявку (публично) ---- */
   if (req.method === 'POST' && url.pathname === '/api/lead') {
@@ -817,6 +817,19 @@ const server = http.createServer((req, res) => {
         sendJson(res, 500, { error: String(e.message || e).slice(0, 300) });
       }
     });
+  }
+
+  /* ---- Каналы воронки: последние собранные сообщения — диагностика (по токену) ---- */
+  if (req.method === 'GET' && url.pathname === '/api/channels/last') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    (async () => {
+      try {
+        const msgs = await chList(Date.now() - 7 * 86400000, 100);
+        sendJson(res, 200, { ok: true, count: msgs.length,
+          messages: msgs.slice(-30).map(m => ({ key: m.key, channel: m.channel, chatId: m.chatId, dir: m.dir, name: m.name, text: String(m.text || '').slice(0, 60), tsMs: m.tsMs })) });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    })();
+    return;
   }
 
   /* ---- Каналы воронки: состояние (по токену) ---- */
