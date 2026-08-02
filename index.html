@@ -1444,10 +1444,10 @@ let DATA = {
      прикладывает фото чека И фото покупки, владелец открывает заявку, смотрит
      фото и решает. Отказ — это всегда содержательная причина, а не "нет фото". */
   expenseClaims:[
-    {id:9001, who:'Алексей', role:'Продавец', item:'Лента для чек-принтера и канцелярия', amount:1450, comment:'Закончилась лента, купил в магазине рядом', hasPhotoChek:true, hasPhotoPurchase:true, status:'pending', date:'26.06.2026', paidOut:false},
-    {id:9002, who:'Владислав', role:'Старший продавец', item:'Скотч упаковочный, плёнка', amount:680, comment:'Для упаковки заказов на доставку', hasPhotoChek:true, hasPhotoPurchase:true, status:'approved', date:'24.06.2026', paidOut:true},
+    {id:9001, who:'Алексей', role:'Менеджер', item:'Лента для чек-принтера и канцелярия', amount:1450, comment:'Закончилась лента, купил в магазине рядом', hasPhotoChek:true, hasPhotoPurchase:true, status:'pending', date:'26.06.2026', paidOut:false},
+    {id:9002, who:'Владислав', role:'Старший менеджер', item:'Скотч упаковочный, плёнка', amount:680, comment:'Для упаковки заказов на доставку', hasPhotoChek:true, hasPhotoPurchase:true, status:'approved', date:'24.06.2026', paidOut:true},
     {id:9003, who:'Виктор Н.', role:'Мастер', item:'Изопропиловый спирт для чистки контактов', amount:520, comment:'Закончился расходник на сервисе', hasPhotoChek:true, hasPhotoPurchase:false, status:'rejected', date:'22.06.2026', rejectReason:'Неудовлетворительно — такой расходник уже закупается централизованно, через личные покупки компенсировать не будем'},
-    {id:9004, who:'Алексей', role:'Продавец', item:'Батарейки для ценников', amount:340, comment:'', hasPhotoChek:true, hasPhotoPurchase:true, status:'approved', date:'19.06.2026', paidOut:false},
+    {id:9004, who:'Алексей', role:'Менеджер', item:'Батарейки для ценников', amount:340, comment:'', hasPhotoChek:true, hasPhotoPurchase:true, status:'approved', date:'19.06.2026', paidOut:false},
   ],
   /* Бухгалтерия: фиксированные расходы месяца, по формуле из документации
      Чистая прибыль = Выручка − зарплаты − расходники − аренда − реклама − прочие */
@@ -1485,25 +1485,25 @@ let DATA = {
        каждый работает 2 дня подряд, затем отдыхает; пары сменяются со
        сдвигом в один день, поэтому в магазине всегда ровно два человека.
        start — первый день ближайшей рабочей пары (цикл 5 дней: 2 работы + 3 отдыха). */
-    {id:1, name:'Алексей', role:'Продавец', unit:'shop_c', storeId:'store_kashirka', phone:'+7 921 000-11-22', baseSalary:65000, salaryPlan:{advance:26000, remainder:39000, bonus:8000},
+    {id:1, name:'Алексей', role:'Менеджер', unit:'shop_c', storeId:'store_lunnaya', phone:'+7 921 000-11-22', baseSalary:65000, salaryPlan:{advance:26000, remainder:39000, bonus:8000},
       responsibilities:'Консультирует клиентов, оформляет и выдаёт заказы, ведёт кассу магазина',
-      schedule:{cycle:'2/2', start:'23.07.2026', period:5, work:2, hours:'10:00–21:00'},
+      schedule:{cycle:'2/2', start:'27.07.2026', period:4, work:2, hours:'10:00–21:00'},
       extraAccess:{expensesReview:false, analytics:false}},
-    {id:2, name:'Вячеслав', role:'Продавец', unit:'shop_c', storeId:'store_kashirka', phone:'+7 921 000-22-33', baseSalary:65000, salaryPlan:{advance:26000, remainder:39000, bonus:8000},
+    {id:2, name:'Вячеслав', role:'Менеджер', unit:'shop_c', storeId:'store_lunnaya', phone:'+7 921 000-22-33', baseSalary:65000, salaryPlan:{advance:26000, remainder:39000, bonus:8000},
       responsibilities:'Консультирует клиентов, оформляет и выдаёт заказы, ведёт кассу магазина',
-      schedule:{cycle:'2/2', start:'24.07.2026', period:5, work:2, hours:'10:00–21:00'},
+      schedule:{cycle:'2/2', start:'27.07.2026', period:4, work:2, hours:'10:00–21:00'},
       extraAccess:{expensesReview:false, analytics:false}},
-    {id:3, name:'Владислав', role:'Продавец', unit:'shop_c', storeId:'store_kashirka', phone:'+7 921 222-33-44', baseSalary:68000, salaryPlan:{advance:27000, remainder:41000, bonus:9000},
+    {id:3, name:'Владислав', role:'Менеджер', unit:'shop_c', storeId:'store_lunnaya', phone:'+7 921 222-33-44', baseSalary:68000, salaryPlan:{advance:27000, remainder:41000, bonus:9000},
       responsibilities:'Консультирует клиентов, оформляет заказы, замещает владельца по кассе и приёмке',
-      schedule:{cycle:'2/2', start:'25.07.2026', period:5, work:2, hours:'10:00–21:00'},
+      schedule:{cycle:'2/2', start:'29.07.2026', period:4, work:2, hours:'10:00–21:00'},
       extraAccess:{expensesReview:false, analytics:true}},
-    {id:4, name:'Иван', role:'Продавец', unit:'shop_c', storeId:'store_kashirka', phone:'+7 921 444-55-66', baseSalary:63000, salaryPlan:{advance:25000, remainder:38000, bonus:7000},
+    {id:4, name:'Иван', role:'Менеджер', unit:'shop_c', storeId:'store_lunnaya', phone:'+7 921 444-55-66', baseSalary:63000, salaryPlan:{advance:25000, remainder:38000, bonus:7000},
       responsibilities:'Консультирует клиентов, оформляет и выдаёт заказы, следит за витриной',
-      schedule:{cycle:'2/2', start:'26.07.2026', period:5, work:2, hours:'10:00–21:00'},
+      schedule:{cycle:'2/2', start:'29.07.2026', period:4, work:2, hours:'10:00–21:00'},
       extraAccess:{expensesReview:false, analytics:false}},
-    {id:5, name:'Дарья', role:'Продавец', unit:'shop_c', storeId:'store_kashirka', phone:'+7 921 444-77-88', baseSalary:63000, salaryPlan:{advance:25000, remainder:38000, bonus:7000},
+    {id:5, name:'Дарья', role:'Менеджер', unit:'shop_c', storeId:'store_kashirka', phone:'+7 921 444-77-88', baseSalary:63000, salaryPlan:{advance:25000, remainder:38000, bonus:7000},
       responsibilities:'Консультирует клиентов, оформляет и выдаёт заказы, ведёт соцсети магазина',
-      schedule:{cycle:'2/2', start:'27.07.2026', period:5, work:2, hours:'10:00–21:00'},
+      schedule:{cycle:'2/2', start:'27.07.2026', period:4, work:2, hours:'10:00–21:00'},
       extraAccess:{expensesReview:false, analytics:false}},
     /* ---- Служебные демо-профили (support:true): в списке «Команды» и графике
        не показываются, но нужны, чтобы роли Мастер/Курьер/Сборщик и их
@@ -1858,8 +1858,8 @@ const ROLES = {
   director:{label:'Директор — Лунная 4', short:'Д1', homeStoreId:'store_lunnaya', menu:['dashboard','crm','orders','service','warehouse','purchase','customers','pricing','finance','accounting','expenses','analytics','tasks','team','manage','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:true, canConfirmPurchase:true, canPriceCollection:true},
   director2:{label:'Директор — Каширское ш. 8', short:'Д2', homeStoreId:'store_kashirka', menu:['dashboard','crm','orders','service','warehouse','purchase','customers','pricing','finance','accounting','expenses','analytics','tasks','team','manage','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:true, canConfirmPurchase:true, canPriceCollection:true},
   admin:{label:'Админ', short:'АД', menu:['dashboard','connections','orders','manage','team','tasks','docs'], seePurchase:false, seeProfit:false, warehouseTabs:[], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
-  senior:{label:'Старший продавец', short:'СП', menu:['dashboard','crm','orders','service','warehouse','purchase','pricing','finance','expenses','analytics','tasks','team','manage','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:false, canConfirmPurchase:true, canPriceCollection:true},
-  seller:{label:'Продавец', short:'ПР', menu:['dashboard','crm','orders','service','warehouse','finance','expenses','tasks','team','docs'], seePurchase:false, seeProfit:false, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
+  senior:{label:'Старший менеджер', short:'СМ', menu:['dashboard','crm','orders','service','warehouse','purchase','pricing','finance','expenses','analytics','tasks','team','manage','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:false, canConfirmPurchase:true, canPriceCollection:true},
+  seller:{label:'Менеджер', short:'МН', menu:['dashboard','crm','orders','service','warehouse','finance','expenses','tasks','team','docs'], seePurchase:false, seeProfit:false, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
   master:{label:'Мастер', short:'МС', menu:['dashboard','service','warehouse','expenses','tasks','team','docs'], seePurchase:false, seeProfit:false, warehouseTabs:['parts'], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
   courier:{label:'Курьер (штатный)', short:'КУ', menu:['dashboard','deliveries','analytics','docs'], seePurchase:false, seeProfit:false, warehouseTabs:[], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
   collector:{label:'Сборщик', short:'СБ', menu:['dashboard','purchase','team','docs'], seePurchase:true, seeProfit:false, warehouseTabs:[], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:true},
@@ -2958,7 +2958,7 @@ function renderMobileDash(c){
   try{
     const list=DATA.employees.filter(e=>!e.support && shiftForAt(e, schedToday(), STATE.activeStoreId));
     html+='<div class="card" style="margin-bottom:10px;padding:10px 12px;"><div class="tsub">Сегодня на смене · '+escHtml((STORES.find(s=>s.id===STATE.activeStoreId)||{}).shortName||'')+'</div>'+
-      '<div style="margin-top:5px;font-weight:600;">'+(list.length?list.map(e=>(e.role==='Мастер'?'🔧 ':'')+escHtml(e.name)).join(', '):'никого')+'</div></div>';
+      '<div style="margin-top:5px;font-weight:600;">'+(list.length?list.map(e=>empRoleIcon(e)+escHtml(e.name)).join(', '):'никого')+'</div></div>';
   }catch(e){}
 
   html+='<button class="btn" id="mdashFull" style="width:100%;justify-content:center;">Полная сводка ↓</button>';
@@ -3772,7 +3772,7 @@ function openAssetDrill(key){
   } else if(key==='collection-assets'){
     title='Точка сбора'; sub='Деньги и товар на точке сбора';
     body+=chainBlock([
-      {icon:'purchase', title:'Закуп подтверждён', sub:'Старший продавец вносит цену'},
+      {icon:'purchase', title:'Закуп подтверждён', sub:'Старший менеджер вносит цену'},
       {icon:'collection', title:'Точка сбора', sub:'Деньги и устройства до отправки', val:rub(a.collection.cash+a.collection.goods)},
       {icon:'truck', title:'Передача в магазин', sub:'Ожидает отправки'},
     ]);
@@ -4730,19 +4730,53 @@ function itemIsAccessory(it){
   if(it.sourceType==='service') return false;   /* услуги и так '—' */
   const nm=String(it.name||'');
   if(ACC_NAME_RE.test(nm)) return true;
-  try{ if((DATA.warehouse.accessories||[]).some(a=>a.model===nm)) return true; }catch(e){}
+  try{ if((DATA.warehouse.accessories||[]).some(a=>whNameEq(a.model, nm))) return true; }catch(e){}
   return false;
 }
 function itemIsBound(it){ return itemRequiresSerial(it) && !!it.imei && it.imei !== 'нет в наличии'; }
 function orderFullyBound(o){ return o.items.every(it=>!itemRequiresSerial(it) || itemIsBound(it)); }
+/* Готов ли заказ по НАЛИЧИЮ (серийник цепляется только сканом при выдаче):
+   каждая позиция либо без серийного учёта, либо уже привязана вручную,
+   либо такая модель есть свободной на точке заказа. */
+function orderReadyByStock(o){
+  return o.items.every(it=>{
+    if(!itemRequiresSerial(it) || itemIsBound(it)) return true;
+    try{ return checkItemAvailability(it,o).status==='here'; }catch(e){ return false; }
+  });
+}
 
+/* Сайт пишет «Смартфон Apple iPhone 15 Pro, 256 ГБ...», на складе — «iPhone 15 Pro 256GB».
+   Сравниваем без регистра, ё, пунктуации и лишних пробелов; если не совпало —
+   проверяем, что все «значимые» слова короткого названия есть в длинном
+   (цифры и объёмы обязаны совпадать точно, чтобы 128GB не сматчился с 256GB). */
+function whNameNorm(s){
+  return String(s||'').toLowerCase().replace(/ё/g,'е')
+    .replace(/[^a-zа-я0-9+]+/g,' ').trim().replace(/\s+/g,' ')
+    /* единицы: «256 ГБ»/«256ГБ»/«256 gb» → «256gb», так же ТБ и мм */
+    .replace(/(\d+) ?(гб|gb)(?= |$)/g,'$1gb')
+    .replace(/(\d+) ?(тб|tb)(?= |$)/g,'$1tb')
+    .replace(/(\d+) ?(мм|mm)(?= |$)/g,'$1mm');
+}
+function whNameEq(a, b){
+  const na=whNameNorm(a), nb=whNameNorm(b);
+  if(!na || !nb) return false;
+  if(na===nb) return true;
+  const [shortN, longN]=na.length<=nb.length?[na,nb]:[nb,na];
+  const lw=new Set(longN.split(' '));
+  const sw=shortN.split(' ');
+  if(sw.length<2) return false;                      /* одно слово — слишком слабый признак */
+  if(!sw.every(w=>lw.has(w))) return false;          /* каждое слово короткого есть в длинном */
+  /* все числа длинного (память, диагональ, поколение) обязаны быть и в коротком, и наоборот */
+  const digits=s=>s.split(' ').filter(w=>/\d/.test(w)).sort().join('|');
+  return digits(shortN)===digits(longN) || digits(shortN)==='' ;
+}
 function checkItemAvailability(it, o){
   if(!itemRequiresSerial(it)) return {status:'no_serial'};
   if(itemIsBound(it)){
     const wh=[...DATA.warehouse.tech, ...DATA.warehouse.tradein].find(x=>x.imei===it.imei);
     return {status:'bound', location: wh?wh.location:'—'};
   }
-  const pool=[...DATA.warehouse.tech, ...DATA.warehouse.tradein].filter(w=>w.model===it.name && (w.status==='free'||w.status==='instock'));
+  const pool=[...DATA.warehouse.tech, ...DATA.warehouse.tradein].filter(w=>whNameEq(w.model, it.name) && (w.status==='free'||w.status==='instock'));
   const here=pool.filter(w=>w.location.includes(o.store));
   if(here.length) return {status:'here', candidates:here};
   if(pool.length) return {status:'elsewhere', candidates:pool};
@@ -4782,18 +4816,14 @@ function recomputeOrderFulfillment(o){
     }
     if(av.status!=='here') anyUnavailable=true;
   });
-  const stillNeedsBinding=o.items.some(it=>itemRequiresSerial(it) && !itemIsBound(it));
   if(anyUnavailable && o.status==='deferred'){
     setOrderStatus(o,'awaiting_stock');
     (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'status', comment:'Не все товары в наличии в выбранном магазине — заказ переведён в «Ждём поступление»'});
-  } else if(!anyUnavailable && stillNeedsBinding && o.status==='awaiting_stock'){
-    setOrderStatus(o,'deferred');
-    (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'status', comment:'Товар появился в наличии — заказ переведён в «В ожидании», ожидает привязки серийника'});
-  } else if(!stillNeedsBinding){
-    const newStatus='ready';
-    if(o.status!==newStatus){
-      setOrderStatus(o,newStatus);
-      (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'status', comment:'Все товары привязаны — заказ переведён в «'+STATUS_LABELS[newStatus][0]+'»'});
+  } else if(!anyUnavailable){
+    /* товар в наличии → «Готов к выдаче»; конкретный серийник — сканом при выдаче (02.08) */
+    if(o.status!=='ready'){
+      setOrderStatus(o,'ready');
+      (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'status', comment:'Товар в наличии — заказ переведён в «Готов к выдаче» (серийник сканируется при выдаче)'});
     }
   }
 }
@@ -5728,19 +5758,20 @@ function openPriceConfirmModal(id, c){
       /* Заказ хранит наименования — конкретные свободные IMEI цепляются сами */
       o.items.forEach(it=>{
         if(itemRequiresSerial(it) && !itemIsBound(it)){
-          const wh=[...DATA.warehouse.tech, ...DATA.warehouse.tradein].find(x=>x.model===it.name && (x.status==='free'||x.status==='instock') && !o.items.some(i2=>i2.imei===x.imei));
-          if(wh){ it.imei=wh.imei; wh.status='reserved'; (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'bind', comment:'Авто-привязка со склада: '+wh.imei+' → «'+it.name+'»'}); }
-          else if(itemIsAccessory(it)){
+          /* серийник НЕ бронируем заранее — только сканом при выдаче (02.08);
+             аксессуарам достаточно наличия на складе */
+          if(itemIsAccessory(it)){
             /* аксессуар: серийника нет — достаточно наличия на складе аксессуаров */
-            const acc=(DATA.warehouse.accessories||[]).find(a=>a.model===it.name && (a.qty||0)>0 && a.status!=='out');
+            const acc=(DATA.warehouse.accessories||[]).find(a=>whNameEq(a.model, it.name) && (a.qty||0)>0 && a.status!=='out');
             if(acc){ it.imei='—'; (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'bind', comment:'Аксессуар «'+it.name+'» есть на складе ('+acc.qty+' шт) — без серийного учёта'}); }
           }
         }
       });
-      if(orderFullyBound(o)){
+      if(orderReadyByStock(o)){
         setOrderStatus(o,'ready');
+        (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'status', comment:'Товар в наличии на точке — заказ готов к выдаче (серийник сканируется при выдаче)'});
         closeModal(); renderOrders(c||document.getElementById('pageContent'));
-        toast('Цена зафиксирована. Товар в наличии — заказ готов к выдаче.', 'success');
+        toast('Цена зафиксирована. Товар в наличии — заказ готов к выдаче, серийник отсканируете при выдаче.', 'success');
         if(inStore) setTimeout(()=>openIssueModal(o.id), 350);   /* клиент здесь — сразу к выдаче */
       } else {
         setOrderStatus(o,'awaiting_stock');
@@ -6042,19 +6073,53 @@ function openOrderModal(id, c){
   }
   body+='</div>';
 
-  /* --- Состав заказа --- */
+  /* --- Состав заказа (+наличие на складе по каждой позиции) --- */
+  const avByItem=o.items.map(it=>{
+    if(itemIsBound(it)) return null;
+    if(!itemRequiresSerial(it)){
+      /* аксессуар: наличие по складу аксессуаров */
+      try{
+        const acc=(DATA.warehouse.accessories||[]).find(a=>whNameEq(a.model, it.name) && (a.qty||0)>0 && a.status!=='out');
+        return acc?{status:'here_acc', qty:acc.qty}:{status:'no_serial'};
+      }catch(e){ return {status:'no_serial'}; }
+    }
+    try{ return checkItemAvailability(it,o); }catch(e){ return {status:'none'}; }
+  });
+  const avLabel=av=>{
+    if(!av) return '';
+    if(av.status==='here') return '<div class="tsub" style="color:var(--positive);">📦 в наличии здесь · '+av.candidates.length+' шт</div>';
+    if(av.status==='here_acc') return '<div class="tsub" style="color:var(--positive);">📦 на складе аксессуаров · '+av.qty+' шт</div>';
+    if(av.status==='elsewhere') return '<div class="tsub" style="color:var(--warning);">в другом магазине · '+av.candidates.length+' шт</div>';
+    if(av.status==='collector') return '<div class="tsub" style="color:var(--warning);">заказан у поставщика</div>';
+    if(av.status==='none') return '<div class="tsub" style="color:var(--negative);">нет в наличии</div>';
+    return '';
+  };
   body+='<div class="drill-divider"></div><div class="drill-block-label">Состав заказа</div>';
   body+='<div class="table-wrap"><table><thead><tr><th>Товар</th><th>IMEI</th><th>Цена</th><th></th></tr></thead><tbody>';
   o.items.forEach((it,i)=>{
     const bound=itemIsBound(it);
     body+='<tr>'+
-      '<td class="tname">'+escHtml(it.name)+'</td>'+
+      '<td class="tname">'+escHtml(it.name)+avLabel(avByItem[i])+'</td>'+
       '<td class="mono tsub">'+(bound?it.imei:(itemRequiresSerial(it)?'<span style="color:var(--warning);">не привязан</span>':'—'))+'</td>'+
       '<td class="mono">'+rub(it.price)+'</td>'+
       '<td>'+(!bound && itemRequiresSerial(it) ? '<button class="btn btn-sm" data-bind-item="'+i+'">Привязать</button>' : '')+'</td>'+
     '</tr>';
   });
   body+='</tbody></table></div>';
+  /* Всё в наличии в этом магазине → подсказка «минуя Ждём товар» */
+  (function(){
+    if(!['new','deferred','awaiting_stock'].includes(o.status)) return;
+    const open=avByItem.filter(Boolean);
+    if(!open.length) return;
+    const allHere=open.every(av=>av.status==='here'||av.status==='here_acc'||av.status==='no_serial');
+    const someHere=open.some(av=>av.status==='here'||av.status==='here_acc');
+    if(allHere && someHere){
+      const hint=(o.status==='new')
+        ? 'Подтвердите заказ и согласуйте цену — заказ сразу станет «Готов к выдаче», минуя «Ждём товар». Серийник отсканируете при выдаче.'
+        : 'Товар на месте — заказ перейдёт в «Готов к выдаче» сам при открытии карточки. Серийник отсканируете при выдаче.';
+      body+='<div class="card" style="margin-top:8px;border-left:3px solid var(--positive);"><div class="tsub"><b style="color:var(--positive);">📦 Весь товар в наличии в этом магазине.</b> '+hint+'</div></div>';
+    }
+  })();
 
   /* --- История --- */
   body+='<div class="drill-divider"></div><div class="drill-block-label">История</div>';
@@ -6318,7 +6383,7 @@ function printWarrantyCard(id){
     '</div>'+
 
     '<div class="sigs">'+
-      '<div class="sig"><div class="sig-t">Продавец</div>'+
+      '<div class="sig"><div class="sig-t">Менеджер</div>'+
         '<div class="r"><div class="lbl">ФИО:</div><div class="val">_________________</div></div>'+
         '<div class="sig-l"></div><div class="sig-s">Подпись</div></div>'+
       '<div class="sig"><div class="sig-t">Покупатель</div>'+
@@ -6393,7 +6458,7 @@ function printUsedDeviceAct(id){
     '</div>'+
 
     '<div class="sigs">'+
-      '<div class="sig"><div class="sig-t">Продавец</div>'+
+      '<div class="sig"><div class="sig-t">Менеджер</div>'+
         '<div class="r"><div class="lbl">ФИО:</div><div class="val">_________________</div></div>'+
         '<div class="sig-l"></div><div class="sig-s">Подпись</div>'+
         '<div style="font-size:10px;margin-top:6px;">Дата: «____» _______________ 20____ г.</div></div>'+
@@ -6497,9 +6562,9 @@ function openWarrantyCaseModal(id, c){
 
 function openIssueModal(id){
   const o=findOrder(id);
-  if(!orderFullyBound(o)){
-    (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'blocked', comment:'Попытка выдачи отклонена: не все товары привязаны к заказу'});
-    toast('Не все товары привязаны к заказу', 'error');
+  if(!orderReadyByStock(o)){
+    (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'blocked', comment:'Попытка выдачи отклонена: товара нет в наличии на точке'});
+    toast('Товара нет в наличии на этой точке — выдача невозможна', 'error');
     return;
   }
   let scanState=o.items.map(it=>({matched:null}));
@@ -6512,7 +6577,7 @@ function openIssueModal(id){
     const scanIt=it.imei!=='—';
     body+='<div class="check-row" id="scanRow'+i+'" style="flex-direction:column;align-items:stretch;gap:8px;">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">'+
-        '<div><b style="color:var(--text-0);">'+escHtml(it.name)+'</b>'+(scanIt?'<div class="tsub mono">Ожидаемый код: '+it.imei+'</div>':'')+'</div>'+
+        '<div><b style="color:var(--text-0);">'+escHtml(it.name)+'</b>'+(scanIt?(it.imei?'<div class="tsub mono">Ожидаемый код: '+it.imei+'</div>':'<div class="tsub">Отсканируйте любую коробку этой модели — код привяжется к заказу</div>'):'')+'</div>'+
         (scanIt
           ? '<span class="wait" id="scanStatus'+i+'">'+ic('alert')+' Не отсканировано</span>'
           : '<span class="ok" id="scanStatus'+i+'">'+ic('check')+' Проверяется визуально</span>')+
@@ -6600,14 +6665,15 @@ function openIssueModal(id){
           statusEl.className='ok'; statusEl.innerHTML=ic('check')+' Совпадает'; scanState[i].matched=true; try{beep('ok');}catch(e){}
         } else {
           const whUnit=[...DATA.warehouse.tech, ...DATA.warehouse.tradein].find(x=>x.imei===v);
-          const sameModel=whUnit && whUnit.model===it.name;
+          const sameModel=whUnit && whNameEq(whUnit.model, it.name);
           const notTaken=whUnit && (whUnit.status==='free'||whUnit.status==='instock'|| (whUnit.status==='reserved'&&it.imei===v));
           const notDouble=holder<0;
           if(sameModel && notTaken && notDouble){
-            const prev=[...DATA.warehouse.tech, ...DATA.warehouse.tradein].find(x=>x.imei===it.imei);
+            const wasEmpty=!it.imei;
+            const prev=it.imei?[...DATA.warehouse.tech, ...DATA.warehouse.tradein].find(x=>x.imei===it.imei):null;
             if(prev && prev.status==='reserved') prev.status='instock';
             it.imei=v; whUnit.status='reserved';
-            statusEl.className='ok'; statusEl.innerHTML=ic('check')+' Совпадает (модель та же — код перепривязан)'; scanState[i].matched=true;
+            statusEl.className='ok'; statusEl.innerHTML=ic('check')+(wasEmpty?' Код привязан к заказу':' Совпадает (модель та же — код перепривязан)'); scanState[i].matched=true; try{beep('ok');}catch(e){}
           } else {
             statusEl.className='bad'; statusEl.innerHTML=ic('x')+' Не совпадает'; scanState[i].matched=false; try{beep('err');}catch(e){}
           }
@@ -7418,8 +7484,8 @@ function openNewServiceModal(c){
 function openTakeServiceModal(id, c){
   const t=DATA.service.find(x=>x.id===id);
   if(!t) return;
-  const masters=DATA.employees ? DATA.employees.filter(e=>e.role==='master').map(e=>e.name) : [];
-  const fallback=['Виктор Н.','Олег П.'];
+  const masters=DATA.employees ? DATA.employees.filter(e=>/мастер/i.test(e.role||'')).map(e=>e.name) : [];
+  const fallback=['Виктор Н.'];
   const list=masters.length?masters:fallback;
   const body='<div class="field"><label>Назначить ответственного мастера</label>'+
     '<select class="select-mini" id="svcTakeMaster" style="width:100%;">'+list.map(m=>'<option>'+m+'</option>').join('')+'</select></div>'+
@@ -7438,8 +7504,8 @@ function openTakeServiceModal(id, c){
 function openReassignServiceModal(id, c){
   const t=DATA.service.find(x=>x.id===id);
   if(!t) return;
-  const masters=DATA.employees ? DATA.employees.filter(e=>e.role==='master').map(e=>e.name) : [];
-  const fallback=['Виктор Н.','Олег П.'];
+  const masters=DATA.employees ? DATA.employees.filter(e=>/мастер/i.test(e.role||'')).map(e=>e.name) : [];
+  const fallback=['Виктор Н.'];
   const list=(masters.length?masters:fallback).filter(m=>m!==t.master);
   if(list.length===0){ toast('Нет других мастеров для передачи', 'error'); return; }
   const pending=DATA.serviceHandoffs.find(h=>h.ticketId===t.id && h.status==='pending');
@@ -10625,7 +10691,7 @@ function openTaskTransferModal(taskId){
   const cur=taskParticipants(t).map(p=>p.name);
   /* Передавать можно только тем, у кого есть доступ к разделу «Задачи» —
      иначе сотрудник не увидит переданную задачу */
-  const ROLE_BY_TITLE={'Продавец':'seller','Старший продавец':'senior','Мастер':'master','Курьер':'courier','Сборщик':'collector'};
+  const ROLE_BY_TITLE={'Менеджер':'seller','Продавец':'seller','Старший менеджер':'senior','Старший продавец':'senior','Мастер':'master','Курьер':'courier','Сборщик':'collector'};
   const candidates=DATA.employees.filter(e=>{
     if(e.noAccess || cur.includes(e.name)) return false;
     const rk=ROLE_BY_TITLE[e.role];
@@ -12899,14 +12965,23 @@ function ensureShiftData(){
   if(!DATA.attendance) DATA.attendance={};           // 'ДД.ММ.ГГГГ': {id:{scannedAt,absence,noShow,fined}}
   if(!DATA.fines) DATA.fines=[];                      // журнал штрафов
   if(!DATA.explanations) DATA.explanations=[];        // объяснительные
-  if(!DATA.shiftNorms) DATA.shiftNorms={};            // 'ДД.ММ.ГГГГ': {Продавцы:2, Мастера:1, ...}
+  if(!DATA.shiftNorms) DATA.shiftNorms={};            // 'ДД.ММ.ГГГГ': {Менеджеры:2, Мастера:1, ...}
+  Object.values(DATA.shiftNorms).forEach(n=>{ if(n && n['Продавцы']!=null){ n['Менеджеры']=n['Продавцы']; delete n['Продавцы']; } });
   if(!DATA.invites) DATA.invites=[];                  // приглашения сотрудников (макет)
   DATA.employees.forEach(e=>{ if(e.schedule && !e.badgeCode) e.badgeCode='IMG-'+String(e.id).replace(/\D/g,'').padStart(4,'0'); });
 }
 /* Роль → нормовая категория для панели управления. */
-const ROLE_BUCKETS=['Продавцы','Мастера','Сборщики'];
+const ROLE_BUCKETS=['Менеджеры','Мастера','Сборщики'];
+function empRoleIcon(e){
+  const r=String((e&&e.role)||e||'');
+  if(/мастер/i.test(r)) return '\u{1F527} ';        /* 🔧 */
+  if(/менеджер|продавец/i.test(r)) return '\u{1F4BC} '; /* 💼 */
+  if(/курьер/i.test(r)) return '\u{1F69A} ';        /* 🚚 */
+  if(/сборщик/i.test(r)) return '\u{1F4E6} ';       /* 📦 */
+  return '';
+}
 function roleBucket(role){
-  if(/продавец/i.test(role)) return 'Продавцы';
+  if(/продавец|менеджер/i.test(role)) return 'Менеджеры';
   if(/мастер/i.test(role)) return 'Мастера';
   if(/сборщик/i.test(role)) return 'Сборщики';
   return 'Прочие';
@@ -13082,7 +13157,7 @@ function scheduleCalendarHTML(){
       const mgrs=working.filter(x=>x.e.role!=='Мастер');
       const masters=working.filter(x=>x.e.role==='Мастер');
       html+=mgrs.map(x=>'<div class="cal-shift" title="'+escHtml(x.e.name)+' · '+x.e.role+'">'+
-        '<span class="cal-who">'+escHtml(x.e.name)+'</span></div>').join('');
+        '<span class="cal-who">'+empRoleIcon(x.e)+escHtml(x.e.name)+'</span></div>').join('');
       if(masters.length){
         html+='<div style="margin-top:4px;padding-top:4px;border-top:1px dashed rgba(255,255,255,.14);">'+
           masters.map(x=>'<div class="cal-shift" title="'+escHtml(x.e.name)+' · Мастер" style="opacity:.9;">'+
@@ -13448,7 +13523,7 @@ function wireControlPanel(c){
 /* Приглашение сотрудника (макет): почта + роль. */
 function openInviteModal(c){
   ensureShiftData();
-  const roles=['Продавец','Старший продавец','Мастер','Сборщик','Курьер'];
+  const roles=['Менеджер','Старший менеджер','Мастер','Сборщик','Курьер'];
   let body='<div class="field" style="margin-bottom:10px;"><label>Почта сотрудника</label><input class="input-mini" id="invEmail" style="width:100%;" placeholder="name@mail.ru"></div>'+
     '<div class="field"><label>Роль</label><select class="select-mini" id="invRole" style="width:100%;">'+roles.map(r=>'<option>'+r+'</option>').join('')+'</select></div>'+
     '<p class="tsub" style="margin-top:10px;">Макет: письмо-приглашение уйдёт после подключения бэкенда. Пока создаётся запись «Приглашён».</p>';
@@ -13683,13 +13758,13 @@ function renderTeam(c){
   const canEditShifts=(isBossRole()||STATE.role==='senior'||STATE.role==='admin');
   const otherStoresLine=STORES.filter(s=>s.id!==STATE.activeStoreId).map(s=>{
     const list=DATA.employees.filter(e=>!e.support && shiftForAt(e, schedToday(), s.id));
-    return '<div class="tsub" style="margin-top:6px;">'+escHtml(s.shortName)+': '+(list.length?list.map(e=>(e.role==='Мастер'?'🔧 ':'')+escHtml(e.name)).join(', '):'никого')+'</div>';
+    return '<div class="tsub" style="margin-top:6px;">'+escHtml(s.shortName)+': '+(list.length?list.map(e=>empRoleIcon(e)+escHtml(e.name)).join(', '):'никого')+'</div>';
   }).join('');
   html+='<div class="section"><div class="card" style="border-color:rgba(52,211,153,.35);display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;">'+
     '<div><div class="kpi-label">Сегодня на смене · '+ruDateStr(schedToday())+' · '+escHtml((STORES.find(s=>s.id===STATE.activeStoreId)||{}).shortName||'')+'</div>'+
     '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center;">'+
     (onTodayList.length?
-      onTodayList.filter(e=>e.role!=='Мастер').map(e=>'<span class="badge b-done" style="font-size:13px;">'+escHtml(e.name)+'</span>').join('')+
+      onTodayList.filter(e=>e.role!=='Мастер').map(e=>'<span class="badge b-done" style="font-size:13px;">'+empRoleIcon(e)+escHtml(e.name)+'</span>').join('')+
       onTodayList.filter(e=>e.role==='Мастер').map(e=>'<span class="badge b-progress" style="font-size:13px;">🔧 '+escHtml(e.name)+'</span>').join('')
       : '<span class="tsub">никого</span>')+
     '</div>'+otherStoresLine+'</div>'+
@@ -19924,13 +19999,13 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-72';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-75';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
 const CRED_DEFAULTS={ site:{ apiUrl:(location&&location.protocol&&location.protocol.startsWith('http'))?'/api':'https://imagnate-assistant.onrender.com/api' } };
 const CRM_CHAIN=['new','working','waiting','won'];
-const EMP_ROLE_CHOICES=['Продавец','Старший продавец','Мастер','Курьер','Сборщик'];
+const EMP_ROLE_CHOICES=['Менеджер','Старший менеджер','Мастер','Курьер','Сборщик'];
 const LEAD_EDIT_FIELDS={
   name:   {label:'Имя клиента',        ph:'Иван Иванович'},
   contact:{label:'Телефон / контакт',  ph:'+7 900 000-00-00 или ник соцсети'},
@@ -20416,7 +20491,7 @@ function openEmployeeModal(empId, c){
     '</select></div>'+
     '<div><div class="tsub" style="margin-bottom:4px;">Телефон (необязательно)</div><input class="input-mini" id="empPhone" value="'+(emp?escAttr(emp.phone||''):'')+'" placeholder="+7 ..." style="width:100%;"></div>'+
   '</div>'+
-  (emp?'':'<div class="tsub" style="margin-top:10px;">Продавец сразу попадает в карусель 2/2; мастера и другие роли выходят по ручным назначениям — нажмите на день в календаре и отметьте их.</div>');
+  (emp?'':'<div class="tsub" style="margin-top:10px;">Менеджер сразу попадает в карусель 2/2; мастера и другие роли выходят по ручным назначениям — нажмите на день в календаре и отметьте их.</div>');
   const actions=[
     {label: emp?'Сохранить':'Добавить', cls:'btn-primary', action:()=>{
       const name=document.getElementById('empName').value.trim();
@@ -20431,7 +20506,7 @@ function openEmployeeModal(empId, c){
         toast('Сотрудник обновлён: '+name+' · '+role,'success');
       } else {
         const nid=Math.max(0,...DATA.employees.map(e=>typeof e.id==='number'?e.id:0))+1;
-        const sched = role==='Продавец'
+        const sched = /продавец|менеджер/i.test(role)
           ? {cycle:'2/2', start:ruDateStr(schedToday()), period:5, work:2, hours:'10:00–21:00'}
           : {manual:true};
         DATA.employees.push({id:nid, name:name, role:role, unit:'shop_c', storeId:storeSel, phone:phone||'—', baseSalary:null,
@@ -20850,7 +20925,7 @@ function openShiftEditModal(dStr, c){
     const other=elsewhere(e.id);
     return '<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;cursor:pointer;">'+
       '<input type="checkbox" class="shiftEditChk" value="'+e.id+'"'+(current.includes(e.id)?' checked':'')+'> '+
-      '<span>'+(e.role==='Мастер'?'🔧 ':'')+escHtml(e.name)+' <span class="tsub">· '+e.role+(other?' · в этот день на «'+escHtml(other)+'»':'')+'</span></span></label>';
+      '<span>'+empRoleIcon(e)+escHtml(e.name)+' <span class="tsub">· '+e.role+(other?' · в этот день на «'+escHtml(other)+'»':'')+'</span></span></label>';
   };
   const mgrs=staff.filter(e=>e.role!=='Мастер');
   const masters=staff.filter(e=>e.role==='Мастер');
@@ -21974,13 +22049,9 @@ setInterval(async()=>{
         d.competitorPrices=prim.competitorPrices;
       });
       prim.cashOps.forEach(op=>{ if(!op.store) op.store=primaryId; });
-      /* решение владельца 24.07: график ведём на Каширском ш. 8 —
-         переносим записи смен, ранее осевшие на Лунной */
-      Object.keys(prim.shiftAssignments||{}).forEach(k=>{
-        const day=prim.shiftAssignments[k];
-        if(day && day.store_lunnaya && !day.store_kashirka){ day.store_kashirka=day.store_lunnaya; delete day.store_lunnaya; }
-      });
-      prim.employees.forEach(e=>{ if(e.storeId==='store_lunnaya') e.storeId='store_kashirka'; });
+      /* решение владельца 24.07 (график на Каширке) ОТМЕНЕНО 02.08:
+         основная точка — Лунная 4, менеджеры распределены по точкам
+         (см. _staffRealign74 ниже) — принудительный перенос убран */
     }
   }catch(e){ console.warn('linkSharedTeam:', e); }
 })();
@@ -22015,6 +22086,50 @@ setInterval(async()=>{
       /* старый формат: дата -> [ids]  →  новый: дата -> {точка: [ids]} */
       Object.keys(d.shiftAssignments).forEach(k=>{
         if(Array.isArray(d.shiftAssignments[k])) d.shiftAssignments[k]={store_kashirka:d.shiftAssignments[k]};
+      });
+      /* 29.07-74: реальный штат по точкам (решение владельца 02.08).
+         Лунная 4 — основная: пары менеджеров 2/2 (Алексей+Вячеслав ↔ Владислав+Иван)
+         + мастер Виктор; Каширское ш. 8 — Дарья. Старые демо-имена убираем. */
+      if(!d._staffRealign74){
+        d._staffRealign74=1;
+        const oldDemo=['Иванов Д.','Кузьмина Е.','Иванова О.','Олег П.','Сергей Т.','Марат Б.'];
+        for(let i=d.employees.length-1;i>=0;i--){
+          const e=d.employees[i];
+          if(oldDemo.includes(e.name) && !e.support) d.employees.splice(i,1);
+        }
+        const REAL=[
+          {name:'Алексей',   store:'store_lunnaya',  start:'27.07.2026'},
+          {name:'Вячеслав',  store:'store_lunnaya',  start:'27.07.2026'},
+          {name:'Владислав', store:'store_lunnaya',  start:'29.07.2026'},
+          {name:'Иван',      store:'store_lunnaya',  start:'29.07.2026'},
+          {name:'Дарья',     store:'store_kashirka', start:'27.07.2026'},
+        ];
+        REAL.forEach(p=>{
+          let e=d.employees.find(x=>!x.support && x.name===p.name);
+          if(!e){
+            const nid=Math.max(10, ...d.employees.map(x=>typeof x.id==='number'?x.id:0))+1;
+            e={id:nid, name:p.name, role:'Менеджер', unit:'shop_c', phone:'—', baseSalary:63000,
+               salaryPlan:{advance:25000, remainder:38000, bonus:7000},
+               responsibilities:'Консультирует клиентов, оформляет и выдаёт заказы',
+               extraAccess:{expensesReview:false, analytics:false}};
+            d.employees.push(e);
+          }
+          e.storeId=p.store;
+          e.schedule=Object.assign({}, e.schedule||{}, {cycle:'2/2', start:p.start, period:4, work:2,
+            hours:(e.schedule&&e.schedule.hours)||'10:00–21:00'});
+        });
+        /* из графика убрать тех, кого больше нет */
+        const okIds=new Set(d.employees.map(e=>e.id));
+        Object.keys(d.shiftAssignments||{}).forEach(k=>{
+          const day=d.shiftAssignments[k];
+          if(day && typeof day==='object' && !Array.isArray(day))
+            Object.keys(day).forEach(sid=>{ day[sid]=(day[sid]||[]).filter(x=>okIds.has((x&&typeof x==='object')?x.id:x)); });
+        });
+      }
+      /* всегда (идемпотентно): продавцы теперь называются менеджерами */
+      d.employees.forEach(e=>{
+        if(e.role==='Продавец') e.role='Менеджер';
+        if(e.role==='Старший продавец') e.role='Старший менеджер';
       });
     });
   }catch(e){ console.warn('ensureSupportProfiles:', e); }
