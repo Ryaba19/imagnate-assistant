@@ -742,7 +742,7 @@ const server = http.createServer((req, res) => {
 
   /* ---- Страницы ---- */
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return sendFile(res, 'index.html');
-  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-22' });
+  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-29' });
 
   /* ---- Сайт отправляет заявку (публично) ---- */
   if (req.method === 'POST' && url.pathname === '/api/lead') {
@@ -1157,10 +1157,53 @@ const server = http.createServer((req, res) => {
   sendJson(res, 404, { error: 'Неизвестный запрос' });
 });
 
+/* ============================================================
+   СЕРВЕРНЫЕ ПРОВЕРКИ: раз в 5 минут сервер сам смотрит облачный
+   снимок базы и шлёт уведомления, ЕСЛИ ERP ни у кого не открыта
+   (снимок старше 3 минут — значит, страницы нет; иначе клиент шлёт сам).
+   Дедупликация: одна заявка — одно уведомление в день (channel_kv).
+============================================================ */
+async function serverSideChecks() {
+  try {
+    const cur = await stateLoad();
+    if (!cur || !cur.state) return;
+    if (Date.now() - (cur.savedAtMs || 0) < 3 * 60 * 1000) return;   /* страница открыта */
+    const stores = cur.state.stores || {};
+    const now = new Date();
+    const p = n => String(n).padStart(2, '0');
+    const dayKey = p(now.getDate()) + '.' + p(now.getMonth() + 1) + '.' + now.getFullYear();
+    const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const parseRu = s => { const m = String(s || '').match(/(\d{2})\.(\d{2})\.(\d{4})/); return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null; };
+    for (const sid of Object.keys(stores)) {
+      const d = stores[sid] || {};
+      for (const t of (d.service || [])) {
+        if (['done', 'archive'].includes(t.status)) continue;
+        const due = parseRu(t.due);
+        if (due && due < todayMid) {
+          const k = 'srvntf_overdue_' + sid + '_' + t.id + '_' + dayKey;
+          if (await kvGet(k)) continue;
+          await kvSet(k, '1');
+          await tgSend('🔧 Просрочен ремонт\nЗаявка №' + t.id + (t.device ? ' — ' + t.device : '') + '\nСрок был: ' + t.due + '\n(отправлено сервером — ERP закрыта)');
+        }
+      }
+      for (const l of (d.leads || [])) {
+        if (l.fellBack && l.stage === 'new') {
+          const k = 'srvntf_fell_' + sid + '_' + l.id + '_' + dayKey;
+          if (await kvGet(k)) continue;
+          await kvSet(k, '1');
+          await tgSend('🔴 Упавшая заявка CRM\nКлиент: ' + (l.name || '—') + '\nНе подтверждена вовремя — заберите в работу\n(отправлено сервером — ERP закрыта)');
+        }
+      }
+    }
+  } catch (e) { console.error('[серверные проверки]', e.message); }
+}
+
 dbInit()
   .catch(e => { console.error('БД недоступна (' + e.message + ') — работаю в файловом режиме'); pool = null; })
   .then(() => server.listen(PORT, () => {
     setTimeout(() => { registerWebhooks().catch(e => console.error('вебхуки:', e.message)); }, 5000);
+    setTimeout(() => { serverSideChecks(); }, 20000);
+    setInterval(() => { serverSideChecks(); }, 5 * 60 * 1000);
     setInterval(() => { registerWebhooks().catch(e => console.error('вебхуки:', e.message)); }, 24 * 3600 * 1000);
     /* при каждом запуске (деплой / пробуждение) — глубокая перечитка всех
        чатов: закрывает пропуски прошлого, дубликаты отсекает дедупликация */

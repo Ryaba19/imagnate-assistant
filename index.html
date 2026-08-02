@@ -1854,6 +1854,7 @@ const ROLES = {
   owner:{label:'Владелец', short:'ВЛ', menu:['dashboard','crm','orders','service','warehouse','purchase','customers','pricing','finance','accounting','expenses','analytics','tasks','team','manage','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:true, canConfirmPurchase:true, canPriceCollection:true},
   director:{label:'Директор — Лунная 4', short:'Д1', homeStoreId:'store_lunnaya', menu:['dashboard','crm','orders','service','warehouse','purchase','customers','pricing','finance','accounting','expenses','analytics','tasks','team','manage','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:true, canConfirmPurchase:true, canPriceCollection:true},
   director2:{label:'Директор — Каширское ш. 8', short:'Д2', homeStoreId:'store_kashirka', menu:['dashboard','crm','orders','service','warehouse','purchase','customers','pricing','finance','accounting','expenses','analytics','tasks','team','manage','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:true, canConfirmPurchase:true, canPriceCollection:true},
+  admin:{label:'Админ', short:'АД', menu:['dashboard','manage','team','tasks','analytics','docs'], seePurchase:false, seeProfit:false, warehouseTabs:[], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
   senior:{label:'Старший продавец', short:'СП', menu:['dashboard','crm','orders','service','warehouse','purchase','pricing','finance','expenses','analytics','tasks','team','manage','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:false, canConfirmPurchase:true, canPriceCollection:true},
   seller:{label:'Продавец', short:'ПР', menu:['dashboard','crm','orders','service','warehouse','finance','expenses','tasks','team','docs'], seePurchase:false, seeProfit:false, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
   master:{label:'Мастер', short:'МС', menu:['dashboard','service','warehouse','expenses','tasks','team','docs'], seePurchase:false, seeProfit:false, warehouseTabs:['parts'], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
@@ -2337,24 +2338,36 @@ function renderSidebar(){
       networkButtons+
       '<div class="density-toggle" id="densityToggle" title="Компактный режим: больше данных на экран">'+
         (document.body.classList.contains('compact')?'◱ Обычный вид':'◳ Компактный вид')+'</div>'+
-      '<div class="role-block">'+
-        '<div class="role-current">'+
-          '<div class="role-avatar">'+role.short+'</div>'+
-          '<div class="role-meta"><b>'+role.label+'</b><span>Демо-режим просмотра роли</span></div>'+
-        '</div>'+
-        '<select class="role-select" id="roleSelect">'+
-          Object.keys(ROLES).map(k=>'<option value="'+k+'" '+(k===STATE.role?'selected':'')+'>'+ROLES[k].label+'</option>').join('')+
-        '</select>'+
-        '<div class="role-hint">Переключение роли меняет доступные разделы и видимость закупочных цен / прибыли — согласно правам из проектной документации.</div>'+
-      '</div>'+
+      '<div class="density-toggle" id="feedbackBtn" title="Идея или проблема — написать администратору">💬 Обратная связь</div>'+
+      (pinModeOn()
+        ? '<div class="role-block">'+
+            '<div class="role-current">'+
+              '<div class="role-avatar">'+role.short+'</div>'+
+              '<div class="role-meta"><b>'+escHtml(currentEmployeeName())+'</b><span>'+role.label+'</span></div>'+
+            '</div>'+
+            '<button class="btn btn-sm" id="pinLockBtn" style="width:100%;margin-top:6px;">🔒 Сменить пользователя</button>'+
+          '</div>'
+        : '<div class="role-block">'+
+            '<div class="role-current">'+
+              '<div class="role-avatar">'+role.short+'</div>'+
+              '<div class="role-meta"><b>'+role.label+'</b><span>Демо-режим просмотра роли</span></div>'+
+            '</div>'+
+            '<select class="role-select" id="roleSelect">'+
+              Object.keys(ROLES).map(k=>'<option value="'+k+'" '+(k===STATE.role?'selected':'')+'>'+ROLES[k].label+'</option>').join('')+
+            '</select>'+
+            '<div class="role-hint">Переключение роли меняет доступные разделы и видимость закупочных цен / прибыли — согласно правам из проектной документации.</div>'+
+          '</div>')+
     '</div>';
 
   sidebar.querySelectorAll('.nav-item').forEach(el=>{
     el.addEventListener('click', ()=>{ navigate(el.dataset.page); closeSidebarMobile(); });
   });
-  document.getElementById('roleSelect').addEventListener('change', e=>{
-    setRole(e.target.value);
-  });
+  const rsel=document.getElementById('roleSelect');
+  if(rsel) rsel.addEventListener('change', e=>{ setRole(e.target.value); });
+  const plb=document.getElementById('pinLockBtn');
+  if(plb) plb.addEventListener('click', ()=>pinLockShow());
+  const fbb=document.getElementById('feedbackBtn');
+  if(fbb) fbb.addEventListener('click', openFeedbackModal);
   const dt=document.getElementById('densityToggle');
   if(dt) dt.addEventListener('click', ()=>{
     document.body.classList.toggle('compact');
@@ -2450,9 +2463,12 @@ function openMobileMoreSheet(){
     '<div class="msheet-title">Все разделы</div>'+
     '<div class="msheet-list">'+rows+'</div>'+
     '<div class="msheet-foot">'+
-      '<select class="role-select" id="msheetRole">'+
-        Object.keys(ROLES).map(k=>'<option value="'+k+'" '+(k===STATE.role?'selected':'')+'>'+ROLES[k].label+'</option>').join('')+
-      '</select>'+
+      (pinModeOn()
+        ? '<button class="btn btn-sm" id="msheetPinLock" style="width:100%;">🔒 '+escHtml(currentEmployeeName())+' · сменить пользователя</button>'
+        : '<select class="role-select" id="msheetRole">'+
+            Object.keys(ROLES).map(k=>'<option value="'+k+'" '+(k===STATE.role?'selected':'')+'>'+ROLES[k].label+'</option>').join('')+
+          '</select>')+
+      '<button class="btn btn-sm" id="msheetFeedback" style="width:100%;margin-top:8px;">💬 Обратная связь</button>'+
       '<div class="tsub" style="margin-top:8px;text-align:center;">Store Control · сборка '+BUILD_TAG+'</div>'+
     '</div>'+
   '</div>';
@@ -2461,7 +2477,210 @@ function openMobileMoreSheet(){
   ov.querySelectorAll('[data-spage]').forEach(el=>el.addEventListener('click', ()=>{ closeMobileMoreSheet(); navigate(el.dataset.spage); }));
   const rs=document.getElementById('msheetRole');
   if(rs) rs.addEventListener('change', e=>{ closeMobileMoreSheet(); setRole(e.target.value); });
+  const mpl=document.getElementById('msheetPinLock');
+  if(mpl) mpl.addEventListener('click', ()=>{ closeMobileMoreSheet(); pinLockShow(); });
+  const mfb=document.getElementById('msheetFeedback');
+  if(mfb) mfb.addEventListener('click', ()=>{ closeMobileMoreSheet(); openFeedbackModal(); });
 }
+
+/* ============================================================
+   PIN-ВХОДЫ (боевой режим доступа).
+   Включает владелец: Управление → «Входы по PIN». Пока выключено —
+   работает старый демо-переключатель ролей.
+   PIN хранится только хэшем (SHA-256 с солью) в общих данных;
+   сессия «кто вошёл» живёт на конкретном устройстве.
+============================================================ */
+async function sha256Hex(str){
+  const buf=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function pinCfg(){
+  const d=(typeof chHomeStore==='function'?chHomeStore():DATA)||DATA;
+  d.settings=d.settings||{};
+  return d.settings;
+}
+function pinModeOn(){ try{ return !!pinCfg().pinMode; }catch(e){ return false; } }
+function pinAllEmployees(){
+  /* сотрудники общие для точек — берём из главной */
+  const d=(typeof chHomeStore==='function'?chHomeStore():DATA)||DATA;
+  return d.employees||DATA.employees||[];
+}
+function empRoleKey(e){
+  const r=String(e.role||'');
+  if(/директор/i.test(r)) return (e.storeId==='store_kashirka')?'director2':'director';
+  if(/старший/i.test(r)) return 'senior';
+  if(/продавец/i.test(r)) return 'seller';
+  if(/мастер/i.test(r)) return 'master';
+  if(/курьер/i.test(r)) return 'courier';
+  if(/сборщик/i.test(r)) return 'collector';
+  return 'seller';
+}
+function pinSessionSave(u){ try{ localStorage.setItem('erp_pin_session', JSON.stringify(u||null)); }catch(e){} }
+function pinSessionLoad(){ try{ return JSON.parse(localStorage.getItem('erp_pin_session')||'null'); }catch(e){ return null; } }
+function empScheduledStoreToday(e){
+  try{
+    for(const s of STORES){ if(shiftForAt(e, schedToday(), s.id)) return s.id; }
+  }catch(err){}
+  return null;
+}
+function applyPinUser(u, silent){
+  if(!u) return;
+  if(u.type==='owner'){
+    STATE.currentEmpId=null;
+    setRole('owner');
+  } else if(u.type==='admin'){
+    STATE.currentEmpId=null;
+    setRole('admin');
+  } else {
+    const e=pinAllEmployees().find(x=>x.id===u.id);
+    if(!e) return;
+    STATE.currentEmpId=e.id;
+    const rk=empRoleKey(e);
+    /* точка: выбранная на входе → по графику на сегодня → домашняя */
+    let sid=u.storeId||null;
+    if(!sid) sid=empScheduledStoreToday(e);
+    sid=sid||e.storeId;
+    if(sid && STORE_DATA[sid]){ STATE.activeStoreId=sid; DATA=STORE_DATA[sid]; }
+    setRole(rk);
+    if(!silent && u.bySchedule && sid && STORE_DATA[sid]) toast('По графику сегодня: '+(STORE_DATA[sid].storeName||sid),'info');
+  }
+  if(!silent) toast('Вход выполнен: '+(u.type==='owner'?'Владелец':(u.type==='admin'?'Админ':((pinAllEmployees().find(x=>x.id===u.id)||{}).name||''))),'success');
+}
+window._pinFails={};
+window._pinBlockUntil=0;
+window._pinLastAct=Date.now();
+function pinLockShow(){
+  if(document.getElementById('pinLock')) return;
+  pinSessionSave(null);
+  const emps=pinAllEmployees().filter(e=>e&&e.name);
+  const ov=document.createElement('div');
+  ov.id='pinLock';
+  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:var(--bg-0,#0b0e14);display:flex;align-items:center;justify-content:center;padding:20px;';
+  const tile=(id,name,sub)=>'<div class="card pin-tile" data-pin-user="'+id+'" style="cursor:pointer;padding:14px 16px;min-width:150px;text-align:center;">'+
+    '<div style="font-weight:800;font-size:14px;">'+escHtml(name)+'</div><div class="tsub">'+escHtml(sub)+'</div></div>';
+  ov.innerHTML='<div style="max-width:640px;width:100%;">'+
+    '<div style="text-align:center;margin-bottom:16px;"><div style="font-size:20px;font-weight:900;">Store Control</div><div class="tsub">Выберите себя и введите PIN · сборка '+BUILD_TAG+'</div></div>'+
+    '<div id="pinTiles" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">'+
+      tile('owner','Владелец','полный доступ')+
+      tile('admin','Админ','доступы · роли · обратная связь')+
+      emps.map(e=>tile('emp'+e.id, e.name, e.role+(e.pinHash?'':' · PIN не задан'))).join('')+
+    '</div>'+
+    '<div id="pinPad" style="display:none;max-width:260px;margin:18px auto 0;text-align:center;">'+
+      '<div id="pinWho" style="font-weight:700;margin-bottom:6px;"></div>'+
+      '<div id="pinDots" class="mono" style="font-size:26px;letter-spacing:8px;min-height:34px;">····</div>'+
+      '<div id="pinMsg" class="tsub" style="min-height:18px;"></div>'+
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;">'+
+        [1,2,3,4,5,6,7,8,9].map(n=>'<button class="btn" data-pin-d="'+n+'" style="padding:14px 0;font-size:17px;">'+n+'</button>').join('')+
+        '<button class="btn" data-pin-act="back" style="padding:14px 0;">⌫</button>'+
+        '<button class="btn" data-pin-d="0" style="padding:14px 0;font-size:17px;">0</button>'+
+        '<button class="btn btn-primary" data-pin-act="ok" style="padding:14px 0;">OK</button>'+
+      '</div>'+
+      '<button class="btn btn-sm" data-pin-act="cancel" style="margin-top:10px;">← Другой пользователь</button>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(ov);
+  let sel=null, buf='';
+  const dots=()=>{ document.getElementById('pinDots').textContent=buf?('•'.repeat(buf.length)):'····'; };
+  const msg=(t,neg)=>{ const m=document.getElementById('pinMsg'); m.textContent=t||''; m.style.color=neg?'var(--negative)':'var(--text-2)'; };
+  const pick=(id)=>{
+    sel=id; buf='';
+    document.getElementById('pinTiles').style.display='none';
+    document.getElementById('pinPad').style.display='block';
+    const who=(id==='owner')?'Владелец':(id==='admin'?'Админ':((emps.find(e=>'emp'+e.id===id)||{}).name||''));
+    document.getElementById('pinWho').textContent=who;
+    if(id==='owner') msg('');
+    else if(id==='admin'){ if(!pinCfg().adminPinHash) msg('PIN админа не задан — владелец задаёт его в «Управлении»', true); else msg(''); }
+    else{
+      const e=emps.find(x=>'emp'+x.id===id);
+      if(e && !e.pinHash) msg('PIN не задан — попросите владельца задать его в «Управлении»', true);
+      else msg('');
+    }
+    dots();
+  };
+  const back=()=>{ sel=null; buf=''; document.getElementById('pinPad').style.display='none'; document.getElementById('pinTiles').style.display='flex'; };
+  const submit=async()=>{
+    if(!sel || buf.length<4){ msg('PIN — минимум 4 цифры', true); return; }
+    if(Date.now()<window._pinBlockUntil){ msg('Подождите '+Math.ceil((window._pinBlockUntil-Date.now())/1000)+' сек', true); buf=''; dots(); return; }
+    let okHash=null, u=null, salt='';
+    if(sel==='owner'){ okHash=pinCfg().ownerPinHash||null; u={type:'owner'}; salt='owner'; }
+    else if(sel==='admin'){ okHash=pinCfg().adminPinHash||null; u={type:'admin'}; salt='admin'; }
+    else{
+      const e=emps.find(x=>'emp'+x.id===sel);
+      if(!e || !e.pinHash){ msg('PIN не задан для этого сотрудника', true); buf=''; dots(); return; }
+      okHash=e.pinHash; u={type:'emp', id:e.id}; salt='emp'+e.id;
+    }
+    if(!okHash){ msg('PIN не задан — задаётся в «Управлении»', true); return; }
+    const finish=(uu)=>{
+      pinSessionSave(uu);
+      window._pinLastAct=Date.now();
+      ov.remove();
+      document.removeEventListener('keydown', keyH, true);
+      applyPinUser(uu);
+    };
+    const h=await sha256Hex('storecontrol|'+salt+'|'+buf);
+    if(h===okHash){
+      window._pinFails[sel]=0;
+      if(u.type==='emp'){
+        const e=emps.find(x=>x.id===u.id);
+        const sched=empScheduledStoreToday(e);
+        if(sched){ u.storeId=sched; u.bySchedule=true; finish(u); return; }
+        if(STORES.length>1){
+          /* сегодня не в графике — сотрудник выбирает магазин сам */
+          document.getElementById('pinPad').style.display='none';
+          const st=document.createElement('div');
+          st.id='pinStores';
+          st.style.cssText='max-width:320px;margin:18px auto 0;text-align:center;';
+          st.innerHTML='<div style="font-weight:700;margin-bottom:4px;">'+escHtml(e.name)+'</div>'+
+            '<div class="tsub" style="margin-bottom:10px;">Сегодня вас нет в графике — выберите, в каком магазине работаете:</div>'+
+            STORES.map(s=>'<button class="btn btn-primary" data-pin-store="'+s.id+'" style="width:100%;margin-bottom:8px;padding:12px 0;">'+escHtml(s.shortName||s.name||s.id)+'</button>').join('');
+          document.getElementById('pinPad').parentElement.appendChild(st);
+          st.querySelectorAll('[data-pin-store]').forEach(b=>b.addEventListener('click',()=>{ u.storeId=b.dataset.pinStore; finish(u); }));
+          return;
+        }
+      }
+      finish(u);
+    } else {
+      window._pinFails[sel]=(window._pinFails[sel]||0)+1;
+      buf=''; dots();
+      if(window._pinFails[sel]>=5){
+        window._pinBlockUntil=Date.now()+30000;
+        window._pinFails[sel]=0;
+        msg('5 неверных попыток — пауза 30 секунд', true);
+        try{ tgNotify('🔒 Неверный PIN 5 раз подряд\nПользователь: '+document.getElementById('pinWho').textContent+'\nВремя: '+DATA.today+' '+nowTime()); }catch(e){}
+      } else msg('Неверный PIN ('+window._pinFails[sel]+' из 5)', true);
+    }
+  };
+  ov.querySelectorAll('[data-pin-user]').forEach(el=>el.addEventListener('click',()=>pick(el.dataset.pinUser)));
+  ov.addEventListener('click', e=>{
+    const d=e.target.closest&&e.target.closest('[data-pin-d]');
+    const a=e.target.closest&&e.target.closest('[data-pin-act]');
+    if(d){ if(buf.length<6) buf+=d.dataset.pinD; dots(); }
+    else if(a){
+      if(a.dataset.pinAct==='back'){ buf=buf.slice(0,-1); dots(); }
+      else if(a.dataset.pinAct==='ok') submit();
+      else if(a.dataset.pinAct==='cancel') back();
+    }
+  });
+  const keyH=(e)=>{
+    if(!document.getElementById('pinLock')) return;
+    if(!sel) return;
+    if(/^[0-9]$/.test(e.key)){ if(buf.length<6) buf+=e.key; dots(); e.preventDefault(); }
+    else if(e.key==='Backspace'){ buf=buf.slice(0,-1); dots(); e.preventDefault(); }
+    else if(e.key==='Enter'){ submit(); e.preventDefault(); }
+    else if(e.key==='Escape'){ back(); e.preventDefault(); }
+  };
+  document.addEventListener('keydown', keyH, true);
+}
+/* автоблокировка по простою */
+['pointerdown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev, ()=>{ window._pinLastAct=Date.now(); }, {passive:true, capture:true}));
+setInterval(()=>{
+  try{
+    if(!pinModeOn()) return;
+    if(document.getElementById('pinLock')) return;
+    const min=pinCfg().pinLockMin==null?10:pinCfg().pinLockMin;
+    if(min>0 && Date.now()-window._pinLastAct>min*60000) pinLockShow();
+  }catch(e){}
+}, 20000);
 
 function setRole(role){
   STATE.role=role;
@@ -4897,6 +5116,10 @@ function releaseOrderItems(o){
   });
 }
 function currentEmployeeName(){
+  if(STATE.currentEmpId){
+    const pe=pinAllEmployees().find(x=>x.id===STATE.currentEmpId);
+    if(pe) return pe.name;
+  }
   const e=(DATA.employees||[]).find(x=>x.role===STATE.role);
   return e?e.name:ROLES[STATE.role].label;
 }
@@ -4909,7 +5132,9 @@ function openOrderModal(id, c){
   const payable=orderPayablePrice(o);
 
   /* --- Шапка: клиент и заказ --- */
-  let body='<div class="field-grid">'+
+  let body='';
+  if(o.returned) body+='<div class="card" style="border-color:var(--negative);margin-bottom:10px;padding:10px 14px;"><div class="tsub" style="color:var(--negative);font-weight:600;">↩ Возврат '+o.returned.date+' · '+rub(o.returned.sum)+' ('+escHtml(o.returned.how||'')+')'+(o.returned.reason?' · '+escHtml(o.returned.reason):'')+' · '+escHtml(o.returned.by||'')+'</div></div>';
+  body+='<div class="field-grid">'+
     field('Клиент', o.name)+
     field('Телефон', o.phone)+
     field('Оформлен', o.date)+
@@ -5014,6 +5239,9 @@ function openOrderModal(id, c){
   else if(o.status==='deferred')       foot=[{label:'Изменить дату', cls:'btn-primary', action:()=>{closeModal(); openEditDateModal(o.id, c);}}];
   else if(o.status==='awaiting_stock') foot=[{label:'Товар пришёл', cls:'btn-primary', action:()=>{closeModal(); openGoodsArrivedModal(o.id, c);}}];
   else if(o.status==='ready')          foot=[{label:'Выдать', cls:'btn-primary', action:()=>{closeModal(); openIssueModal(o.id, c);}}];
+  else if(o.status==='done' && (isBossRole()||STATE.role==='senior'))
+    foot=[{label:'🔧 Гарантийный случай', action:()=>{closeModal(); openWarrantyCaseModal(o.id, c);}},
+          {label:'↩ Возврат', cls:'btn-danger', action:()=>{closeModal(); openReturnModal(o.id, c);}}];
 
   openModal('Заказ №'+o.id, '<span class="badge '+st[1]+'">'+st[0]+'</span>', body, foot);
 
@@ -5327,6 +5555,87 @@ function printUsedDeviceAct(id){
 
 function field(label, value, mono){
   return '<div class="field"><label>'+label+'</label><div class="v'+(mono?' mono':'')+'">'+(value||'—')+'</div></div>';
+}
+
+/* ============================================================
+   ВОЗВРАТ выданного заказа: деньги из кассы/безнала обратно клиенту,
+   товар — на склад или пометкой «брак». ГАРАНТИЙНЫЙ СЛУЧАЙ — заявка
+   в Сервис с привязкой к заказу и серийнику.
+============================================================ */
+function openReturnModal(id, c){
+  const o=findOrder(id); if(!o) return;
+  if(o.returned){ toast('По этому заказу возврат уже проведён','info'); return; }
+  const sum=orderPayablePrice(o);
+  const body='<div class="field-grid">'+field('Клиент', escHtml(o.name))+field('Выдан', o.closedAt||o.date||'—')+'</div>'+
+    '<div class="field"><label>Сумма возврата, ₽</label><input class="input-mini" id="retSum" type="number" style="width:100%;" value="'+Math.round(sum)+'"></div>'+
+    '<div class="field"><label>Причина</label><input class="input-mini" id="retReason" style="width:100%;" placeholder="Например: не подошёл / заводской брак"></div>'+
+    '<div class="toggle-row" style="margin:8px 0;"><div class="toggle-switch on" id="retToStock"></div>Товар возвращается на склад (выключите при браке)</div>'+
+    '<div class="tsub" style="margin:6px 0;">Как вернуть деньги клиенту:</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-primary" id="retCash">Наличными из кассы</button><button class="btn" id="retCard">На карту (безнал)</button></div>';
+  openModal('↩ Возврат — заказ №'+o.id, 'Деньги, склад и журнал — одной операцией', body, []);
+  let toStock=true;
+  document.getElementById('retToStock').addEventListener('click', function(){ toStock=!toStock; this.classList.toggle('on', toStock); });
+  const doRet=(how)=>{
+    const s=Math.round(parseFloat(document.getElementById('retSum').value)||0);
+    if(s<=0){ toast('Укажите сумму возврата','error'); return; }
+    const reason=(document.getElementById('retReason').value||'').trim();
+    if(how==='cash'){
+      if(!DATA.cashOps) DATA.cashOps=[];
+      const op={id:(DATA.cashOps.length?Math.max(...DATA.cashOps.map(x=>x.id)):0)+1,
+        date:DATA.today, time:nowTime(), by:taskMe(), dir:'out', amount:s,
+        purpose:'Возврат клиенту — заказ №'+o.id, comment:reason||o.name||'', status:'done', approvedBy:null, store:STATE.activeStoreId};
+      DATA.cashOps.unshift(op);
+      try{ applyCashOp(op); }catch(e){}
+    } else {
+      if(!DATA.assets) DATA.assets={};
+      DATA.assets.cashless=(DATA.assets.cashless||0)-s;
+    }
+    (o.items||[]).forEach(it=>{
+      if(it.imei && it.imei!=='—' && it.imei!=='нет в наличии'){
+        const wh=[...DATA.warehouse.tech, ...DATA.warehouse.tradein].find(x=>x.imei===it.imei);
+        if(wh){
+          if(toStock){ wh.status='instock'; }
+          else { wh.status='sold'; wh.location='Брак (возврат по заказу №'+o.id+')'; }
+        }
+      }
+    });
+    o.returned={date:DATA.today, sum:s, reason, by:taskMe(), how:(how==='cash'?'наличные':'безнал'), toStock};
+    (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'note',
+      comment:'↩ Возврат: '+rub(s)+' ('+(how==='cash'?'наличными из кассы':'на карту')+')'+(reason?' — '+reason:'')+(toStock?'. Товар возвращён на склад':'. Товар помечен браком')});
+    try{ fullSave(); }catch(e){}
+    closeModal(); renderOrders(c||document.getElementById('pageContent'));
+    toast('Возврат по заказу №'+o.id+' проведён: '+rub(s),'success');
+  };
+  document.getElementById('retCash').addEventListener('click', ()=>doRet('cash'));
+  document.getElementById('retCard').addEventListener('click', ()=>doRet('card'));
+}
+function openWarrantyCaseModal(id, c){
+  const o=findOrder(id); if(!o) return;
+  const opts=o.items.map((it,i)=>'<option value="'+i+'">'+escHtml(it.name)+(it.imei&&it.imei!=='—'?' · '+it.imei:'')+'</option>').join('');
+  const body='<div class="field"><label>Устройство</label><select class="select-mini" id="wcItem" style="width:100%;">'+opts+'</select></div>'+
+    '<div class="field"><label>Что случилось (слова клиента)</label><input class="input-mini" id="wcIssue" style="width:100%;" placeholder="Например: не заряжается"></div>'+
+    '<div class="tsub" style="margin-top:6px;">Создастся заявка в Сервисе с привязкой к заказу и серийнику. Гарантия — по нашему талону: техника 12 мес, аксессуары 1 мес.</div>';
+  openModal('🔧 Гарантийный случай — заказ №'+o.id,'',body,[{label:'Создать заявку в Сервис', cls:'btn-primary', action:()=>{
+    const it=o.items[parseInt(document.getElementById('wcItem').value)||0];
+    const issue=(document.getElementById('wcIssue').value||'').trim()||'Гарантийный случай';
+    const sid=(DATA.service&&DATA.service.length?Math.max(...DATA.service.map(t=>typeof t.id==='number'?t.id:0)):3000)+1;
+    (DATA.service=DATA.service||[]).unshift({
+      id:sid, device:it.name, client:o.name, phone:o.phone||'—',
+      issue:issue+' (ГАРАНТИЯ, заказ №'+o.id+')', clientWords:'«'+issue+'»',
+      agreedWorks:'Гарантийная диагностика', imei:(it.imei&&it.imei!=='—')?it.imei:'',
+      devicePassword:'', accountRemoved:'no',
+      condition:{body:[],display:[],power:[],wifi:[],bt:[]}, conditionExtras:'',
+      costLabor:0, costParts:0, cost:0, estDays:'', due:null,
+      master:null, urgency:'normal', status:'new', accepted:DATA.today,
+      warranty:true, linkedOrderId:o.id,
+      history:[{date:DATA.today+' '+nowTime(), text:'Гарантийный случай по заказу №'+o.id+' — оформил(а) '+taskMe()}],
+      parts:[]
+    });
+    (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'note', comment:'🔧 Гарантийный случай: «'+it.name+'» → заявка в Сервисе №'+sid});
+    try{ fullSave(); }catch(e){}
+    closeModal();
+    toast('Заявка №'+sid+' создана в Сервисе (гарантия)','success');
+  }}]);
 }
 
 function openIssueModal(id){
@@ -11327,7 +11636,8 @@ function renderAccounting(c){
   }
   html+='</div>';
 
-  html+='<div class="section"><div class="section-title" style="margin-bottom:12px;">ЗП и выплаты'+(unitId!=='all'?' — '+ledger.name:'')+'</div>';
+  html+='<div class="section"><div class="section-title" style="margin-bottom:12px;">ЗП и выплаты'+(unitId!=='all'?' — '+ledger.name:'')+
+    ' <button class="btn btn-sm" id="newSalaryPeriodBtn" style="margin-left:10px;">📅 Начислить новый период</button></div>';
   const staff=DATA.employees.filter(e=>e.salaryPlan && (unitId==='all'||e.unit===unitId));
   let paidTotal=0, dueTotal=0;
   if(staff.length===0){
@@ -11339,6 +11649,7 @@ function renderAccounting(c){
       html+='<div class="card" style="margin-bottom:12px;"><div class="kpi-label" style="margin-bottom:10px;">'+emp.name+'<span class="tsub" style="margin-left:6px;">'+emp.role+'</span></div>';
       SALARY_TYPES.forEach(type=>{
         const pay=DATA.salaryPayouts.find(p=>p.employeeId===emp.id && p.type===type);
+        if(!pay) return;   /* нет начисления — нажмите «Начислить новый период» */
         const amount=emp.salaryPlan[type];
         if(pay.paid) paidTotal+=amount; else dueTotal+=amount;
         html+='<div class="ledger-row"><div class="l-name">'+SALARY_TYPE_LABELS[type]+'</div><div style="display:flex;align-items:center;gap:10px;">'+
@@ -11389,42 +11700,59 @@ function renderAccounting(c){
   c.innerHTML=html;
 
   c.querySelectorAll('[data-unit]').forEach(el=>el.addEventListener('click',()=>{STATE.unitFilter=el.dataset.unit; renderAccounting(c);}));
+  const nsp=document.getElementById('newSalaryPeriodBtn');
+  if(nsp) nsp.addEventListener('click', ()=>{
+    openModal('📅 Новый расчётный период','', '<div class="tsub" style="line-height:1.6;">Начислить всем сотрудникам с окладом новый период: аванс — 20-го числа текущего месяца, остаток и премия — 5-го числа следующего. Невыплаченные строки прошлого периода будут заменены (история выплат остаётся в журнале).</div>', [{label:'Начислить', cls:'btn-primary', action:()=>{
+      startNewSalaryPeriod();
+      try{ fullSave(); }catch(e){}
+      closeModal(); renderAccounting(c);
+      toast('Новый расчётный период начислен','success');
+    }}]);
+  });
   document.getElementById('ownerDrawsToggle').addEventListener('click', ()=>{STATE.showOwnerDraws=!STATE.showOwnerDraws; renderAccounting(c);});
   c.querySelectorAll('[data-payout]').forEach(el=>el.addEventListener('click',()=>{
     const emp=DATA.employees.find(e=>e.id===parseInt(el.dataset.payout));
     const claims=DATA.expenseClaims.filter(x=>x.who===emp.name && x.status==='approved' && !x.paidOut);
     const total=claims.reduce((s,x)=>s+x.amount,0);
-    claims.forEach(x=>x.paidOut=true);
-    DATA.payoutLog.unshift({date:DATA.today, time:nowTime(), label:'Выплата компенсации — '+emp.name, amount:total});
-    renderAccounting(c);
-    toast('Компенсации для '+emp.name+' отмечены как выплаченные', 'success');
+    salaryMoneyOut('Компенсация расходов — '+emp.name, total, ()=>{
+      claims.forEach(x=>x.paidOut=true);
+      DATA.payoutLog.unshift({date:DATA.today, time:nowTime(), label:'Выплата компенсации — '+emp.name, amount:total});
+      renderAccounting(c);
+      toast('Компенсации для '+emp.name+' выплачены', 'success');
+    });
   }));
   c.querySelectorAll('[data-ti-payout]').forEach(el=>el.addEventListener('click',()=>{
     const emp=DATA.employees.find(e=>e.id===parseInt(el.dataset.tiPayout));
     const rewards=(DATA.tradeinBonuses||[]).filter(r=>r.empName===emp.name && !r.paid);
     const total=rewards.reduce((s,r)=>s+r.amount,0);
-    rewards.forEach(r=>r.paid=true);
-    DATA.payoutLog.unshift({date:DATA.today, time:nowTime(), label:'Премии за трейд-ин — '+emp.name, amount:total});
-    renderAccounting(c);
-    toast('Премии за трейд-ин для '+emp.name+' отмечены выплаченными', 'success');
+    salaryMoneyOut('Премии за трейд-ин — '+emp.name, total, ()=>{
+      rewards.forEach(r=>r.paid=true);
+      DATA.payoutLog.unshift({date:DATA.today, time:nowTime(), label:'Премии за трейд-ин — '+emp.name, amount:total});
+      renderAccounting(c);
+      toast('Премии за трейд-ин для '+emp.name+' выплачены', 'success');
+    });
   }));
   c.querySelectorAll('[data-task-payout]').forEach(el=>el.addEventListener('click',()=>{
     const emp=DATA.employees.find(e=>e.id===parseInt(el.dataset.taskPayout));
     const rewards=(DATA.taskPayouts||[]).filter(r=>r.employee===emp.name && !r.paid);
     const total=rewards.reduce((s,r)=>s+r.amount,0);
-    rewards.forEach(r=>r.paid=true);
-    DATA.payoutLog.unshift({date:DATA.today, time:nowTime(), label:'Выплата премии за задачи — '+emp.name, amount:total});
-    renderAccounting(c);
-    toast('Премии за задачи для '+emp.name+' отмечены как выплаченные', 'success');
+    salaryMoneyOut('Премии за задачи — '+emp.name, total, ()=>{
+      rewards.forEach(r=>r.paid=true);
+      DATA.payoutLog.unshift({date:DATA.today, time:nowTime(), label:'Выплата премии за задачи — '+emp.name, amount:total});
+      renderAccounting(c);
+      toast('Премии за задачи для '+emp.name+' выплачены', 'success');
+    });
   }));
   c.querySelectorAll('[data-pay-salary]').forEach(el=>el.addEventListener('click',()=>{
     const [empId,type]=el.dataset.paySalary.split('_');
     const emp=DATA.employees.find(e=>e.id===parseInt(empId));
     const pay=DATA.salaryPayouts.find(p=>p.employeeId===emp.id && p.type===type);
-    pay.paid=true; pay.paidDate=DATA.today;
-    DATA.payoutLog.unshift({date:DATA.today, time:nowTime(), label:'Выплата ЗП ('+SALARY_TYPE_LABELS[type].split(' —')[0]+') — '+emp.name, amount:emp.salaryPlan[type]});
-    renderAccounting(c);
-    toast(SALARY_TYPE_LABELS[type].split(' —')[0]+' для '+emp.name+' отмечен(а) выплаченным', 'success');
+    salaryMoneyOut('Выплата ЗП ('+SALARY_TYPE_LABELS[type].split(' —')[0]+') — '+emp.name, emp.salaryPlan[type], ()=>{
+      pay.paid=true; pay.paidDate=DATA.today;
+      DATA.payoutLog.unshift({date:DATA.today, time:nowTime(), label:'Выплата ЗП ('+SALARY_TYPE_LABELS[type].split(' —')[0]+') — '+emp.name, amount:emp.salaryPlan[type]});
+      renderAccounting(c);
+      toast(SALARY_TYPE_LABELS[type].split(' —')[0]+' для '+emp.name+' выплачен(а)', 'success');
+    });
   }));
   document.getElementById('exportReport').addEventListener('click', ()=>{
     const rows=[['Выручка', ledger.revenue],['Зарплаты (ФОТ, за вычетом штрафов '+finesWithheld+')', -salariesNet],['Аренда', -fe.rent],['Реклама', -fe.ads],['Расходники', -fe.consumables],['Прочие расходы', -fe.other],['Компенсации сотрудникам', -approvedComp],['Премии за задачи', -taskPremTotal],['Чистая прибыль', netProfit]];
@@ -11470,6 +11798,10 @@ const DAY_KEYS=['mon','tue','wed','thu','fri','sat','sun'];
 const DAY_LABELS={mon:'Пн',tue:'Вт',wed:'Ср',thu:'Чт',fri:'Пт',sat:'Сб',sun:'Вс'};
 
 function currentEmployee(){
+  if(STATE.currentEmpId){
+    const e=pinAllEmployees().find(x=>x.id===STATE.currentEmpId);
+    if(e) return e;
+  }
   const map={seller:1, senior:3, master:10, courier:8, collector:9};   /* 5 продавцов + скрытые служебные профили демо-ролей */
   const id=map[STATE.role];
   return id? DATA.employees.find(e=>e.id===id) : null;
@@ -11696,7 +12028,7 @@ function scheduleCalendarHTML(){
   let html='<div class="section-head" style="margin-bottom:10px;">'+
     '<div><div class="section-eyebrow">Рабочий график</div>'+
     '<div class="section-title">'+MONTH_NAMES[m]+' '+y+'</div>'+
-    ((isBossRole()||STATE.role==='senior')?'<div class="tsub" style="margin-top:2px;">Нажмите на день, чтобы изменить состав и время смены</div>':'')+'</div>'+
+    ((isBossRole()||STATE.role==='senior'||STATE.role==='admin')?'<div class="tsub" style="margin-top:2px;">Нажмите на день, чтобы изменить состав и время смены</div>':'')+'</div>'+
     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'+
       '<select class="select-mini" id="schedEmpSel">'+
         '<option value="all"'+(STATE.schedEmp==='all'?' selected':'')+'>Все сотрудники</option>'+
@@ -11718,7 +12050,7 @@ function scheduleCalendarHTML(){
     const isWeekend = date.getDay()===0 || date.getDay()===6;
     const working = shown.map(e=>({e, sh:shiftForAt(e, date, STATE.activeStoreId)})).filter(x=>x.sh);
 
-    const canEdit=(isBossRole()||STATE.role==='senior');
+    const canEdit=(isBossRole()||STATE.role==='senior'||STATE.role==='admin');
     const dStr=ruDateStr(date);
     const manual=!!(((DATA.shiftAssignments||{})[dStr]||{})[STATE.activeStoreId]);
     html+='<div class="cal-cell'+(isToday?' today':'')+(isWeekend?' weekend':'')+'"'+
@@ -12015,15 +12347,145 @@ function openRegistrationModal(inviteId, c){
 }
 
 /* РАЗДЕЛ «УПРАВЛЕНИЕ» — персонал, найм, доступы, нормы смен. */
+/* ============================================================
+   ОБРАТНАЯ СВЯЗЬ: кнопка у каждого сотрудника (низ меню и «Ещё»),
+   читают админ и владелец в «Управлении».
+============================================================ */
+function feedbackList(){
+  const d=(typeof chHomeStore==='function'?chHomeStore():DATA)||DATA;
+  d.feedback=d.feedback||[];
+  return d.feedback;
+}
+function openFeedbackModal(){
+  const body='<div class="tsub" style="margin-bottom:8px;">Идея, проблема или предложение — по системе, магазину, чему угодно. Прочитают админ и владелец.</div>'+
+    '<div class="field"><label>Сообщение</label><textarea class="input-mini" id="fbText" style="width:100%;min-height:110px;resize:vertical;"></textarea></div>';
+  openModal('💬 Обратная связь','',body,[{label:'Отправить', cls:'btn-primary', action:()=>{
+    const t=(document.getElementById('fbText').value||'').trim();
+    if(t.length<3){ toast('Напишите пару слов','error'); return; }
+    const list=feedbackList();
+    list.unshift({id:(list.length?Math.max(...list.map(x=>x.id||0)):0)+1, date:DATA.today, time:nowTime(),
+      by:currentEmployeeName(), role:(ROLES[STATE.role]||{}).label||'', text:t.slice(0,2000), status:'new'});
+    try{ fullSave(); }catch(e){}
+    try{ if(DATA.settings&&DATA.settings.tgEnabled) tgNotify('Поступила обратная связь ✅\nОт: '+currentEmployeeName()+'\nДата: '+DATA.today+' '+nowTime()); }catch(e){}
+    closeModal();
+    toast('Спасибо! Сообщение передано администратору','success');
+  }}]);
+  setTimeout(()=>{ const i=document.getElementById('fbText'); if(i) i.focus(); },50);
+}
+function feedbackHTML(){
+  if(!(isBossRole()||STATE.role==='admin')) return '';
+  const list=feedbackList();
+  const fresh=list.filter(x=>x.status==='new').length;
+  let html='<div class="section"><div class="section-head"><div class="section-title">💬 Обратная связь от сотрудников'+(fresh?' <span class="badge b-new">'+fresh+'</span>':'')+'</div></div><div class="card">';
+  if(!list.length) html+='<div class="tsub">Пока пусто. Кнопка «💬 Обратная связь» есть у каждого сотрудника внизу меню.</div>';
+  else html+=list.slice(0,30).map(f=>'<div class="hist-row"'+(f.status==='new'?' style="border-left:3px solid var(--accent);"':'')+'>'+
+    '<div style="flex:1;min-width:0;"><div class="h-main" style="white-space:normal;">'+escHtml(f.text)+'</div><div class="h-sub">'+escHtml(f.by)+' ('+escHtml(f.role)+') · '+f.date+' '+f.time+'</div></div>'+
+    (f.status==='new'?'<button class="btn btn-sm" data-fb-read="'+f.id+'">Прочитано</button>':'')+
+  '</div>').join('');
+  html+='</div></div>';
+  return html;
+}
+function pinSettingsHTML(){
+  if(!(isBossRole()||STATE.role==='admin')) return '';
+  const cfg=pinCfg();
+  const emps=pinAllEmployees().filter(e=>e&&e.name);
+  const withPin=emps.filter(e=>e.pinHash).length;
+  let html='<div class="section"><div class="section-head"><div class="section-title">🔐 Входы по PIN</div></div>'+
+    '<div class="card">'+
+    '<div class="tsub" style="line-height:1.55;margin-bottom:10px;">Боевой режим доступа: при открытии системы каждый выбирает себя и вводит свой PIN. '+
+    'Демо-переключатель ролей исчезает, все действия пишутся на вошедшего сотрудника. PIN хранится только в зашифрованном виде.</div>'+
+    '<div class="field-grid">'+
+      field('Режим', cfg.pinMode?'<span class="badge b-done">Включён</span>':'<span class="badge b-grey">Выключен</span>')+
+      field('PIN владельца', cfg.ownerPinHash?'<span class="badge b-done">Задан</span>':'<span class="badge b-cancel">НЕ задан</span>')+
+      field('PIN админа', cfg.adminPinHash?'<span class="badge b-done">Задан</span>':'<span class="badge b-grey">нет</span>')+
+      field('PIN у сотрудников', withPin+' из '+emps.length)+
+    '</div>'+
+    '<div class="field" style="max-width:260px;margin-top:8px;"><label>Автоблокировка при простое, минут (0 — выкл)</label>'+
+      '<input class="input-mini" id="pinLockMinInp" type="number" min="0" style="width:100%;" value="'+(cfg.pinLockMin==null?10:cfg.pinLockMin)+'"></div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">'+
+      (isBossRole()?'<button class="btn btn-sm" id="pinOwnerBtn">'+(cfg.ownerPinHash?'Сменить PIN владельца':'Задать PIN владельца')+'</button>':'')+
+      (isBossRole()?'<button class="btn btn-sm" id="pinAdminBtn">'+(cfg.adminPinHash?'Сменить PIN админа':'Задать PIN админа')+'</button>':'')+
+      (isBossRole()?(cfg.pinMode
+        ? '<button class="btn btn-sm btn-danger" id="pinModeOff">Выключить режим</button>'
+        : '<button class="btn btn-sm btn-primary" id="pinModeOnBtn">Включить входы по PIN</button>'):'')+
+    '</div>'+
+    '<div class="drill-divider"></div><div class="drill-block-label">PIN сотрудников</div>'+
+    emps.map(e=>'<div class="hist-row"><div><div class="h-main">'+escHtml(e.name)+'</div><div class="h-sub">'+escHtml(e.role||'')+'</div></div>'+
+      '<div style="display:flex;align-items:center;gap:8px;">'+(e.pinHash?'<span class="badge b-done">задан</span>':'<span class="badge b-grey">нет</span>')+
+      '<button class="btn btn-sm" data-pin-set="'+e.id+'">'+(e.pinHash?'Сменить':'Задать PIN')+'</button></div></div>').join('')+
+    '</div></div>';
+  return html;
+}
+function openPinSetModal(title, onSave, c){
+  const body='<div class="field"><label>Новый PIN (4-6 цифр)</label><input class="input-mini" id="pinNew1" type="password" inputmode="numeric" maxlength="6" style="width:100%;"></div>'+
+    '<div class="field"><label>Повторите PIN</label><input class="input-mini" id="pinNew2" type="password" inputmode="numeric" maxlength="6" style="width:100%;"></div>'+
+    '<div class="tsub" style="margin-top:6px;">PIN нигде не хранится в открытом виде — восстановить нельзя, только задать новый.</div>';
+  openModal(title,'',body,[{label:'Сохранить', cls:'btn-primary', action:async()=>{
+    const a=document.getElementById('pinNew1').value.trim();
+    const b=document.getElementById('pinNew2').value.trim();
+    if(!/^\d{4,6}$/.test(a)){ toast('PIN — от 4 до 6 цифр','error'); return; }
+    if(a!==b){ toast('PIN не совпадает','error'); return; }
+    await onSave(a);
+    try{ fullSave(); }catch(e){}
+    closeModal(); renderManage(c||document.getElementById('pageContent'));
+  }}]);
+  setTimeout(()=>{ const i=document.getElementById('pinNew1'); if(i) i.focus(); },50);
+}
+function wirePinSettings(c){
+  const ob=document.getElementById('pinOwnerBtn');
+  if(ob) ob.addEventListener('click', ()=>openPinSetModal('PIN владельца', async(pin)=>{
+    pinCfg().ownerPinHash=await sha256Hex('storecontrol|owner|'+pin);
+    toast('PIN владельца сохранён','success');
+  }, c));
+  const ab=document.getElementById('pinAdminBtn');
+  if(ab) ab.addEventListener('click', ()=>openPinSetModal('PIN админа', async(pin)=>{
+    pinCfg().adminPinHash=await sha256Hex('storecontrol|admin|'+pin);
+    toast('PIN админа сохранён','success');
+  }, c));
+  c.querySelectorAll('[data-fb-read]').forEach(el=>el.addEventListener('click',()=>{
+    const f=feedbackList().find(x=>x.id===parseInt(el.dataset.fbRead));
+    if(f){ f.status='read'; try{ fullSave(); }catch(e){} renderManage(c); }
+  }));
+  c.querySelectorAll('[data-pin-set]').forEach(el=>el.addEventListener('click', ()=>{
+    const e=pinAllEmployees().find(x=>x.id===parseInt(el.dataset.pinSet));
+    if(!e) return;
+    openPinSetModal('PIN — '+e.name, async(pin)=>{
+      e.pinHash=await sha256Hex('storecontrol|emp'+e.id+'|'+pin);
+      toast('PIN для «'+e.name+'» сохранён','success');
+    }, c);
+  }));
+  const mi=document.getElementById('pinLockMinInp');
+  if(mi) mi.addEventListener('change', ()=>{
+    pinCfg().pinLockMin=Math.max(0, parseInt(mi.value)||0);
+    try{ fullSave(); }catch(e){}
+    toast('Автоблокировка: '+(pinCfg().pinLockMin||'выключена')+(pinCfg().pinLockMin?' мин':''),'info');
+  });
+  const on=document.getElementById('pinModeOnBtn');
+  if(on) on.addEventListener('click', ()=>{
+    if(!pinCfg().ownerPinHash){ toast('Сначала задайте PIN владельца','error'); return; }
+    pinCfg().pinMode=true;
+    try{ fullSave(); }catch(e){}
+    toast('Входы по PIN включены. Раздайте PIN сотрудникам.','success');
+    renderSidebar(); renderManage(c);
+  });
+  const off=document.getElementById('pinModeOff');
+  if(off) off.addEventListener('click', ()=>{
+    pinCfg().pinMode=false;
+    try{ fullSave(); }catch(e){}
+    toast('Входы по PIN выключены — вернулся демо-режим','info');
+    renderSidebar(); renderManage(c);
+  });
+}
 function renderManage(c){
   ensureShiftData();
-  c.innerHTML=controlPanelHTML();
+  c.innerHTML=pinSettingsHTML()+feedbackHTML()+controlPanelHTML();
   wireControlPanel(c);
+  wirePinSettings(c);
 }
 
 function renderTeam(c){
   try{ ensureShiftData(); }catch(e){}
-  const isOwner=isBossRole();
+  const isOwner=isBossRole()||STATE.role==='admin';   /* админ управляет командой, ролями и графиком */
   const isManager=isBossRole()||STATE.role==='senior';
   const me=currentEmployee();
   let html='';
@@ -12077,7 +12539,7 @@ function renderTeam(c){
 
   /* Кто сегодня в магазине */
   const onTodayList=DATA.employees.filter(e=>!e.support && shiftForAt(e, schedToday(), STATE.activeStoreId));
-  const canEditShifts=(isBossRole()||STATE.role==='senior');
+  const canEditShifts=(isBossRole()||STATE.role==='senior'||STATE.role==='admin');
   const otherStoresLine=STORES.filter(s=>s.id!==STATE.activeStoreId).map(s=>{
     const list=DATA.employees.filter(e=>!e.support && shiftForAt(e, schedToday(), s.id));
     return '<div class="tsub" style="margin-top:6px;">'+escHtml(s.shortName)+': '+(list.length?list.map(e=>(e.role==='Мастер'?'🔧 ':'')+escHtml(e.name)).join(', '):'никого')+'</div>';
@@ -17907,7 +18369,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-26';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-29';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -19014,6 +19476,56 @@ function ourModelPrices(){
   return Object.values(map);
 }
 
+/* Выплата сотруднику с настоящей проводкой: наличные из кассы точки
+   (журнал кассы) или безнал. «Без проводки» — только отметка (как раньше). */
+function salaryMoneyOut(label, amount, cb){
+  const body='<div class="field-grid">'+field('Назначение', escHtml(label))+field('Сумма', rub(amount))+'</div>'+
+    '<div class="tsub" style="margin:10px 0 6px;">Откуда выплачиваем:</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+      '<button class="btn btn-primary" id="pyCash">Наличные из кассы</button>'+
+      '<button class="btn" id="pyCard">Безнал</button>'+
+      '<button class="btn" id="pySkip">Только отметить (без проводки)</button>'+
+    '</div>';
+  openModal('Выплата', '', body, []);
+  const done=(srcKind)=>{
+    if(srcKind==='cash'){
+      if(!DATA.cashOps) DATA.cashOps=[];
+      const op={id:(DATA.cashOps.length?Math.max(...DATA.cashOps.map(x=>x.id)):0)+1,
+        date:DATA.today, time:nowTime(), by:taskMe(), dir:'out', amount:Math.round(amount),
+        purpose:label, comment:'выплата сотруднику', status:'done', approvedBy:null, store:STATE.activeStoreId};
+      DATA.cashOps.unshift(op);
+      try{ applyCashOp(op); }catch(e){}
+    } else if(srcKind==='card'){
+      if(!DATA.assets) DATA.assets={};
+      DATA.assets.cashless=(DATA.assets.cashless||0)-Math.round(amount);
+    }
+    try{ fullSave(); }catch(e){}
+    closeModal();
+    cb(srcKind);
+  };
+  setTimeout(()=>{
+    const c1=document.getElementById('pyCash'), c2=document.getElementById('pyCard'), c3=document.getElementById('pySkip');
+    if(c1) c1.addEventListener('click', ()=>done('cash'));
+    if(c2) c2.addEventListener('click', ()=>done('card'));
+    if(c3) c3.addEventListener('click', ()=>done('skip'));
+  },0);
+}
+/* Новый расчётный период: аванс 20-го текущего, остаток и премия 5-го следующего */
+function startNewSalaryPeriod(){
+  const now=new Date();
+  const p=n=>String(n).padStart(2,'0');
+  const adv='20.'+p(now.getMonth()+1)+'.'+now.getFullYear();
+  const nm=new Date(now.getFullYear(), now.getMonth()+1, 5);
+  const rem='05.'+p(nm.getMonth()+1)+'.'+nm.getFullYear();
+  const staff=DATA.employees.filter(e=>e.salaryPlan);
+  DATA.salaryPayouts=(DATA.salaryPayouts||[]).filter(x=>!staff.some(e=>e.id===x.employeeId));
+  staff.forEach(e=>{
+    DATA.salaryPayouts.push({employeeId:e.id, type:'advance',   dueDate:adv, paid:false, paidDate:null});
+    DATA.salaryPayouts.push({employeeId:e.id, type:'remainder', dueDate:rem, paid:false, paidDate:null});
+    DATA.salaryPayouts.push({employeeId:e.id, type:'bonus',     dueDate:rem, paid:false, paidDate:null});
+  });
+}
+
 function postOrderMoney(o, byLabel){
   if(o.cashPosted) return;
   const sum=orderPayablePrice(o);
@@ -19787,6 +20299,15 @@ setInterval(()=>{ if(processReviewMailQueue() && STATE.page!=='archive') renderP
 tgWatchNewSiteItems();
 setInterval(tgWatchNewSiteItems, 10000);
 setInterval(()=>{ try{ tgWatchNewChannelLeads(); }catch(e){} }, 12000);
+/* PIN-режим: при запуске — восстановить сессию устройства или показать вход */
+try{
+  if(pinModeOn()){
+    const su=pinSessionLoad();
+    const valid = su && (su.type==='owner' ? !!pinCfg().ownerPinHash : pinAllEmployees().some(e=>e.id===su.id && e.pinHash));
+    if(valid) applyPinUser(su, true);
+    else pinLockShow();
+  }
+}catch(e){ console.warn('pin boot:', e); }
 if(_fullLoaded) toast('Восстановлены данные прошлой сессии','success');
 if(loaded && DATA.siteCatalog.length){
   toast('Восстановлено: '+DATA.siteCatalog.length+' товаров каталога', 'success');
