@@ -340,6 +340,8 @@ const chState = {};
   const sets = envSets(CH_ENV_NAMES[ch]);
   chState[ch] = { configured: sets.length > 0, ok: null, error: null, lastPoll: 0, stores: sets.map(s => s.store) };
 });
+/* токен Strapi сайта хранится на сервере — компам вводить ничего не нужно */
+chState.strapiToken = !!process.env.STRAPI_API_TOKEN;
 
 /* --- АВИТО (Messenger API), с комплектом ключей на точку --- */
 const avitoAuth = {};   /* set.key -> {tok, exp, uid} */
@@ -742,7 +744,52 @@ const server = http.createServer((req, res) => {
 
   /* ---- Страницы ---- */
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return sendFile(res, 'index.html');
-  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-29' });
+  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-31' });
+
+  /* ---- Автонастройка нового компа: открыл систему с сервера — она сама
+     получила адрес API и ключ. Включается переменной AUTO_SETUP=1. ---- */
+  if (req.method === 'GET' && url.pathname === '/api/bootstrap') {
+    const auto = process.env.AUTO_SETUP === '1';
+    return sendJson(res, 200, { ok: true, apiUrl: '/api',
+      strapiToken: !!process.env.STRAPI_API_TOKEN,
+      storeToken: auto ? STORE_TOKEN : null,
+      hint: auto ? 'автонастройка включена' : 'для полной автонастройки добавьте AUTO_SETUP=1 в Environment' });
+  }
+
+  /* ---- АВТОРИЗАЦИЯ КОМПЬЮТЕРА: новый комп вводит PIN сотрудника/владельца,
+     сервер сверяет его с облачной базой и выдаёт ключ связи. Один раз на комп.
+     Защита: 5 попыток в минуту с адреса. ---- */
+  if (req.method === 'POST' && url.pathname === '/api/device-auth') {
+    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?');
+    if (!floodOk('dev_' + ip)) return sendJson(res, 429, { error: 'Слишком много попыток. Подождите минуту.' });
+    return readBody(req, async b => {
+      const pin = String(b.pin || '').trim();
+      if (!/^\d{4,6}$/.test(pin)) return sendJson(res, 400, { error: 'PIN — от 4 до 6 цифр' });
+      try {
+        const cur = await stateLoad();
+        if (!cur || !cur.state || !cur.state.stores) return sendJson(res, 500, { error: 'База ещё пуста — первый комп настройте вручную (шестерёнка Заказов)' });
+        const crypto = require('crypto');
+        const h = s => crypto.createHash('sha256').update(s).digest('hex');
+        let who = null;
+        for (const sid of Object.keys(cur.state.stores)) {
+          const d = cur.state.stores[sid] || {};
+          const st = d.settings || {};
+          if (st.ownerPinHash && h('storecontrol|owner|' + pin) === st.ownerPinHash) { who = 'Владелец'; break; }
+          if (st.adminPinHash && h('storecontrol|admin|' + pin) === st.adminPinHash) { who = 'Админ'; break; }
+          for (const e of (d.employees || [])) {
+            if (e.pinHash && h('storecontrol|emp' + e.id + '|' + pin) === e.pinHash) { who = e.name; break; }
+          }
+          if (who) break;
+        }
+        if (!who) {
+          console.log('[авторизация компа] неверный PIN с ' + ip);
+          return sendJson(res, 401, { error: 'PIN не найден. Проверьте или попросите владельца задать вам PIN.' });
+        }
+        console.log('[авторизация компа] ключ выдан: ' + who + ' (' + ip + ')');
+        sendJson(res, 200, { ok: true, storeToken: STORE_TOKEN, who });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    });
+  }
 
   /* ---- Сайт отправляет заявку (публично) ---- */
   if (req.method === 'POST' && url.pathname === '/api/lead') {
@@ -1139,6 +1186,28 @@ const server = http.createServer((req, res) => {
       } catch (e) { sendJson(res, 500, { error: e.message }); }
     })();
     return;
+  }
+
+  /* ---- Прокси к Strapi сайта: токен подставляет СЕРВЕР (STRAPI_API_TOKEN).
+     Компы и браузеры больше не хранят токен — вписан один раз в Environment. ---- */
+  if (req.method === 'POST' && url.pathname === '/api/strapi') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return readBody(req, async b => {
+      const p = String(b.path || '');
+      const method = (b.method === 'PUT' || b.method === 'POST' || b.method === 'DELETE') ? b.method : 'GET';
+      if (p.indexOf('/api/') !== 0) return sendJson(res, 400, { error: 'Путь должен начинаться с /api/' });
+      const tok = process.env.STRAPI_API_TOKEN || b.token || '';
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (tok) headers['Authorization'] = 'Bearer ' + tok;
+        const opts = { method, headers };
+        if (b.body && method !== 'GET') opts.body = JSON.stringify(b.body);
+        const r = await fetch('https://admin.imagnate.ru' + p, opts);
+        const text = await r.text();
+        let j = null; try { j = JSON.parse(text); } catch (e) { j = { raw: text.slice(0, 500) }; }
+        sendJson(res, 200, { ok: r.ok, status: r.status, data: j });
+      } catch (e) { sendJson(res, 502, { error: 'Сайт не ответил: ' + e.message }); }
+    });
   }
 
   /* ---- Каналы воронки: состояние (по токену) ---- */

@@ -2549,6 +2549,42 @@ function applyPinUser(u, silent){
 window._pinFails={};
 window._pinBlockUntil=0;
 window._pinLastAct=Date.now();
+/* Первый запуск на новом компе: ввёл свой PIN — сервер сверил с базой,
+   выдал ключ связи, компьютер запомнен навсегда */
+function deviceAuthShow(saveCreds){
+  if(document.getElementById('devAuth')) return;
+  const ov=document.createElement('div');
+  ov.id='devAuth';
+  ov.style.cssText='position:fixed;inset:0;z-index:99998;background:var(--bg-0,#0b0e14);display:flex;align-items:center;justify-content:center;padding:20px;';
+  ov.innerHTML='<div style="max-width:360px;width:100%;text-align:center;">'+
+    '<div style="font-size:20px;font-weight:900;">Store Control</div>'+
+    '<div class="tsub" style="margin:6px 0 16px;">Новый компьютер. Введите ваш PIN — система привяжет его и настроит всё сама.</div>'+
+    '<input class="input-mini" id="devAuthPin" type="password" inputmode="numeric" maxlength="6" placeholder="PIN" style="width:100%;text-align:center;font-size:22px;letter-spacing:6px;">'+
+    '<div id="devAuthMsg" class="tsub" style="min-height:18px;margin-top:6px;"></div>'+
+    '<button class="btn btn-primary" id="devAuthGo" style="width:100%;margin-top:8px;padding:12px 0;">Авторизовать компьютер</button>'+
+  '</div>';
+  document.body.appendChild(ov);
+  const inp=document.getElementById('devAuthPin');
+  const msg=(t,neg)=>{ const m=document.getElementById('devAuthMsg'); m.textContent=t||''; m.style.color=neg?'var(--negative)':'var(--text-2)'; };
+  const go=async()=>{
+    const pin=(inp.value||'').trim();
+    if(!/^\d{4,6}$/.test(pin)){ msg('PIN — от 4 до 6 цифр', true); return; }
+    msg('Проверяю…');
+    try{
+      const r=await fetch(location.origin+'/api/device-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin})});
+      const j=await r.json();
+      if(j && j.ok && j.storeToken){
+        saveCreds(j.storeToken);
+        try{ fullSave(); }catch(e){}
+        msg('Готово! Здравствуйте, '+(j.who||'')+'. Загружаю данные…');
+        setTimeout(()=>location.reload(), 800);
+      } else msg((j&&j.error)||'Не получилось — попробуйте ещё раз', true);
+    }catch(e){ msg('Нет связи с сервером: '+e.message, true); }
+  };
+  document.getElementById('devAuthGo').addEventListener('click', go);
+  inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); go(); } });
+  setTimeout(()=>inp.focus(), 100);
+}
 function pinLockShow(){
   if(document.getElementById('pinLock')) return;
   pinSessionSave(null);
@@ -13561,7 +13597,17 @@ function detectImportType(json){
    Запись цен: POST /api/produkties/price-sync {items:[{documentId, price}]}
    — эндпоинты уже добавлены в проект бэкенда, ждут деплоя.
 ============================================================ */
-function apiToken(){ try{ return localStorage.getItem('erp_api_token')||''; }catch(e){ return ''; } }
+/* Токен Strapi: сначала локальный (если вводили на этом компе), иначе —
+   серверный (STRAPI_API_TOKEN на Render): система подтянет его сама,
+   на компах ничего вводить не нужно */
+function serverHasStrapiToken(){ try{ return !!(window._chSrvStatus && window._chSrvStatus.strapiToken); }catch(e){ return false; } }
+function apiToken(){
+  try{
+    const t=localStorage.getItem('erp_api_token')||'';
+    if(t) return t;
+    return serverHasStrapiToken()?'@server':'';
+  }catch(e){ return ''; }
+}
 function apiHeaders(){ const h={'Content-Type':'application/json'}; const t=apiToken(); if(t) h['Authorization']='Bearer '+t; return h; }
 
 function pricingDbHTML(){
@@ -13578,7 +13624,7 @@ function pricingDbHTML(){
       '<button class="btn btn-sm btn-primary" id="dbTest">Проверить связь</button>'+
       '<button class="btn btn-sm" id="dbPullPrices">⬇ Забрать цены с сайта</button>'+
     '</div>'+
-    '<p class="tsub" style="margin-top:8px;">Токен живёт только в этом браузере. Карточек в каталоге: <b>'+DATA.siteCatalog.length+'</b>, из них с ценой: <b>'+withPrice+'</b>. Синхронизация: '+synced+'.</p>'+
+    '<p class="tsub" style="margin-top:8px;">'+(serverHasStrapiToken()?'✅ Токен подтягивается с сервера (STRAPI_API_TOKEN на Render) — на компах вводить не нужно. ':'Токен живёт только в этом браузере (лучше: впишите STRAPI_API_TOKEN на Render — и вводить не придётся нигде). ')+' Карточек в каталоге: <b>'+DATA.siteCatalog.length+'</b>, из них с ценой: <b>'+withPrice+'</b>. Синхронизация: '+synced+'.</p>'+
   '</div>';
   h+='<div class="card"><div class="kpi-label" style="margin-bottom:8px;">Как это работает</div>'+
     '<ol class="tsub" style="margin:0 0 0 18px;line-height:1.8;">'+
@@ -14015,14 +14061,27 @@ async function strapiOrdersSync(quiet){
 }
 
 async function strapiReq(path, method, body){
+  const t=apiToken();
   const lsrv=(typeof localSyncUrl==='function')? localSyncUrl() : '';
-  if(lsrv){
+  if(lsrv && t!=='@server'){
     const r=await fetch(lsrv+'/api/strapi',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({path, method:method||'GET', token:apiToken(), body:body||null})});
+      body:JSON.stringify({path, method:method||'GET', token:t, body:body||null})});
     const j=await r.json();
     if(j.error) throw new Error(j.error);
     if(!j.ok) throw new Error('HTTP '+j.status+(j.data&&j.data.error&&j.data.error.message?' · '+j.data.error.message:''));
     return j.data;
+  }
+  if(t==='@server'){
+    /* токен лежит на нашем сервере — он сам подставит его к запросу */
+    const creds=erpServerCreds();
+    if(creds){
+      const r=await fetch(creds.api+'/strapi',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+creds.token},
+        body:JSON.stringify({path, method:method||'GET', body:body||null})});
+      const j=await r.json();
+      if(j.error) throw new Error(j.error);
+      if(!j.ok) throw new Error('HTTP '+j.status+(j.data&&j.data.error&&j.data.error.message?' · '+j.data.error.message:''));
+      return j.data;
+    }
   }
   const opts={method:method||'GET', headers:apiHeaders()};
   if(body && method!=='GET') opts.body=JSON.stringify(body);
@@ -18369,7 +18428,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-29';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-31';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -20165,6 +20224,29 @@ if(_fullLoaded) updateStoreSelector();
 /* Двойная база: при загрузке берём САМЫЙ СВЕЖИЙ снимок из трёх мест —
    этот браузер, локальный сервер (комп), облако (Render). */
 (async function initialStatePull(){
+  /* АВТОНАСТРОЙКА: система открыта с нашего сервера, а связь ещё не
+     настроена — сервер сам выдаёт адрес API и ключ (env AUTO_SETUP=1).
+     Новый комп/браузер работает сразу, без ручного ввода. */
+  try{
+    if(/^https?:/.test(location.protocol) && !erpServerCreds()){
+      const b=await (await fetch(location.origin+'/api/bootstrap')).json();
+      const saveCreds=(tok)=>{
+        let i2=integrationFor('site');
+        if(!i2){ i2={channel:'site'}; DATA.integrations.push(i2); }
+        i2.status='connected';
+        i2.creds={apiUrl:location.origin+'/api', apiToken:tok};
+        i2.account=location.host;
+        i2.connectedAt=i2.connectedAt||DATA.today;
+      };
+      if(b && b.ok && b.storeToken){
+        saveCreds(b.storeToken);
+        console.log('Автонастройка: сервер выдал адрес API и ключ связи');
+      } else if(b && b.ok){
+        /* АВТОРИЗАЦИЯ КОМПЬЮТЕРА: сервер знаком, но ключ выдаёт только по PIN */
+        deviceAuthShow(saveCreds);
+      }
+    }
+  }catch(e){}
   let bestMs=0, best=null, bestSrc='';
   try{ const raw=localStorage.getItem(LS_FULL_KEY); if(raw) bestMs=(JSON.parse(raw).savedAtMs)||0; }catch(e){}
   const lbase=localSyncUrl();
