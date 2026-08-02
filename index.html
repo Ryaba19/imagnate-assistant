@@ -13062,6 +13062,7 @@ function controlPanelHTML(){
         '<div><div class="tname" style="font-size:14.5px;">'+escHtml(emp.name)+(emp.nick?' <span class="tsub">('+escHtml(emp.nick)+')</span>':'')+(emp.restricted?' <span class="merge-pill" style="background:var(--negative-soft);color:var(--negative);">ограничен</span>':'')+(emp.noAccess?' <span class="merge-pill" style="background:rgba(255,255,255,.08);color:var(--text-3);">внештатно</span>':'')+(emp.courierType?' <span class="merge-pill" style="background:var(--accent-soft);color:var(--accent-2);">'+(emp.courierType==='staff'?'штатный курьер':'сдельный курьер')+'</span>':'')+'</div>'+
         '<div class="tsub">'+emp.role+' · '+(DATA.units.find(u=>u.id===emp.unit)?.name||'—')+' · '+emp.phone+(emp.badgeCode?' · бейдж '+emp.badgeCode:'')+'</div></div>'+
         (finesTot>0?'<span class="badge b-cancel">штрафы '+rub(finesTot)+'</span>':'')+
+        (isBossRole()?'<button class="btn btn-sm btn-danger" data-emp-del="'+emp.id+'" title="Убрать сотрудника из системы">Убрать</button>':'')+
       '</div>'+
       (!emp.noAccess && emp.extraAccess ? '<div class="toggle-row" style="margin-top:10px;flex-wrap:wrap;gap:12px;"><span style="color:var(--text-3);">Доступ:</span>'+
         '<span class="toggle-pill '+(emp.extraAccess.expensesReview?'on':'')+'" data-toggle-access="'+emp.id+'_expensesReview">Проверка расходов</span>'+
@@ -13098,6 +13099,33 @@ function controlPanelHTML(){
 }
 
 function wireControlPanel(c){
+  c.querySelectorAll('[data-emp-del]').forEach(el=>el.addEventListener('click',()=>{
+    if(!isBossRole()){ toast('Только владелец','error'); return; }
+    const emp=DATA.employees.find(e=>e.id===parseInt(el.dataset.empDel));
+    if(!emp) return;
+    openModal('Убрать сотрудника?', emp.name,
+      '<div class="tsub" style="line-height:1.7;">Сотрудник <b>'+escHtml(emp.name)+'</b> будет удалён из системы: '+
+      'исчезнет из графика смен, входов по PIN, уведомлений и всех списков.<br><br>'+
+      'История операций с его именем (продажи, выдачи, журнал) сохранится.<br><br><b>Отменить будет нельзя.</b></div>',
+      [{label:'Убрать из системы', cls:'btn-danger', action:()=>{
+        const i=DATA.employees.indexOf(emp);
+        if(i>=0) DATA.employees.splice(i,1);   /* команда общая — уходит со всех точек */
+        try{ const H=chHomeStore(); (H._staffRemoved=H._staffRemoved||[]).push(emp.name); }catch(e){}
+        try{
+          /* подчистить ручные назначения в графике */
+          Object.values(DATA.shiftAssignments||{}).forEach(day=>{
+            Object.keys(day||{}).forEach(sid=>{
+              if(Array.isArray(day[sid])) day[sid]=day[sid].filter(x=>((x&&typeof x==='object')?x.id:x)!==emp.id);
+            });
+          });
+        }catch(e){}
+        try{ fullSave(); }catch(e){}
+        closeModal();
+        toast('«'+emp.name+'» убран из системы','success');
+        renderManage(c);
+      }},
+      {label:'Отмена', cls:'', action:closeModal}]);
+  }));
   c.querySelectorAll('[data-tg-chat]').forEach(el=>el.addEventListener('change',()=>{
     const emp=DATA.employees.find(e=>e.id===parseInt(el.dataset.tgChat));
     if(!emp) return;
@@ -19632,7 +19660,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-68';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-69';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -21697,12 +21725,16 @@ setInterval(async()=>{
     Object.keys(STORE_DATA).forEach(sid=>{
       const d=STORE_DATA[sid];
       if(!d || !Array.isArray(d.employees)) return;
+      /* владелец удалил профиль — НЕ воссоздавать (29.07-69) */
+      const removed=new Set();
+      Object.values(STORE_DATA).forEach(x=>{ ((x&&x._staffRemoved)||[]).forEach(n=>removed.add(n)); });
       const need=[
         {id:10, name:'Виктор Н.', role:'Мастер', unit:'workshop_n', phone:'+7 921 444-55-66'},
         {id:8,  name:'Сергей Т.', role:'Курьер', unit:'shop_c', phone:'+7 921 440-00-03', courierType:'staff'},
         {id:9,  name:'Марат Б.', role:'Сборщик', unit:null, phone:'+7 900 555-66-77'},
       ];
       need.forEach(p=>{
+        if(removed.has(p.name)) return;
         const exists=d.employees.some(e=>e.role===p.role);
         if(!exists) d.employees.push(Object.assign({baseSalary:null, support:true, schedule:null,
           responsibilities:'Демо-профиль: служебная роль', extraAccess:{expensesReview:false, analytics:false}}, p));
