@@ -2868,8 +2868,10 @@ function erpServerCreds(){
   }catch(e){}
   return null;
 }
-function tgNotify(text){
-  /* fire-and-forget: не блокирует работу, ошибки сети молча игнорируются */
+function tgNotify(text, extraChatIds){
+  /* fire-and-forget: не блокирует работу, ошибки сети молча игнорируются.
+     extraChatIds — дополнительные получатели (сотрудники на смене);
+     без них сообщение идёт только на TELEGRAM_CHAT_IDS (владелец). */
   try{
     if(!DATA.settings || !DATA.settings.tgEnabled) return;
     const c=erpServerCreds(); if(!c) return;
@@ -2877,10 +2879,26 @@ function tgNotify(text){
     const key=String(text).slice(0,140);
     if(window._tgSent.has(key)) return;
     window._tgSent.add(key);
+    const body={text:String(text).slice(0,3500)};
+    if(Array.isArray(extraChatIds) && extraChatIds.length) body.chatIds=extraChatIds.slice(0,20);
     fetch(c.api+'/notify',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.token},
-      body:JSON.stringify({text:String(text).slice(0,3500)})}).catch(function(){});
+      body:JSON.stringify(body)}).catch(function(){});
   }catch(e){}
 }
+/* Кто сегодня на смене и подключил Telegram — только им шлём рабочие уведомления */
+function shiftTgChatIds(){
+  const out=[];
+  try{
+    const today=schedToday();
+    (pinAllEmployees()||[]).forEach(e=>{
+      if(!e || !e.tgChatId) return;
+      if(typeof shiftFor==='function' && shiftFor(e, today)) out.push(String(e.tgChatId));
+    });
+  }catch(e){}
+  return out;
+}
+/* Рабочие уведомления: владелец + сотрудники, которые сегодня на смене */
+function tgNotifyShift(text){ tgNotify(text, shiftTgChatIds()); }
 function sendRealMail(to, subject, body, isHtml){
   try{
     if(!DATA.settings || !DATA.settings.mailRealSend) return Promise.resolve({skipped:true});
@@ -4821,8 +4839,11 @@ function openOrderSettingsModal(){
     const cb=document.getElementById('cleanStartBtn');
     if(cb) cb.addEventListener('click', ()=>{
       if(!isBossRole()){ toast('Только владелец или директор', 'error'); return; }
+      const whCnt=Object.values(STORE_DATA).reduce((s,d)=>s+['tech','tradein','accessories','parts'].reduce((s2,k)=>s2+(((d.warehouse||{})[k]||[]).length),0),0);
       openModal('Чистый старт — вы уверены?','',
-        '<div class="tsub" style="line-height:1.7;">Будут УДАЛЕНЫ все демо-данные: заказы, заявки CRM, клиенты, ремонты, задачи, закуп, кассы (обнулятся), склад (опустеет). Вместо них загрузится реальная история сайта. Команда, график смен и настройки сохранятся.<br><br><b>Отменить операцию будет нельзя.</b></div>',
+        '<div class="tsub" style="line-height:1.7;">Будут УДАЛЕНЫ все демо-данные: заказы, заявки CRM, клиенты, ремонты, задачи, закуп, кассы (обнулятся), склад (опустеет). Вместо них загрузится реальная история сайта. Команда, график смен и настройки сохранятся.<br><br>'+
+        (whCnt?('<b style="color:var(--negative);">⚠ На складе сейчас '+whCnt+' единиц — они будут удалены тоже!</b> Если вы уже сканировали РЕАЛЬНЫЙ товар — не запускайте чистый старт: история сайта и так подтягивается автоматически.<br><br>'):'')+
+        '<b>Отменить операцию будет нельзя.</b></div>',
         [{label:'Удалить демо и загрузить реальные данные', cls:'btn-danger', action:()=>{ cleanStartImport(); }}]);
     });
   },0);
@@ -7274,12 +7295,60 @@ function openWarehouseCategoryDrill(tabKey){
 }
 
 /* ============================================================
-   ИНВЕНТАРИЗАЦИЯ — первичный завод склада (владелец/директор/старший).
-   Поток: выбрал модель (подсказки из каталога сайта, розничная цена
-   подтянется сама) → вписал закупочную → сканируешь IMEI подряд —
-   каждая единица сразу на складе. Аксессуары — без IMEI, количеством.
+   ИНВЕНТАРИЗАЦИЯ — завод склада. Доступна и продавцам: поток максимально
+   простой — выбрал модель (розница подтянется из каталога сайта) →
+   сканируешь IMEI подряд. Аксессуары — без IMEI, количеством.
+   Закупочных цен здесь НЕТ (решение владельца 02.08): сотрудники их
+   не видят и не вводят; владелец при желании проставит их позже.
 ============================================================ */
 const INV={model:'', price:0, purchase:0, acc:false, session:[]};
+/* СТРАЖ ФОКУСА СКАНЕРА (29.07-52): сканер печатает как клавиатура — туда,
+   где курсор. Пока открыто окно сканирования, курсор не должен теряться. */
+function scanTargetEl(){
+  /* поле скана инвентаризации или первое несканированное поле окна выдачи */
+  const inv=document.getElementById('invImei');
+  if(inv && inv.offsetParent) return inv;
+  for(let i=0;i<30;i++){
+    const el=document.getElementById('scanInput'+i);
+    if(el && el.offsetParent && !el.value) return el;
+  }
+  return null;
+}
+(function scanFocusGuard(){
+  const grab=()=>{
+    try{
+      const t=scanTargetEl();
+      if(!t) return;
+      const ae=document.activeElement;
+      if(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.isContentEditable)) return;
+      t.focus();
+    }catch(e){}
+  };
+  /* вернулись в окно браузера (например, из Telegram) — курсор сразу в скан.
+     Если окно было неактивно, а окно сканирования открыто — напоминаем, что
+     сканы в это время печатались в ДРУГОЕ приложение (браузер их не видит). */
+  let _blurAt=0;
+  window.addEventListener('blur', ()=>{ _blurAt=Date.now(); });
+  window.addEventListener('focus', ()=>setTimeout(()=>{
+    grab();
+    try{
+      if(_blurAt && Date.now()-_blurAt>2500 && scanTargetEl() &&
+         Date.now()-(window._scanAwayWarnAt||0)>300000){
+        window._scanAwayWarnAt=Date.now();
+        toast('Окно ERP было неактивно. Если в это время сканировали — коды ушли в другое приложение (например, Telegram). Сканируйте при активном окне ERP.','error');
+      }
+      _blurAt=0;
+    }catch(e){}
+  }, 60));
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) setTimeout(grab, 60); });
+  /* начали сканировать, а курсор нигде — перехватываем на лету, символ не теряется */
+  document.addEventListener('keydown', (e)=>{
+    if(e.ctrlKey||e.metaKey||e.altKey) return;
+    if(e.key && e.key.length===1) grab();
+  }, true);
+  /* клик по пустому месту в окне сканирования не роняет курсор */
+  document.addEventListener('mouseup', ()=>setTimeout(grab, 40));
+})();
 function invCatalogPrice(name){
   const p=(DATA.siteCatalog||[]).find(x=>(x.name||'')===name);
   return p&&p.price!=null?Math.round(p.price):0;
@@ -7290,21 +7359,17 @@ function openInventoryModal(c){
     'Затем сканируйте IMEI подряд: каждая единица сразу встаёт на склад. Для аксессуаров — галочка «без IMEI», заводятся количеством.</div>';
   body+='<div class="field"><label>Модель</label><input class="input-mini" id="invModel" style="width:100%;" placeholder="Начните вводить название…" value="'+escAttr(INV.model)+'"></div>'+
     '<div id="invSuggest"></div>'+
-    '<div class="field-grid" style="margin-top:8px;">'+
-      '<div class="field"><label>Розничная цена, ₽</label><input class="input-mini" id="invPrice" type="number" style="width:100%;" value="'+(INV.price||'')+'"></div>'+
-      '<div class="field"><label>Закупочная цена, ₽</label><input class="input-mini" id="invPurchase" type="number" style="width:100%;" value="'+(INV.purchase||'')+'"></div>'+
-    '</div>'+
+    '<div class="field" style="margin-top:8px;"><label>Розничная цена, ₽</label><input class="input-mini" id="invPrice" type="number" style="width:100%;" value="'+(INV.price||'')+'"></div>'+
     '<div class="toggle-row" style="margin:8px 0;"><div class="toggle-switch '+(INV.acc?'on':'')+'" id="invAccTgl"></div>Аксессуар — без IMEI, заводится количеством</div>';
   body+='<div id="invScanArea">'+(INV.acc
     ? '<div class="field"><label>Количество, шт</label><input class="input-mini" id="invQty" type="number" min="1" value="1" style="width:100%;"></div>'+
       '<button class="btn btn-primary" id="invAddAcc" style="margin-top:6px;">Добавить на склад</button>'
     : '<div class="field"><label>Скан IMEI / серийного номера</label><input class="input-mini" id="invImei" style="width:100%;" placeholder="Наведите сканер — единица добавится сама (или введите и Enter)"></div>')+
   '</div>';
-  const sum=INV.session.reduce((s,x)=>s+(x.purchase||0)*(x.qty||1),0);
   const cnt=INV.session.reduce((s,x)=>s+(x.qty||1),0);
-  body+='<div class="drill-divider"></div><div class="drill-block-label">Заведено за сессию: '+cnt+' шт · закупка '+rub(sum)+'</div>'+
+  body+='<div class="drill-divider"></div><div class="drill-block-label">Заведено за сессию: '+cnt+' шт</div>'+
     (INV.session.length?'<div style="max-height:180px;overflow:auto;">'+INV.session.slice(-12).reverse().map(x=>
-      '<div class="hist-row"><div><div class="h-main">'+escHtml(x.model)+(x.qty>1?' × '+x.qty:'')+'</div><div class="h-sub mono">'+(x.imei||'без IMEI')+' · закуп '+rub(x.purchase)+' · розница '+rub(x.price)+'</div></div></div>').join('')+'</div>'
+      '<div class="hist-row"><div><div class="h-main">'+escHtml(x.model)+(x.qty>1?' × '+x.qty:'')+'</div><div class="h-sub mono">'+(x.imei||'без IMEI')+' · розница '+rub(x.price)+'</div></div></div>').join('')+'</div>'
     :'<div class="tsub">Пока пусто</div>');
   openModal('📦 Инвентаризация — '+escHtml(DATA.storeName||''), 'Первичный завод склада', body, [{label:'Готово', cls:'btn-primary', action:()=>{ closeModal(); renderWarehouse(c); }}]);
 
@@ -7323,28 +7388,26 @@ function openInventoryModal(c){
       document.getElementById('invPrice').value=INV.price||'';
       sug.innerHTML='';
       const ii=document.getElementById('invImei'); if(ii) ii.focus();
-      const pp=document.getElementById('invPurchase'); if(pp && !parseFloat(pp.value)) pp.focus();
     }));
   };
   mInp.addEventListener('input', ()=>{ INV.model=mInp.value.trim(); showSug(); });
   document.getElementById('invPrice').addEventListener('input', e=>{ INV.price=Math.round(parseFloat(e.target.value)||0); });
-  document.getElementById('invPurchase').addEventListener('input', e=>{ INV.purchase=Math.round(parseFloat(e.target.value)||0); });
   document.getElementById('invAccTgl').addEventListener('click', ()=>{ INV.acc=!INV.acc; openInventoryModal(c); });
 
   const addUnit=(imei)=>{
     INV.model=(document.getElementById('invModel').value||'').trim();
     INV.price=Math.round(parseFloat(document.getElementById('invPrice').value)||0);
-    INV.purchase=Math.round(parseFloat(document.getElementById('invPurchase').value)||0);
     if(!INV.model){ toast('Сначала выберите модель','error'); return; }
-    if(!INV.purchase){ toast('Впишите закупочную цену — прибыль считается от неё','error'); return; }
     const clean=String(imei||'').trim();
     if(!clean || clean.length<6){ toast('Слишком короткий код','error'); return; }
     if([...DATA.warehouse.tech, ...DATA.warehouse.tradein].some(x=>x.imei===clean)){
       toast('Этот IMEI уже на складе: '+clean,'error'); try{beep('err');}catch(e){}
       return;
     }
-    DATA.warehouse.tech.push({imei:clean, model:INV.model, purchase:INV.purchase, price:INV.price||invCatalogPrice(INV.model), status:'instock', location:loc});
-    INV.session.push({model:INV.model, imei:clean, purchase:INV.purchase, price:INV.price, qty:1});
+    DATA.warehouse.tech.push({imei:clean, model:INV.model, purchase:0, price:INV.price||invCatalogPrice(INV.model), status:'instock', location:loc});
+    INV.session.push({model:INV.model, imei:clean, purchase:0, price:INV.price, qty:1});
+    /* вписанная розница запоминается в карточке модели — «цена не указана» уходит */
+    if(INV.price){ const card=(DATA.siteCatalog||[]).find(p=>(p.name||'')===INV.model); if(card && card.price!==INV.price) card.price=INV.price; }
     try{beep('ok');}catch(e){}
     try{ fullSave(); }catch(e){}
     openInventoryModal(c);   /* перерисовать со счётчиком; фокус вернётся в скан */
@@ -7352,20 +7415,19 @@ function openInventoryModal(c){
   const ii=document.getElementById('invImei');
   if(ii){
     ii.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addUnit(ii.value); } });
-    if(INV.model && INV.purchase) ii.focus(); else mInp.focus();
+    if(INV.model) ii.focus(); else mInp.focus();
   }
   const accBtn=document.getElementById('invAddAcc');
   if(accBtn) accBtn.addEventListener('click', ()=>{
     INV.model=(document.getElementById('invModel').value||'').trim();
     INV.price=Math.round(parseFloat(document.getElementById('invPrice').value)||0);
-    INV.purchase=Math.round(parseFloat(document.getElementById('invPurchase').value)||0);
     const qty=Math.max(1, parseInt(document.getElementById('invQty').value)||1);
     if(!INV.model){ toast('Сначала выберите модель','error'); return; }
-    if(!INV.purchase){ toast('Впишите закупочную цену','error'); return; }
     const ex=(DATA.warehouse.accessories||[]).find(a=>a.model===INV.model);
-    if(ex){ ex.qty=(ex.qty||0)+qty; ex.purchase=INV.purchase; if(INV.price) ex.price=INV.price; ex.status='instock'; }
-    else DATA.warehouse.accessories.push({sku:'ACC-'+String(Date.now()).slice(-6), model:INV.model, purchase:INV.purchase, price:INV.price||invCatalogPrice(INV.model), status:'instock', location:loc, qty:qty});
-    INV.session.push({model:INV.model, imei:'', purchase:INV.purchase, price:INV.price, qty:qty});
+    if(ex){ ex.qty=(ex.qty||0)+qty; if(INV.price) ex.price=INV.price; ex.status='instock'; }
+    else DATA.warehouse.accessories.push({sku:'ACC-'+String(Date.now()).slice(-6), model:INV.model, purchase:0, price:INV.price||invCatalogPrice(INV.model), status:'instock', location:loc, qty:qty});
+    INV.session.push({model:INV.model, imei:'', purchase:0, price:INV.price, qty:qty});
+    if(INV.price){ const card=(DATA.siteCatalog||[]).find(p=>(p.name||'')===INV.model); if(card && card.price!==INV.price) card.price=INV.price; }
     try{ fullSave(); }catch(e){}
     toast('«'+INV.model+'» +'+qty+' шт на складе','success');
     openInventoryModal(c);
@@ -7386,8 +7448,9 @@ function renderWarehouse(c){
     '</div><div class="topbar-spacer"></div>'+
     (STATE.whFilters.tab==='tech'?'<button class="btn btn-sm" id="whMatrixBtn">'+ic('gear')+' Матрица «всегда на складе»</button>':'')+
     (STATE.whFilters.tab==='tradein'?'<button class="btn btn-sm btn-primary" id="whTradeinBtn">'+ic('plus')+' Принять б/у (трейд-ин / выкуп)</button>':'')+
-    ((isBossRole()||STATE.role==='senior')?'<button class="btn btn-sm btn-primary" id="whInventoryBtn">📦 Инвентаризация</button>':'')+
-    (STATE.role!=='master'?'<button class="btn btn-sm" id="whScanBtn">📷 Сканировать поставку</button>':'')+
+    ((isBossRole()||['senior','seller'].includes(STATE.role))?'<button class="btn btn-sm btn-primary" id="whInventoryBtn">📦 Инвентаризация</button>':'')+
+    (isBossRole()?'<button class="btn btn-sm" id="whClearBtn" title="Убрать демо-товары перед реальной инвентаризацией">🧹 Очистить склад</button>':'')+
+    (function(){ try{ const l=JSON.parse(localStorage.getItem('erp_wh_lost')||'[]'); return (isBossRole()&&l.length)?'<button class="btn btn-sm btn-primary" id="whRestoreBtn" style="border-color:var(--warning);">♻ Вернуть пропавшие сканы ('+l.length+')</button>':''; }catch(e){ return ''; } })()+
     '<button class="btn btn-sm btn-primary" id="whReceiveBtn" style="margin-left:8px;">'+ic('truck')+' Принять поставку</button>'+
     '<input class="input-mini" id="whSearch" placeholder="Поиск по модели / IMEI" value="'+STATE.whFilters.q+'" style="width:240px;margin-left:8px;"></div>';
 
@@ -7473,6 +7536,54 @@ function renderWarehouse(c){
   if(whScan) whScan.addEventListener('click', openSupplyScanModal);
   const whInv=document.getElementById('whInventoryBtn');
   if(whInv) whInv.addEventListener('click', ()=>openInventoryModal(c));
+  const whRst=document.getElementById('whRestoreBtn');
+  if(whRst) whRst.addEventListener('click', ()=>{
+    let lost=[]; try{ lost=JSON.parse(localStorage.getItem('erp_wh_lost')||'[]'); }catch(e){}
+    if(!lost.length){ toast('Резерв пуст','info'); return; }
+    openModal('♻ Вернуть пропавшие сканы?','',
+      '<div class="tsub" style="line-height:1.7;">На этом компьютере отложено <b>'+lost.length+'</b> единиц, которые исчезли со склада при обмене данными между компьютерами (например, сканировали здесь, а другой комп прислал снимок без них).<br><br>'+
+      '«Вернуть» — они встанут обратно на свои точки и вкладки; дубли исключены.<br><br>'+
+      '<b style="color:var(--warning);">Если склад чистили СПЕЦИАЛЬНО (кнопкой «Очистить склад») — жмите «Забыть», чтобы старое не вернулось.</b></div>',
+      [{label:'Вернуть на склад', cls:'btn-primary', action:()=>{
+        let back=0;
+        lost.forEach(r=>{
+          try{
+            const t=(r.store && STORE_DATA[r.store])?STORE_DATA[r.store]:DATA;
+            t.warehouse=t.warehouse||{};
+            const arr=t.warehouse[r.tab]=t.warehouse[r.tab]||[];
+            const everywhere=Object.values(STORE_DATA).some(d=>['tech','tradein'].some(k=>(((d||{}).warehouse||{})[k]||[]).some(x=>String(x.imei)===String(r.item.imei))));
+            if(!everywhere){ arr.push(r.item); back++; }
+          }catch(e){}
+        });
+        localStorage.removeItem('erp_wh_lost');
+        try{ fullSave(); }catch(e){}
+        closeModal();
+        toast('Возвращено на склад: '+back+' единиц','success');
+        renderWarehouse(c);
+      }},
+      {label:'Забыть (чистили специально)', cls:'btn-danger', action:()=>{
+        localStorage.removeItem('erp_wh_lost');
+        closeModal();
+        toast('Резерв очищен','info');
+        renderWarehouse(c);
+      }}]);
+  });
+  const whClr=document.getElementById('whClearBtn');
+  if(whClr) whClr.addEventListener('click', ()=>{
+    const cnt=['tech','tradein','accessories','parts'].reduce((s,k)=>s+((DATA.warehouse[k]||[]).length),0);
+    if(!cnt){ toast('Склад уже пуст','info'); return; }
+    openModal('🧹 Очистить склад — вы уверены?','',
+      '<div class="tsub" style="line-height:1.7;">Будут удалены ВСЕ позиции со всех вкладок склада этой точки: <b>'+cnt+' шт</b> (техника, трейд-ин, аксессуары, запчасти).<br><br>'+
+      'Заказы, клиенты, кассы и всё остальное не трогаются. Используйте перед реальной инвентаризацией, чтобы демо-товары не мешались с настоящими.<br><br><b>Отменить будет нельзя.</b></div>',
+      [{label:'Очистить склад ('+cnt+' шт)', cls:'btn-danger', action:()=>{
+        ['tech','tradein','accessories','parts'].forEach(k=>{ if(DATA.warehouse[k]) DATA.warehouse[k]=[]; });
+        try{ fullSave(); }catch(e){}
+        closeModal();
+        toast('Склад очищен — можно сканировать реальный товар (📦 Инвентаризация)','success');
+        renderWarehouse(c);
+      }},
+      {label:'Отмена', cls:'', action:closeModal}]);
+  });
   const recvBtn=document.getElementById('whReceiveBtn');
   if(recvBtn) recvBtn.addEventListener('click', ()=>{
     // Приёмка — это действие над складом, а не отдельный раздел.
@@ -8601,14 +8712,14 @@ function tgWatchNewSiteItems(){
     (DATA.orders||[]).forEach(o=>{
       if(!o.externalId || !/^(site|strapi)_/.test(String(o.externalId)) || o.tgNotified) return;
       o.tgNotified=true;
-      tgNotify('Поступил новый заказ ✅\n'+
+      tgNotifyShift('Поступил новый заказ ✅\n'+
         'Номер заказа: №'+o.id+'\n'+
         'Дата оформления: '+(o.date||DATA.today)+' '+nowTime());
     });
     (DATA.service||[]).forEach(t=>{
       if(!t.externalId || !/^(site|strapi)_/.test(String(t.externalId)) || t.tgNotified) return;
       t.tgNotified=true;
-      tgNotify('Поступила новая заявка на ремонт ✅\n'+
+      tgNotifyShift('Поступила новая заявка на ремонт ✅\n'+
         'Номер заявки: №'+t.id+'\n'+
         'Дата оформления: '+(t.accepted||DATA.today)+' '+nowTime());
     });
@@ -8728,6 +8839,7 @@ async function integrationsHeartbeat(){
   };
   await step('site',          ()=>siteSyncNow(true));
   await step('strapiOrders',  ()=>strapiOrdersSync(true));
+  await step('backfill14d',   ()=>strapiBackfill14d());
   await step('strapiRepairs', ()=>strapiRepairsSync(true));
   await step('channels',      ()=>channelsSyncNow(false));
   if(_hbTick%4===0)   await step('siteStatuses',    ()=>strapiStatusRefresh());
@@ -8740,6 +8852,7 @@ async function integrationsHeartbeat(){
   _hbBusy=false;
 }
 setTimeout(()=>{ try{ integrationsHeartbeat(); }catch(e){} }, 2000);
+setTimeout(()=>{ try{ channelsSyncNow(false, true); }catch(e){} }, 10000);   /* догон недели диалогов при запуске */
 setTimeout(()=>{ try{ annShowUnseen(); }catch(e){} }, 2600);
 setInterval(()=>{ try{ integrationsHeartbeat(); }catch(e){} }, HEARTBEAT_MS);
 /* сообщения каналов забираем чаще всех — каждые 5 секунд: вебхук кладёт их
@@ -8876,7 +8989,7 @@ function importChannelMessages(list){
     if(!l){
       /* старое сообщение (архив/догон) — не повод создавать заявку:
          переписка хранится на сервере и подтянется, если клиент напишет снова */
-      if(m.tsMs && m.tsMs < Date.now()-3*86400000) return;
+      if(m.tsMs && m.tsMs < Date.now()-7*86400000) return;   /* видим все диалоги за неделю */
       const lid=(target.leads.length?Math.max(...target.leads.map(x=>x.id||0)):7300)+1;
       l={id:lid, channel:m.channel, externalId:m.key, chatKey:ck, chatId:String(m.chatId), sourceUrl:'', source:'sync',
         name:(m.name||'').trim()||('Клиент '+((CHANNELS[m.channel]||{}).label||m.channel)),
@@ -8935,7 +9048,7 @@ function tgWatchNewChannelLeads(){
       (d.leads||[]).forEach(l=>{
         if(!l.chatKey || l.tgNotified) return;
         l.tgNotified=true;
-        tgNotify('Поступила новая заявка ✅\nКанал: '+((CHANNELS[l.channel]||{}).label||l.channel)+'\nДата: '+(l.createdAt||DATA.today)+' '+nowTime());
+        tgNotifyShift('Поступила новая заявка ✅\nКанал: '+((CHANNELS[l.channel]||{}).label||l.channel)+'\nДата: '+(l.createdAt||DATA.today)+' '+nowTime());
       });
     });
   }catch(e){}
@@ -12698,7 +12811,9 @@ function controlPanelHTML(){
   html+='</div>';
 
   /* --- 3. Сотрудники и доступы (справочник + точки доступа) --- */
-  html+='<div class="section"><div class="section-title" style="margin-bottom:10px;">Сотрудники и доступы</div>';
+  html+='<div class="section"><div class="section-head"><div class="section-title">Сотрудники и доступы</div>'+
+    (isBossRole()||STATE.role==='admin'?'<button class="btn btn-sm" id="tgChatIdsBtn">✈ Найти chat_id</button>':'')+'</div>'+
+    '<div class="tsub" style="margin-bottom:10px;">Уведомления о новых заказах и заявках получают владелец и те, кто сегодня на смене (с заполненным Telegram chat_id). Выходные не беспокоим. Сотрудник пишет боту любое сообщение → «Найти chat_id» → впишите число в его карточку.</div>';
   DATA.employees.forEach(emp=>{
     const finesTot=empFinesTotal(emp.id);
     html+='<div class="card" style="margin-bottom:10px;">'+
@@ -12712,6 +12827,11 @@ function controlPanelHTML(){
         '<span class="toggle-pill '+(emp.extraAccess.analytics?'on':'')+'" data-toggle-access="'+emp.id+'_analytics">Аналитика</span>'+
         (emp.restricted?'<button class="btn btn-sm btn-danger" data-lift-restrict="'+emp.id+'">Снять ограничение</button>':'')+
       '</div>':'')+
+      (!emp.noAccess ? '<div style="display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;">'+
+        '<span class="tsub">✈ Telegram для уведомлений:</span>'+
+        '<input class="input-mini mono" data-tg-chat="'+emp.id+'" placeholder="chat_id (число)" style="width:150px;" value="'+escAttr(emp.tgChatId||'')+'">'+
+        (emp.tgChatId?'<span class="badge b-done">подключён</span>':'<span class="tsub" style="opacity:.6;">пусто — уведомления не приходят</span>')+
+      '</div>' : '')+
     '</div>';
   });
   html+='</div>';
@@ -12737,6 +12857,31 @@ function controlPanelHTML(){
 }
 
 function wireControlPanel(c){
+  c.querySelectorAll('[data-tg-chat]').forEach(el=>el.addEventListener('change',()=>{
+    const emp=DATA.employees.find(e=>e.id===parseInt(el.dataset.tgChat));
+    if(!emp) return;
+    emp.tgChatId=el.value.trim().replace(/[^\-\d]/g,'');
+    el.value=emp.tgChatId;
+    try{ fullSave(); }catch(e){}
+    toast(emp.tgChatId?('Telegram для «'+emp.name+'» сохранён — будет получать уведомления в свои смены'):('Telegram у «'+emp.name+'» отключён'),'success');
+  }));
+  const tgBtn=document.getElementById('tgChatIdsBtn');
+  if(tgBtn) tgBtn.addEventListener('click', async()=>{
+    const creds=erpServerCreds();
+    if(!creds){ toast('Нет связи с сервером','error'); return; }
+    tgBtn.disabled=true;
+    try{
+      const j=await (await fetch(creds.api+'/telegram/chats',{headers:{'Authorization':'Bearer '+creds.token}})).json();
+      const list=Object.entries(j.chats||{});
+      openModal('✈ Telegram chat_id','кто недавно писал нашему боту',
+        (list.length
+          ? list.map(([id,name])=>'<div class="hist-row"><div class="h-main">'+escHtml(name||'—')+'</div><div class="mono" style="user-select:all;">'+escHtml(id)+'</div></div>').join('')
+          : '<div class="tsub">Пока пусто. Попросите сотрудника написать нашему боту любое сообщение (например «привет») и нажмите кнопку снова.</div>')+
+        '<div class="tsub" style="margin-top:10px;">Скопируйте число и впишите в поле «Telegram для уведомлений» у сотрудника ниже.</div>',
+        [{label:'Закрыть', cls:'btn-primary', action:closeModal}]);
+    }catch(e){ toast('Не удалось получить список: '+e.message,'error'); }
+    tgBtn.disabled=false;
+  });
   const dateInp=c.querySelector('#normDateInp');
   if(dateInp) dateInp.addEventListener('change', ()=>{ const v=dateInp.value.trim(); if(/^\d{2}\.\d{2}\.\d{4}$/.test(v)){ STATE.normDate=v; renderManage(c);} else toast('Формат ДД.ММ.ГГГГ', 'error'); });
   const saveN=c.querySelector('#saveNorms');
@@ -14256,7 +14401,7 @@ async function cleanStartImport(){
         conditionExtras:z.phone_status?('Состояние со слов клиента: '+String(z.phone_status).slice(0,200)):'',
         costLabor:0, costParts:0, cost:(parseFloat(String(z.summary||'').replace(/\s/g,''))||null),
         estDays:'', due:null, master:null, urgency:'normal',
-        status:active?'new':(rRej?'archive':'done'), accepted:created,
+        status:active?siteRepairStatusToErp(rst):(rRej?'archive':'done'), accepted:created,
         history:[{date:created+' 12:00', text:active?'Заявка на ремонт с сайта':(rRej?'Отказ (статус сайта)':'Выполнен (статус сайта)')}],
         parts:[],
       });
@@ -14281,12 +14426,19 @@ async function strapiRepairsSync(quiet){
     const H=chHomeStore();   /* сервис живёт на Лунной */
     H.service=H.service||[];
     if(H.siteLastRemontId==null){
-      const j0=await strapiReq('/api/remonts?status=draft&sort=id:desc&pagination[pageSize]=1&fields[0]=id');
-      H.siteLastRemontId=(j0.data&&j0.data[0]&&j0.data[0].id)||0;
-      console.log('Strapi-ремонты: старт с id '+H.siteLastRemontId);
-      return 0;
+      /* первое подключение: заявки на ремонт за 14 дней — сразу в Сервис */
+      const sinceR=new Date(Date.now()-14*86400000).toISOString();
+      const j0=await strapiReq('/api/remonts?status=draft&filters[createdAt][$gt]='+encodeURIComponent(sinceR)+'&sort=id:asc&pagination[pageSize]=100');
+      const jTop=await strapiReq('/api/remonts?status=draft&sort=id:desc&pagination[pageSize]=1&fields[0]=id');
+      const topId=(jTop.data&&jTop.data[0]&&jTop.data[0].id)||0;
+      H.siteLastRemontId=-1;   /* временно: пропустить через общий импорт ниже */
+      const dataR=(j0.data||[]);
+      /* дальше общий код добавит их как обычные новые; курсор станет topId */
+      var _firstRunRepairs=dataR, _firstRunTop=topId;
     }
-    const j=await strapiReq('/api/remonts?status=draft&filters[id][$gt]='+H.siteLastRemontId+'&sort=id:asc&pagination[pageSize]=25');
+    const j=(typeof _firstRunRepairs!=='undefined')
+      ? {data:_firstRunRepairs}
+      : await strapiReq('/api/remonts?status=draft&filters[id][$gt]='+H.siteLastRemontId+'&sort=id:asc&pagination[pageSize]=25');
     let added=0;
     (j.data||[]).forEach(z=>{
       if(z.id>H.siteLastRemontId) H.siteLastRemontId=z.id;
@@ -14311,13 +14463,15 @@ async function strapiRepairsSync(quiet){
         costLabor:0, costParts:0,
         cost: (parseFloat(String(z.summary||'').replace(/\s/g,''))||null),
         estDays:'', due:null, master:null, urgency:'normal',
-        status:rDone?'done':(rRej?'archive':'new'), accepted:DATA.today,
+        status:rDone?'done':(rRej?'archive':siteRepairStatusToErp(rst)), accepted:DATA.today,
         history:[{date:DATA.today+' '+nowTime(), text:rDone?'Выполнен (статус сайта)':(rRej?'Отказ (статус сайта)':'Заявка на ремонт с сайта — позвонить клиенту и принять устройство')}],
         parts:[],
-        tgNotified:(rDone||rRej)?true:undefined,
+        tgNotified:(rDone||rRej||typeof _firstRunRepairs!=='undefined')?true:undefined,   /* импорт истории не бомбит бота */
       });
       added++;
     });
+    if(typeof _firstRunTop!=='undefined' && _firstRunTop>(H.siteLastRemontId||0)) H.siteLastRemontId=_firstRunTop;
+    if(H.siteLastRemontId<0) H.siteLastRemontId=0;
     if(added){
       tgWatchNewSiteItems();
       updateBellBadge();
@@ -14389,15 +14543,37 @@ function applySiteOrderStatus(o, rawSt, stamp, dStore){
   }
   return false;
 }
+/* ПЕРЕВОДЧИК СТАТУСОВ РЕМОНТА сайта → категории Сервиса ERP.
+   Понимает англ. и рус. записи; незнакомое — безопасно в «Новую заявку». */
+function siteRepairStatusToErp(rawSt){
+  const st=String(rawSt||'').toLowerCase().trim();
+  if(!st) return 'new';
+  if(/^done$|complete|vypoln|выполн|finish|success|выдан|заверш/.test(st)) return 'done';
+  if(/reject|otkaz|отказ|cancel|otmen|отмен/.test(st)) return 'archive';
+  if(/запчаст|детал|part|постав/.test(st)) return 'wait_part';
+  if(/оплат|payment|предоплат/.test(st)) return 'wait_payment';
+  if(/готов|ready|клиент|забер/.test(st)) return 'wait_client';
+  if(/progress|work|работ|диагност|принят|обработ|ремонт/.test(st)) return 'progress';
+  return 'new';
+}
+/* Сайт двигает ремонт по категориям только ВПЕРЁД — если мастер в ERP уже
+   увёл заявку дальше, сайт её не откатит. */
+const REPAIR_STATUS_RANK={new:0, progress:1, wait_part:2, wait_payment:3, wait_client:4};
 function applySiteRepairStatus(t, rawSt){
   if(!t || ['done','archive'].includes(t.status)) return false;
-  const st=String(rawSt||'').toLowerCase();
-  if(st==='done' || /complete|vypoln|выполн/.test(st)){
+  const mapped=siteRepairStatusToErp(rawSt);
+  if(mapped==='done'){
     t.status='done'; (t.history=t.history||[]).push({date:DATA.today+' '+nowTime(), text:'Выполнен (статус сайта)'});
     return true;
   }
-  if(/reject|otkaz|отказ|cancel/.test(st)){
+  if(mapped==='archive'){
     t.status='archive'; (t.history=t.history||[]).push({date:DATA.today+' '+nowTime(), text:'Отказ (статус сайта)'});
+    return true;
+  }
+  if(mapped!=='new' && mapped!==t.status &&
+     (REPAIR_STATUS_RANK[mapped]||0)>(REPAIR_STATUS_RANK[t.status]||0)){
+    t.status=mapped;
+    (t.history=t.history||[]).push({date:DATA.today+' '+nowTime(), text:'Сайт: статус → «'+((SERVICE_STATUS[mapped]||[mapped])[0])+'»'});
     return true;
   }
   return false;
@@ -14473,15 +14649,229 @@ async function strapiStatusRefresh(){
   }catch(e){}
 }
 
+/* ПОЛНЫЙ ИМПОРТ ИСТОРИИ (29.07-47): вся история сайта — в ERP, без чистого
+   старта и без затирания текущих данных. Дедуп по externalId, клиенты по
+   телефонам. Выполняется один раз; при ошибке сети повторяется сам. */
+let _fhBusy=false;
+async function strapiFullHistoryImport(){
+  if(_fhBusy) return 0;
+  const H=chHomeStore();
+  if(H._fullHist47) return 0;
+  if(!apiToken()) return 0;
+  _fhBusy=true;
+  try{
+    toast('Загружаю всю историю заказов с сайта…','info');
+    let imported=0;
+    /* — все заказы — */
+    let pg=1, pc=1;
+    while(pg<=pc && pg<=40){
+      const j0=await strapiReq('/api/zakazies?status=draft&sort=id:asc&pagination[page]='+pg+'&pagination[pageSize]=100&populate=*');
+      const chunk=j0.data||[];
+      pc=(j0.meta&&j0.meta.pagination&&j0.meta.pagination.pageCount)||1;
+      chunk.forEach(z=>{
+        const ext='strapi_'+z.id;
+        if((H.orders||[]).some(o=>o.externalId===ext)) return;
+        const oid=Math.max(10000,...H.orders.map(o=>typeof o.id==='number'?o.id:0))+1;
+        const o=mapZakazToOrder(z, oid, true);   /* история: старое сразу в архив */
+        /* свежевыданные — неделю видны во вкладке «Выданные» */
+        if(o.status==='done' && o.closedAt){
+          const p=o.closedAt.split(' ')[0].split('.');
+          const dt=new Date(+p[2], +p[1]-1, +p[0]);
+          if(Date.now()-dt.getTime()<7*86400000) o.archived=false;
+        }
+        H.orders.unshift(o);
+        if(z.id>(H.siteLastZakazId||0)) H.siteLastZakazId=z.id;
+        imported++;
+      });
+      pg++;
+    }
+    /* — все ремонты — */
+    try{
+      let rp=1, rpc=1;
+      while(rp<=rpc && rp<=20){
+        const jr=await strapiReq('/api/remonts?status=draft&sort=id:asc&pagination[page]='+rp+'&pagination[pageSize]=100');
+        const chunkR=jr.data||[];
+        rpc=(jr.meta&&jr.meta.pagination&&jr.meta.pagination.pageCount)||1;
+        chunkR.forEach(z=>{
+          const ext='strapi_r_'+z.id;
+          if((H.service||[]).some(t=>t.externalId===ext)) return;
+          const sid=((H.service||[]).length?Math.max(...H.service.map(t=>t.id)):3000)+1;
+          const rst=String(z.order_status||'new').toLowerCase();
+          const rDone=/^done$|complete|vypoln|выполн/.test(rst);
+          const rRej=/reject|otkaz|отказ|cancel/.test(rst);
+          const ageDays=z.createdAt? Math.floor((Date.now()-new Date(z.createdAt).getTime())/86400000) : 0;
+          const active=!rDone && !rRej && ageDays<=30;
+          const created=(z.createdAt? String(z.createdAt).slice(0,10).split('-').reverse().join('.') : DATA.today);
+          H.service.unshift({
+            id:sid, externalId:ext, tgNotified:true,
+            device:String(z.phone_model||'Устройство с сайта').slice(0,90),
+            client:String(z.name||'Без имени').slice(0,80),
+            phone:String(z.phone||'—').slice(0,30),
+            issue:String(z.comment||'Заявка с сайта').slice(0,500),
+            clientWords:z.comment?('«'+String(z.comment).slice(0,300)+'»'):'',
+            agreedWorks:String(z.work_plan||'').slice(0,300),
+            devicePassword:String(z.phone_password||'').slice(0,60),
+            imei:'', accountRemoved:'no',
+            condition:{body:[],display:[],power:[],wifi:[],bt:[]},
+            conditionExtras:z.phone_status?('Состояние со слов клиента: '+String(z.phone_status).slice(0,200)):'',
+            costLabor:0, costParts:0, cost:(parseFloat(String(z.summary||'').replace(/\s/g,''))||null),
+            estDays:'', due:null, master:null, urgency:'normal',
+            status:active?siteRepairStatusToErp(rst):(rRej?'archive':'done'), accepted:created,
+            history:[{date:created+' 12:00', text:active?'Заявка на ремонт с сайта':(rRej?'Отказ (статус сайта)':'Выполнен (статус сайта)')}],
+            parts:[],
+          });
+          if(z.id>(H.siteLastRemontId||0)) H.siteLastRemontId=z.id;
+          imported++;
+        });
+        rp++;
+      }
+    }catch(e){ console.warn('история ремонтов:', e.message); }
+    /* — клиенты по телефонам — */
+    try{
+      H.customers=H.customers||[];
+      const byPhone=new Map();
+      H.customers.forEach(c=>{ (c.phones||[]).forEach(p=>{ const np=normPhone(p); if(np) byPhone.set(np,c); }); });
+      (H.orders||[]).forEach(o=>{
+        const np=normPhone(o.phone);
+        if(!np) return;
+        let c=byPhone.get(np);
+        if(!c){
+          c={id:(H.customers.length?Math.max(...H.customers.map(x=>x.id||0)):0)+1, name:o.name, phones:[o.phone], consent:false, source:'Сайт', orders:[], totalSpent:0};
+          H.customers.push(c); byPhone.set(np,c);
+        }
+        c.orders=c.orders||[];
+        if(!c.orders.includes(o.id)){
+          c.orders.push(o.id);
+          if(o.status==='done') c.totalSpent=(c.totalSpent||0)+(o.items||[]).reduce((s,i2)=>s+(i2.price||0),0);
+        }
+      });
+    }catch(e){ console.warn('клиенты из истории:', e.message); }
+    H._fullHist47=1;
+    if(imported){
+      try{ fullSave(); }catch(e){}
+      updateBellBadge();
+      toast('✅ История сайта загружена: +'+imported+' (заказы, ремонты, клиенты)','success');
+      if(['orders','service','customers'].includes(STATE.page)) renderPage();
+    }
+    console.log('Полный импорт истории: '+imported);
+    return imported;
+  }catch(e){ console.warn('полный импорт истории:', e.message); return 0; }
+  finally{ _fhBusy=false; }
+}
+setTimeout(()=>{ try{ strapiFullHistoryImport(); }catch(e){} }, 20000);
+setInterval(()=>{ try{ strapiFullHistoryImport(); }catch(e){} }, 300000);
+
+/* ОДНОРАЗОВАЯ ДОГРУЗКА (29.07-46): затянуть заказы и ремонты за 14 дней,
+   даже если система уже «знакома» с сайтом (курсор стоит). Дедуп по externalId.
+   Флаг ставится только после успешного прохода — до тех пор пробуем каждый пульс. */
+let _bf46Busy=false;
+async function strapiBackfill14d(){
+  if(_bf46Busy) return 0;
+  const H=chHomeStore();
+  if(H._backfill46) return 0;
+  if(!apiToken()) return 0;
+  _bf46Busy=true;
+  try{
+    const since=new Date(Date.now()-14*86400000).toISOString();
+    let imported=0;
+    /* — заказы — */
+    let pg=1, pc=1; const all=[];
+    while(pg<=pc && pg<=10){
+      const j0=await strapiReq('/api/zakazies?status=draft&filters[createdAt][$gt]='+encodeURIComponent(since)+'&sort=id:asc&pagination[page]='+pg+'&pagination[pageSize]=100&populate=*');
+      (j0.data||[]).forEach(z=>all.push(z));
+      pc=(j0.meta&&j0.meta.pagination&&j0.meta.pagination.pageCount)||1;
+      pg++;
+    }
+    all.forEach(z=>{
+      const ext='strapi_'+z.id;
+      if((H.orders||[]).some(o=>o.externalId===ext)) return;
+      const oid=Math.max(10000,...H.orders.map(o=>typeof o.id==='number'?o.id:0))+1;
+      H.orders.unshift(mapZakazToOrder(z, oid, false));
+      if(z.id>(H.siteLastZakazId||0)) H.siteLastZakazId=z.id;
+      imported++;
+    });
+    /* — ремонты — */
+    try{
+      const jr=await strapiReq('/api/remonts?status=draft&filters[createdAt][$gt]='+encodeURIComponent(since)+'&sort=id:asc&pagination[pageSize]=100');
+      (jr.data||[]).forEach(z=>{
+        const ext='strapi_r_'+z.id;
+        if((H.service||[]).some(t=>t.externalId===ext)) return;
+        const sid=((H.service||[]).length?Math.max(...H.service.map(t=>t.id)):3000)+1;
+        const rst=String(z.order_status||'new').toLowerCase();
+        const rDone=/^done$|complete|vypoln|выполн/.test(rst);
+        const rRej=/reject|otkaz|отказ|cancel/.test(rst);
+        const created=(z.createdAt? String(z.createdAt).slice(0,10).split('-').reverse().join('.') : DATA.today);
+        H.service.unshift({
+          id:sid, externalId:ext, tgNotified:true,
+          device:String(z.phone_model||'Устройство с сайта').slice(0,90),
+          client:String(z.name||'Без имени').slice(0,80),
+          phone:String(z.phone||'—').slice(0,30),
+          issue:String(z.comment||'Заявка с сайта').slice(0,500),
+          clientWords:z.comment?('«'+String(z.comment).slice(0,300)+'»'):'',
+          agreedWorks:String(z.work_plan||'').slice(0,300),
+          devicePassword:String(z.phone_password||'').slice(0,60),
+          imei:'', accountRemoved:'no',
+          condition:{body:[],display:[],power:[],wifi:[],bt:[]},
+          conditionExtras:z.phone_status?('Состояние со слов клиента: '+String(z.phone_status).slice(0,200)):'',
+          costLabor:0, costParts:0, cost:(parseFloat(String(z.summary||'').replace(/\s/g,''))||null),
+          estDays:'', due:null, master:null, urgency:'normal',
+          status:rDone?'done':(rRej?'archive':siteRepairStatusToErp(rst)), accepted:created,
+          history:[{date:created+' 12:00', text:rDone?'Выполнен (статус сайта)':(rRej?'Отказ (статус сайта)':'Заявка на ремонт с сайта')}],
+          parts:[],
+        });
+        if(z.id>(H.siteLastRemontId||0)) H.siteLastRemontId=z.id;
+        imported++;
+      });
+    }catch(e){ console.warn('догрузка ремонтов:', e.message); }
+    H._backfill46=1;   /* успех — больше не повторяем */
+    if(imported){
+      try{ fullSave(); }catch(e){}
+      updateBellBadge();
+      toast('Сайт: догружена история за 14 дней — '+imported,'success');
+      if(['orders','service'].includes(STATE.page)) renderPage();
+    }
+    console.log('Догрузка 14 дней: '+imported);
+    return imported;
+  }catch(e){ console.warn('догрузка истории:', e.message); return 0; }
+  finally{ _bf46Busy=false; }
+}
 async function strapiOrdersSync(quiet){
   try{
     if(!apiToken()) return 0;   /* токен Strapi не настроен — канал молчит */
     const H=chHomeStore();   /* заказы с сайта всегда падают в главную точку (Лунная 4) */
     if(H.siteLastZakazId==null){
-      const j0=await strapiReq('/api/zakazies?status=draft&sort=id:desc&pagination[pageSize]=1&fields[0]=id');
-      H.siteLastZakazId=(j0.data&&j0.data[0]&&j0.data[0].id)||0;
-      console.log('Strapi-заказы: старт с id '+H.siteLastZakazId+' — забираем только новые');
-      return 0;
+      /* ПЕРВОЕ ПОДКЛЮЧЕНИЕ: сразу затягиваем заказы за последние 14 дней —
+         реальные данные видны с первой минуты, «чистый старт» не обязателен */
+      const since=new Date(Date.now()-14*86400000).toISOString();
+      let pg=1, pc=1; const all=[];
+      while(pg<=pc && pg<=10){
+        const j0=await strapiReq('/api/zakazies?status=draft&filters[createdAt][$gt]='+encodeURIComponent(since)+'&sort=id:asc&pagination[page]='+pg+'&pagination[pageSize]=100&populate=*');
+        (j0.data||[]).forEach(z=>all.push(z));
+        pc=(j0.meta&&j0.meta.pagination&&j0.meta.pagination.pageCount)||1;
+        pg++;
+      }
+      let maxId=0, imported=0;
+      all.forEach(z=>{
+        if(z.id>maxId) maxId=z.id;
+        const ext='strapi_'+z.id;
+        if((H.orders||[]).some(o=>o.externalId===ext)) return;
+        const oid=Math.max(10000,...H.orders.map(o=>typeof o.id==='number'?o.id:0))+1;
+        H.orders.unshift(mapZakazToOrder(z, oid, false));   /* статусы разложатся по вкладкам */
+        imported++;
+      });
+      if(!maxId){
+        const j1=await strapiReq('/api/zakazies?status=draft&sort=id:desc&pagination[pageSize]=1&fields[0]=id');
+        maxId=(j1.data&&j1.data[0]&&j1.data[0].id)||0;
+      }
+      H.siteLastZakazId=maxId;
+      if(imported){
+        updateBellBadge();
+        if(STATE.page==='orders') renderPage();
+        try{ fullSave(); }catch(e){}
+        toast('Сайт: загружены заказы за 14 дней — '+imported,'success');
+      }
+      console.log('Strapi-заказы: первое подключение, импортировано '+imported+', курсор '+maxId);
+      return imported;
     }
     const j=await strapiReq('/api/zakazies?status=draft&filters[id][$gt]='+H.siteLastZakazId+'&sort=id:asc&pagination[pageSize]=25&populate=*');
     let added=0;
@@ -14568,6 +14958,47 @@ async function strapiReq(path, method, body){
   if(!r.ok) throw new Error('HTTP '+r.status);
   return await r.json();
 }
+
+/* ТИХАЯ АВТОПОДТЯЖКА ЦЕН (29.07-53): раз в час забираем розничные цены
+   с сайта и обновляем карточки каталога — инвентаризация всегда с ценами. */
+let _ppBusy=false;
+async function dbPullPricesAuto(){
+  if(_ppBusy) return 0;
+  try{
+    if(!apiToken()) return 0;
+    if(!(DATA.siteCatalog||[]).length) return 0;
+    if(Date.now()-(DATA._priceAutoAtMs||0)<3600000) return 0;
+    _ppBusy=true;
+    let page=1, pageCount=1; const arr=[];
+    while(page<=pageCount && page<=40){
+      const j=await strapiReq('/api/produkties?fields[0]=documentId&fields[1]=current_priced&pagination[page]='+page+'&pagination[pageSize]=100');
+      (j.data||[]).forEach(x=>arr.push(x));
+      pageCount=(j.meta&&j.meta.pagination&&j.meta.pagination.pageCount)||1;
+      page++;
+    }
+    const byDoc=new Map(DATA.siteCatalog.map(p=>[p.documentId,p]));
+    const byId=new Map(DATA.siteCatalog.map(p=>[p.siteProductId,p]));
+    let updated=0;
+    arr.forEach(x=>{
+      const card=byDoc.get(x.documentId)||byId.get(x.id);
+      if(card && x.current_priced!=null){
+        const np=Math.round(parseFloat(x.current_priced));
+        if(np && card.price!==np){ card.price=np; updated++; }
+      }
+    });
+    DATA._priceAutoAtMs=Date.now();
+    if(updated){
+      DATA.siteCatalogVersion=(DATA.siteCatalogVersion||0)+1;
+      DATA.siteCatalogSyncedAt=DATA.today+' '+nowTime();
+      try{ fullSave(); }catch(e){}
+      console.log('Автоцены с сайта: обновлено '+updated+' карточек');
+    }
+    return updated;
+  }catch(e){ console.warn('автоцены:', e.message); return 0; }
+  finally{ _ppBusy=false; }
+}
+setTimeout(()=>{ try{ dbPullPricesAuto(); }catch(e){} }, 15000);
+setInterval(()=>{ try{ dbPullPricesAuto(); }catch(e){} }, 600000);
 
 async function dbPullPrices(c){
   try{
@@ -18914,7 +19345,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-43';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-56';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -19671,6 +20102,14 @@ function openLeadDialog(id, c){
   const sendMsg=()=>{
     const inp=document.getElementById('ldInput');
     const v=(inp.value||'').trim(); if(!v) return;
+    /* ЗАЩИТА ОТ СКАНЕРА (29.07-54): длинный чисто-цифровой код, влетевший со
+       скоростью сканера, — это штрихкод, а не сообщение клиенту */
+    if(/^\d{7,25}$/.test(v) && inp._scanT0>0 && (Date.now()-inp._scanT0) < v.length*35+250){
+      inp.value=''; inp._scanT0=0;
+      toast('Похоже на скан штрихкода — клиенту НЕ отправлено. Сканировать товар: «📦 Инвентаризация» на Складе или окно выдачи заказа.','error');
+      try{ beep('err'); }catch(e){}
+      return;
+    }
     const real=!!(l.chatKey && l.chatId);   /* настоящий канал: ответ уйдёт клиенту */
     const msg={id:(l.msgs.length?Math.max(...l.msgs.map(m=>m.id)):0)+1, dir:'out', text:v, at:DATA.today+' '+nowTime(), status:(real?'pending':'sent'), tsMs:Date.now()};
     l.msgs.push(msg);
@@ -19691,7 +20130,15 @@ function openLeadDialog(id, c){
   const sb=document.getElementById('ldSend');
   if(sb) sb.addEventListener('click', sendMsg);
   const inp=document.getElementById('ldInput');
-  if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); sendMsg(); } });
+  if(inp){
+    inp.addEventListener('paste', ()=>{ inp._scanT0=-1; });   /* вставка — точно человек */
+    inp.addEventListener('input', ()=>{
+      if(!inp.value){ inp._scanT0=0; return; }
+      if(inp._scanT0===-1) return;
+      if(!inp._scanT0) inp._scanT0=Date.now();   /* время первого символа */
+    });
+    inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); sendMsg(); } });
+  }
   const pb=document.getElementById('ldProfile');
   if(pb) pb.addEventListener('click', ()=>openClientProfileModal(l.id, c));
   document.querySelectorAll('#modalBox [data-ledit]').forEach(el=>el.addEventListener('click',()=>openLeadEditFieldModal(l.id, el.dataset.ledit, c)));
@@ -20800,9 +21247,28 @@ setInterval(()=>{ try{ archiveOldClosedOrders(); }catch(e){} }, 3600000);
 /* Двойная база: при загрузке берём САМЫЙ СВЕЖИЙ снимок из трёх мест —
    этот браузер, локальный сервер (комп), облако (Render). */
 (async function initialStatePull(){
-  /* АВТОНАСТРОЙКА: система открыта с нашего сервера, а связь ещё не
-     настроена — сервер сам выдаёт адрес API и ключ (env AUTO_SETUP=1).
-     Новый комп/браузер работает сразу, без ручного ввода. */
+  /* ПЛАВНЫЙ СТАРТ (29.07-51): пока сверяем снимки (браузер / локальный сервер /
+     облако) — держим одну спокойную шторку. Если нужен свежий снимок, страница
+     обновляется прямо под шторкой: для пользователя это один процесс загрузки,
+     без «морганий». Шторка живёт максимум 4 секунды. */
+  let veil=null, veilTimer=null;
+  const veilOff=()=>{ try{ if(veil){ const v=veil; veil=null; v.style.opacity='0'; setTimeout(()=>{ try{ v.remove(); }catch(e){} }, 400); } }catch(e){} };
+  try{
+    if(localSyncUrl() || erpServerCreds() || /^https?:/.test(location.protocol)){
+      veil=document.createElement('div');
+      veil.id='bootVeil';
+      veil.style.cssText='position:fixed;inset:0;z-index:100001;background:radial-gradient(1100px 700px at 50% -10%, #182142 0%, #0b0e14 60%);display:flex;align-items:center;justify-content:center;opacity:1;transition:opacity .35s;';
+      veil.innerHTML='<div style="text-align:center;">'+
+        '<div style="width:58px;height:58px;margin:0 auto 14px;border-radius:17px;background:linear-gradient(135deg,#5e8bff,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:27px;font-weight:900;color:#fff;">S</div>'+
+        '<div style="font-weight:900;font-size:19px;color:#fff;">Store Control</div>'+
+        '<div style="color:#8b92a0;font-size:12.5px;margin-top:7px;" id="bootVeilMsg">Загружаю данные…</div>'+
+        '<div style="width:160px;height:3px;margin:14px auto 0;border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden;"><div style="width:40%;height:100%;border-radius:2px;background:linear-gradient(90deg,#5e8bff,#8b5cf6);animation:bootSlide 1.1s ease-in-out infinite;"></div></div>'+
+        '<style>@keyframes bootSlide{0%{transform:translateX(-100%);}100%{transform:translateX(400%);}}</style>'+
+      '</div>';
+      document.body.appendChild(veil);
+      veilTimer=setTimeout(veilOff, 4000);   /* сервер думает дольше — работаем, не ждём */
+    }
+  }catch(e){}
   try{ await erpAutoConnect(); }catch(e){}
   let bestMs=0, best=null, bestSrc='';
   try{ const raw=localStorage.getItem(LS_FULL_KEY); if(raw) bestMs=(JSON.parse(raw).savedAtMs)||0; }catch(e){}
@@ -20822,14 +21288,55 @@ setInterval(()=>{ try{ archiveOldClosedOrders(); }catch(e){} }, 3600000);
     }catch(e){}
   }
   if(best){
-    try{ localStorage.setItem(LS_FULL_KEY, JSON.stringify(best)); }catch(e){}
-    window._skipAutosave=true;
-    toast('Данные из '+bestSrc+' новее — обновляю…','info');
-    setTimeout(()=>location.reload(), 600);
+    /* защита от вечного цикла: максимум 2 обновления в минуту */
+    let allow=true;
+    try{
+      const g=JSON.parse(sessionStorage.getItem('erp_boot_reloads')||'{"n":0,"t":0}');
+      if(Date.now()-g.t>60000) g.n=0;
+      g.t=Date.now(); g.n++;
+      sessionStorage.setItem('erp_boot_reloads', JSON.stringify(g));
+      if(g.n>2) allow=false;
+    }catch(e){}
+    if(allow){
+      /* СТРАХОВКА СКЛАДА: единицы, которых нет в новом снимке, — в резерв */
+      try{
+        const cur=JSON.parse(localStorage.getItem(LS_FULL_KEY)||'null');
+        if(cur && cur.stores){
+          const imeiSet=(snap)=>{ const s=new Set(); Object.values(snap.stores||{}).forEach(d=>{ const w=(d&&d.warehouse)||{}; ['tech','tradein'].forEach(k=>(w[k]||[]).forEach(x=>{ if(x&&x.imei) s.add(String(x.imei)); })); }); return s; };
+          const newSet=imeiSet(best);
+          const lost=[];
+          Object.entries(cur.stores||{}).forEach(([sid,d])=>{
+            const w=(d&&d.warehouse)||{};
+            ['tech','tradein'].forEach(k=>(w[k]||[]).forEach(x=>{
+              if(x && x.imei && !newSet.has(String(x.imei))) lost.push({store:sid, tab:k, item:x});
+            }));
+          });
+          if(lost.length){
+            const prev=JSON.parse(localStorage.getItem('erp_wh_lost')||'[]');
+            const seen=new Set(prev.map(r=>String(r.item&&r.item.imei)));
+            lost.forEach(r=>{ if(!seen.has(String(r.item.imei))) prev.push(r); });
+            localStorage.setItem('erp_wh_lost', JSON.stringify(prev.slice(-500)));
+            console.warn('Страховка склада: отложено единиц — '+lost.length);
+          }
+        }
+      }catch(e){}
+      try{ localStorage.setItem(LS_FULL_KEY, JSON.stringify(best)); }catch(e){}
+      window._skipAutosave=true;
+      if(veilTimer) clearTimeout(veilTimer);
+      const bm=document.getElementById('bootVeilMsg');
+      if(bm) bm.textContent='Свежие данные из '+bestSrc+' — применяю…';
+      /* остаёмся ПОД шторкой до перезагрузки — моргания не видно */
+      setTimeout(()=>location.reload(), 250);
+      return;
+    }
+    console.warn('Обновление снимка пропущено (защита от цикла) — применится при следующем открытии');
   } else {
     /* наша копия самая свежая (или единственная) — разослать её в оба хранилища */
     try{ const p=buildFullPayload(); localSyncPush(p); cloudSyncPush(p); }catch(e){}
   }
+  try{ sessionStorage.setItem('erp_boot_reloads', JSON.stringify({n:0, t:Date.now()})); }catch(e){}
+  if(veilTimer) clearTimeout(veilTimer);
+  veilOff();
 })();
 /* Миграция после восстановления:
    1) команда ОБЩАЯ на все адреса — сотрудники/график/отметки всех магазинов
