@@ -302,6 +302,20 @@ async function kvSet(k, v) {
   try { fs.writeFileSync(KV_FILE, JSON.stringify(o)); } catch (e) {}
 }
 
+/* --- авторизованные компьютеры: личный ключ на каждый комп, можно отозвать --- */
+let _devices = null;
+async function devicesLoad() {
+  if (_devices) return _devices;
+  try { _devices = JSON.parse((await kvGet('devices_json')) || '[]') || []; }
+  catch (e) { _devices = []; }
+  return _devices;
+}
+async function devicesSave() {
+  try { await kvSet('devices_json', JSON.stringify((_devices || []).map(d => {
+    const c = Object.assign({}, d); delete c._seenDirty; return c;
+  }))); } catch (e) {}
+}
+
 /* --- хранилище сообщений (PG или файл), дедупликация по key --- */
 const CH_FILE = path.join(process.env.DATA_DIR || __dirname, 'channel-msgs.json');
 let chFileMsgs = null;
@@ -729,7 +743,15 @@ async function channelSend(ch, store, chatId, text) {
 
 function checkToken(req, url) {
   const auth = req.headers.authorization || ('Bearer ' + (url.searchParams.get('token') || ''));
-  return auth === 'Bearer ' + STORE_TOKEN;
+  if (auth === 'Bearer ' + STORE_TOKEN) return true;
+  const t = auth.replace(/^Bearer /, '');
+  const d = (_devices || []).find(x => x.token && x.token === t);
+  if (d) {
+    d.lastSeen = new Date().toISOString();
+    if (!d._seenDirty) { d._seenDirty = 1; setTimeout(() => { d._seenDirty = 0; devicesSave(); }, 60000); }
+    return true;
+  }
+  return false;
 }
 function readBody(req, cb) {
   let raw = '';
@@ -744,7 +766,7 @@ const server = http.createServer((req, res) => {
 
   /* ---- Страницы ---- */
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return sendFile(res, 'index.html');
-  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-31' });
+  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-37' });
 
   /* ---- Автонастройка нового компа: открыл систему с сервера — она сама
      получила адрес API и ключ. Включается переменной AUTO_SETUP=1. ---- */
@@ -785,8 +807,49 @@ const server = http.createServer((req, res) => {
           console.log('[авторизация компа] неверный PIN с ' + ip);
           return sendJson(res, 401, { error: 'PIN не найден. Проверьте или попросите владельца задать вам PIN.' });
         }
-        console.log('[авторизация компа] ключ выдан: ' + who + ' (' + ip + ')');
-        sendJson(res, 200, { ok: true, storeToken: STORE_TOKEN, who });
+        await devicesLoad();
+        const tok = 'dev_' + crypto.randomBytes(18).toString('hex');
+        _devices.unshift({
+          id: 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          token: tok, who,
+          ip: String(ip).slice(0, 60),
+          ua: String(req.headers['user-agent'] || '').slice(0, 120),
+          at: new Date().toISOString(), lastSeen: new Date().toISOString()
+        });
+        if (_devices.length > 100) _devices.length = 100;
+        await devicesSave();
+        console.log('[авторизация компа] личный ключ выдан: ' + who + ' (' + ip + ')');
+        sendJson(res, 200, { ok: true, storeToken: tok, who });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    });
+  }
+
+  /* ---- Авторизованные компьютеры: список (ключи не показываем целиком) ---- */
+  if (req.method === 'GET' && url.pathname === '/api/devices') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    (async () => {
+      try {
+        await devicesLoad();
+        sendJson(res, 200, { ok: true, devices: (_devices || []).map(d => ({
+          id: d.id, who: d.who, ip: d.ip, ua: d.ua, at: d.at, lastSeen: d.lastSeen,
+          tail: String(d.token || '').slice(-4)
+        })) });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    })();
+    return;
+  }
+
+  /* ---- Отозвать доступ компьютера: его личный ключ перестаёт работать ---- */
+  if (req.method === 'POST' && url.pathname === '/api/devices/revoke') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return readBody(req, async b => {
+      try {
+        await devicesLoad();
+        const before = (_devices || []).length;
+        _devices = (_devices || []).filter(d => d.id !== String(b.id || ''));
+        await devicesSave();
+        console.log('[авторизация компа] доступ отозван: ' + String(b.id || ''));
+        sendJson(res, 200, { ok: true, removed: before - _devices.length });
       } catch (e) { sendJson(res, 500, { error: e.message }); }
     });
   }
@@ -833,8 +896,7 @@ const server = http.createServer((req, res) => {
 
   /* ---- ERP забирает новые заявки (по токену) ---- */
   if (req.method === 'GET' && url.pathname === '/api/leads') {
-    const auth = req.headers.authorization || ('Bearer ' + (url.searchParams.get('token') || ''));
-    if (auth !== 'Bearer ' + STORE_TOKEN) return sendJson(res, 401, { error: 'Неверный токен' });
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
 
     const since = parseInt(url.searchParams.get('since')) || 0;
     (async () => {
@@ -1280,4 +1342,5 @@ dbInit()
     console.log('Store Control запущен на порту ' + PORT);
     console.log('ERP: /   Форма: /form   API: /api   Хранение: ' + (pool ? 'PostgreSQL' : 'файл leads.json'));
     if (STORE_TOKEN.indexOf('ПОМЕНЯЙТЕ') !== -1) console.log('!!! Задайте STORE_TOKEN в переменных окружения !!!');
+  devicesLoad().then(d => console.log('[авторизация компа] в базе компов: ' + d.length)).catch(() => {});
   }));
