@@ -13052,6 +13052,13 @@ function controlPanelHTML(){
   html+='</div>';
 
   /* --- 3. Сотрудники и доступы (справочник + точки доступа) --- */
+  if(isBossRole()){
+    html+='<div class="card" style="margin-bottom:14px;border-color:var(--warning);">'+
+      '<div class="kpi-label">🧹 Демо-остатки</div>'+
+      '<div class="tsub" style="margin-top:4px;line-height:1.6;">Одним нажатием убрать всё демо, что могло остаться в рабочей базе: '+
+      'демо-сотрудников Сергея Т. и Марата Б. (мастер Виктор остаётся — он ведёт Сервис), демо-уведомления и демо-идеи. Реальные данные не трогаются.</div>'+
+      '<button class="btn btn-sm btn-danger" id="demoDetoxBtn" style="margin-top:10px;">Убрать демо-остатки</button></div>';
+  }
   html+='<div class="section"><div class="section-head"><div class="section-title">Сотрудники и доступы</div>'+
     (isBossRole()||STATE.role==='admin'?'<button class="btn btn-sm" id="tgChatIdsBtn">✈ Найти chat_id</button>':'')+'</div>'+
     '<div class="tsub" style="margin-bottom:10px;">Уведомления о новых заказах и заявках получают владелец и те, кто сегодня на смене (с заполненным Telegram chat_id). Выходные не беспокоим. Сотрудник пишет боту любое сообщение → «Найти chat_id» → впишите число в его карточку.</div>';
@@ -13098,7 +13105,57 @@ function controlPanelHTML(){
   return html;
 }
 
+function demoDetox(){
+  let n=0;
+  const H=chHomeStore();
+  /* демо-сотрудники: только точные демо-профили по имени+роли */
+  /* мастера Виктора ОСТАВЛЯЕМ (решение владельца 02.08) — он ведёт Сервис */
+  const demoStaff=[['Сергей Т.','Курьер'],['Марат Б.','Сборщик']];
+  demoStaff.forEach(([nm,rl])=>{
+    const e=DATA.employees.find(x=>x.name===nm && x.role===rl);
+    if(e){
+      const i=DATA.employees.indexOf(e);
+      if(i>=0){ DATA.employees.splice(i,1); n++; }
+      (H._staffRemoved=H._staffRemoved||[]).push(nm);
+      try{
+        Object.values(DATA.shiftAssignments||{}).forEach(day=>{
+          Object.keys(day||{}).forEach(sid=>{
+            if(Array.isArray(day[sid])) day[sid]=day[sid].filter(x=>((x&&typeof x==='object')?x.id:x)!==e.id);
+          });
+        });
+      }catch(e2){}
+    }
+  });
+  /* демо-уведомления и демо-идеи — по точным демо-текстам */
+  Object.values(STORE_DATA).forEach(d=>{
+    if(Array.isArray(d.notifications)){
+      const before=d.notifications.length;
+      d.notifications=d.notifications.filter(x=>!/поставку S24 Ultra|заявке №5003|заказ №10484/.test(x.text||''));
+      n+=before-d.notifications.length;
+    }
+    if(Array.isArray(d.taskIdeas)){
+      const before=d.taskIdeas.length;
+      d.taskIdeas=d.taskIdeas.filter(x=>!/Хиты недели|QR-код на отзыв/.test(x.title||''));
+      n+=before-d.taskIdeas.length;
+    }
+  });
+  try{ fullSave(); }catch(e){}
+  return n;
+}
 function wireControlPanel(c){
+  const dx=document.getElementById('demoDetoxBtn');
+  if(dx) dx.addEventListener('click',()=>{
+    openModal('Убрать демо-остатки?','',
+      '<div class="tsub" style="line-height:1.7;">Будут удалены: демо-сотрудники Сергей Т. (курьер) и Марат Б. (сборщик), '+
+      'демо-уведомления и демо-идеи. Мастер Виктор Н. остаётся. Настоящая команда, заказы, склад и все реальные данные не трогаются.<br><br><b>Отменить будет нельзя.</b></div>',
+      [{label:'Убрать демо', cls:'btn-danger', action:()=>{
+        const n=demoDetox();
+        closeModal();
+        toast(n?('Демо-остатки убраны: '+n):'Демо-остатков не найдено — база чистая','success');
+        renderManage(c);
+      }},
+      {label:'Отмена', cls:'', action:closeModal}]);
+  });
   c.querySelectorAll('[data-emp-del]').forEach(el=>el.addEventListener('click',()=>{
     if(!isBossRole()){ toast('Только владелец','error'); return; }
     const emp=DATA.employees.find(e=>e.id===parseInt(el.dataset.empDel));
@@ -19660,7 +19717,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-69';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-70';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
