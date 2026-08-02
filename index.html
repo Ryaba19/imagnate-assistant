@@ -3408,13 +3408,28 @@ async function loadDeviceList(){
     const j=await r.json();
     if(!j || !j.ok) throw new Error((j&&j.error)||'нет ответа');
     const list=j.devices||[];
-    if(!list.length){ box.innerHTML='<div class="tsub" style="margin-top:8px;">Пока пусто — компьютеры появятся здесь после авторизации по PIN.</div>'; return; }
+    const legacy=creds && !/^dev_/.test(String(creds.token||''));
+    const legacyNote=legacy?('<div class="tsub" style="margin-top:8px;color:var(--warning);">Этот компьютер работает на общем ключе (старый способ) — поэтому его нет в списке. '+
+      'Нажмите кнопку и введите свой PIN: комп получит личный ключ и появится здесь.</div>'+
+      '<button class="btn btn-sm btn-primary" id="devRebind" style="margin-top:8px;">🔑 Привязать этот компьютер по PIN</button>'):'';
+    if(!list.length){
+      box.innerHTML='<div class="tsub" style="margin-top:8px;">Пока пусто — здесь появляются компьютеры, привязанные лично по PIN (окно «Новый компьютер»). '+
+        'Вход по логину и PIN на экране входа — это другое: он не привязывает комп.</div>'+legacyNote;
+      const rb=document.getElementById('devRebind');
+      if(rb) rb.addEventListener('click', ()=>erpAutoConnect(true));
+      return;
+    }
     box.innerHTML=list.map(d=>{
       const seen=(d.lastSeen||'').replace('T',' ').slice(0,16);
       return '<div class="hist-row"><div><div class="h-main">'+escHtml(d.who||'—')+' · ключ …'+escHtml(d.tail||'')+'</div>'+
         '<div class="h-sub">добавлен '+escHtml((d.at||'').replace('T',' ').slice(0,16))+' · IP '+escHtml(d.ip||'—')+' · был в сети '+escHtml(seen||'—')+'</div></div>'+
         '<button class="btn btn-sm" data-dev-rm="'+escHtml(String(d.id))+'" data-dev-who="'+escHtml(d.who||'')+'">Отозвать</button></div>';
     }).join('');
+    if(legacy){
+      box.insertAdjacentHTML('beforeend', legacyNote);
+      const rb=document.getElementById('devRebind');
+      if(rb) rb.addEventListener('click', ()=>erpAutoConnect(true));
+    }
     box.querySelectorAll('[data-dev-rm]').forEach(b=>b.addEventListener('click',()=>{
       openModal('Отозвать доступ компьютера?', b.dataset.devWho||'',
         '<div class="tsub" style="line-height:1.6;">Этот компьютер сразу потеряет связь с сервером: облачная база, каналы и заказы с сайта на нём перестанут обновляться. '+
@@ -14959,6 +14974,48 @@ async function strapiReq(path, method, body){
   return await r.json();
 }
 
+/* АВТОСБОРКА КАТАЛОГА (29.07-58): каталог пуст → собираем его сами через
+   сервер-прокси (не упираемся в CORS). Все модели сайта с ценами. */
+let _catBusy=false;
+async function siteCatalogAutoBuild(){
+  if(_catBusy) return 0;
+  try{
+    if((DATA.siteCatalog||[]).length) return 0;   /* каталог уже есть */
+    if(!apiToken()) return 0;
+    _catBusy=true;
+    const all=[];
+    let useFields=true;
+    for(let pg=1, pc=1; pg<=pc && pg<=40; pg++){
+      let j=null;
+      if(useFields){
+        try{
+          j=await strapiReq('/api/produkties?status=draft&fields[0]=documentId&fields[1]=current_priced&fields[2]=nazvanie&fields[3]=slug&sort=id:asc&pagination[page]='+pg+'&pagination[pageSize]=100');
+        }catch(e){ useFields=false; }   /* поле называется иначе — берём карточки целиком */
+      }
+      if(!useFields){
+        j=await strapiReq('/api/produkties?status=draft&sort=id:asc&pagination[page]='+pg+'&pagination[pageSize]=100');
+      }
+      (j.data||[]).forEach(x=>all.push(x));
+      pc=(j.meta&&j.meta.pagination&&j.meta.pagination.pageCount)||1;
+    }
+    const mapped=mapSiteApiItems(all);
+    if(!mapped.length) return 0;
+    DATA.siteCatalog=mapped;
+    DATA.siteCatalogVersion=(DATA.siteCatalogVersion||0)+1;
+    DATA.siteCatalogSyncedAt=DATA.today+' '+nowTime();
+    DATA._priceAutoAtMs=Date.now();   /* цены только что свежие */
+    try{ fullSave(); }catch(e){}
+    toast('Каталог сайта загружен: '+mapped.length+' моделей — инвентаризация с подсказками и ценами готова','success');
+    console.log('Автокаталог: '+mapped.length+' моделей');
+    /* если окно инвентаризации открыто — обновить счётчик карточек */
+    try{ if(document.getElementById('invModel')) openInventoryModal(document.getElementById('pageContent')); }catch(e){}
+    return mapped.length;
+  }catch(e){ console.warn('автокаталог:', e.message); return 0; }
+  finally{ _catBusy=false; }
+}
+setTimeout(()=>{ try{ siteCatalogAutoBuild(); }catch(e){} }, 12000);
+setInterval(()=>{ try{ siteCatalogAutoBuild(); }catch(e){} }, 300000);
+
 /* ТИХАЯ АВТОПОДТЯЖКА ЦЕН (29.07-53): раз в час забираем розничные цены
    с сайта и обновляем карточки каталога — инвентаризация всегда с ценами. */
 let _ppBusy=false;
@@ -19345,7 +19402,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-57';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-59';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
