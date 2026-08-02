@@ -4094,6 +4094,40 @@ function canProcureFor(o){
 }
 
 
+/* ДОТЯЖКА ВРЕМЕНИ (29.07-61): у заказов, импортированных старыми сборками,
+   не было точного времени — забираем его с сайта одним проходом. */
+let _tbBusy=false;
+async function orderTimesBackfill(){
+  if(_tbBusy) return 0;
+  const H=chHomeStore();
+  if(H._timeBackfill61) return 0;
+  if(!apiToken()) return 0;
+  _tbBusy=true;
+  try{
+    const need=(H.orders||[]).filter(o=>!o.createdAtMs && /^strapi_/.test(String(o.externalId||'')));
+    let updated=0;
+    for(let i=0;i<need.length;i+=50){
+      const chunk=need.slice(i,i+50);
+      const q=chunk.map((o,k)=>'filters[id][$in]['+k+']='+String(o.externalId).replace('strapi_','')).join('&');
+      const j=await strapiReq('/api/zakazies?status=draft&'+q+'&pagination[pageSize]=50&fields[0]=id&fields[1]=createdAt');
+      (j.data||[]).forEach(z=>{
+        const o=chunk.find(x=>x.externalId==='strapi_'+z.id);
+        if(o && z.createdAt){ o.createdAtMs=new Date(z.createdAt).getTime(); updated++; }
+      });
+    }
+    /* у остальных точного времени нет нигде — помечаем «примерно», часы не показываем */
+    (H.orders||[]).forEach(o=>{ if(!o.createdAtMs){ const d=parseRuDate(o.date); if(d){ o.createdAtMs=d.getTime()+12*3600000; o._timeApprox=1; } } });
+    H._timeBackfill61=1;
+    try{ fullSave(); }catch(e){}
+    if(updated && STATE.page==='orders') renderPage();
+    console.log('Время заказов: уточнено с сайта — '+updated);
+    return updated;
+  }catch(e){ console.warn('время заказов:', e.message); return 0; }
+  finally{ _tbBusy=false; }
+}
+setTimeout(()=>{ try{ orderTimesBackfill(); }catch(e){} }, 25000);
+setInterval(()=>{ try{ orderTimesBackfill(); }catch(e){} }, 300000);
+
 /* Возраст заказа: «сегодня ЧЧ:ММ» / «вчера» / «N дн назад» / дата. */
 function orderFreshInfo(o){
   let ms=o.createdAtMs;
@@ -4101,7 +4135,7 @@ function orderFreshInfo(o){
   if(!ms) return null;
   const d=new Date(ms), now=new Date();
   const today0=new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const hm=o.createdAtMs? (String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')) : '';
+  const hm=(o.createdAtMs && !o._timeApprox)? (String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')) : '';
   const day0=new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const dd=Math.round((today0-day0)/86400000);   /* календарных дней назад */
   if(dd<=0) return {label:'сегодня'+(hm?' '+hm:''), cls:'color:var(--positive);font-weight:600;'};
@@ -4601,6 +4635,173 @@ function findOrder(id){return DATA.orders.find(o=>o.id===id);}
    закрытия (Выдан/Отменён) дополнительно пишется в o.closedAt — для
    отслеживания. Если статус не меняется — ничего не пишем (защита от
    повторной записи при перерисовке). Вызывать вместо o.status='...'. */
+/* СМС клиенту через наш сервер (провайдер sms.ru, ключ на сервере) */
+function sendSms(to, text){
+  try{
+    const c=erpServerCreds(); if(!c) return Promise.resolve({ok:false, error:'нет связи с сервером'});
+    return fetch(c.api+'/send-sms',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.token},
+      body:JSON.stringify({to:to, text:text})}).then(r=>r.json()).catch(e=>({ok:false, error:String(e)}));
+  }catch(e){ return Promise.resolve({ok:false, error:String(e)}); }
+}
+/* Фирменное HTML-письмо «Заказ готов к выдаче» — в стиле писем сайта IMAGNATE */
+/* Общие блоки фирменных писем (стиль письма подтверждения сайта) */
+function mailShell(innerRows){
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"></head>'+
+  '<body style="margin:0;padding:0;background-color:#000000;">'+
+  '<table role="presentation" width="100%" bgcolor="#000000" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:36px 12px;">'+
+  '<table role="presentation" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;">'+
+  '<tr><td align="center" style="padding:6px 0 0;">'+
+    '<div style="font-family:Arial,Helvetica,sans-serif;font-size:34px;letter-spacing:8px;font-weight:bold;color:#d9c87c;">IMAGNATE</div>'+
+    '<div style="height:2px;max-width:340px;width:70%;background:#d9c87c;margin:12px auto 0;"></div>'+
+  '</td></tr>'+
+  innerRows+
+  '<tr><td style="border-top:1px solid #333;font-size:0;line-height:0;padding-top:26px;">&nbsp;</td></tr>'+
+  '<tr><td align="center" style="font-family:Arial;font-size:15px;color:#ffffff;padding-top:8px;">С уважением, команда интернет-магазина <span style="color:#d9c87c;font-weight:bold;">IMAGNATE</span></td></tr>'+
+  '<tr><td align="center" style="font-family:Arial;font-size:14px;color:#ffffff;padding-top:12px;">Связь с нами: <a href="tel:+79932772774" style="color:#d9c87c;font-weight:bold;text-decoration:none;">8 (993) 277-27-74</a> (с 10:00 до 20:00 по мск)</td></tr>'+
+  '<tr><td align="center" style="font-family:Arial;font-size:13px;color:#9a9a9a;padding:12px 0 6px;">© IMAGNATE, 2016-2026 Все права защищены.</td></tr>'+
+  '</table></td></tr></table></body></html>';
+}
+function mailHead(title, badge, badgeColor, orderNo){
+  return '<tr><td align="center" style="padding:30px 0 6px;">'+
+    '<span style="font-family:Arial;font-size:28px;font-weight:bold;color:#ffffff;">'+title+'</span>&nbsp;&nbsp;'+
+    '<span style="display:inline-block;background:'+badgeColor+';color:#ffffff;font-family:Arial;font-size:13px;font-weight:bold;letter-spacing:1px;padding:9px 18px;border-radius:24px;vertical-align:middle;">'+badge+'</span>'+
+  '</td></tr>'+
+  '<tr><td align="center" style="font-family:Arial;font-size:15px;color:#d9c87c;font-weight:bold;padding:2px 0 24px;">№ '+escHtml(String(orderNo))+'</td></tr>'+
+  '<tr><td style="border-top:1px solid #333333;font-size:0;line-height:0;">&nbsp;</td></tr>';
+}
+function mailFmtRub(n){ return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g,' ')+' \u20BD'; }
+function mailItemsTable(o){
+  const items=(o.items||[]);
+  const rows=items.map(i=>'<tr>'+
+    '<td style="font-family:Arial;font-size:15px;color:#ffffff;background:#1f1f1f;border-bottom:1px solid #333;padding:16px 18px;line-height:1.5;">'+escHtml(i.name||'Товар')+'</td>'+
+    '<td align="center" style="font-family:Arial;font-size:15px;color:#ffffff;background:#1f1f1f;border-bottom:1px solid #333;padding:16px 8px;">1</td>'+
+    '<td align="right" style="font-family:Arial;font-size:15px;color:#ffffff;background:#1f1f1f;border-bottom:1px solid #333;padding:16px 18px;white-space:nowrap;">'+mailFmtRub(i.price||0)+'</td>'+
+  '</tr>').join('');
+  return '<tr><td align="center" style="font-family:Arial;font-size:22px;font-weight:bold;color:#ffffff;padding:28px 0 14px;">Состав заказа</td></tr>'+
+  '<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-radius:10px;overflow:hidden;">'+
+    '<tr>'+
+      '<td style="font-family:Arial;font-size:14px;font-weight:bold;color:#d9c87c;background:#2b2b2b;border-bottom:2px solid #d9c87c;padding:15px 18px;">Товар</td>'+
+      '<td align="center" style="font-family:Arial;font-size:14px;font-weight:bold;color:#d9c87c;background:#2b2b2b;border-bottom:2px solid #d9c87c;padding:15px 8px;">Кол-во</td>'+
+      '<td align="right" style="font-family:Arial;font-size:14px;font-weight:bold;color:#d9c87c;background:#2b2b2b;border-bottom:2px solid #d9c87c;padding:15px 18px;">Сумма</td>'+
+    '</tr>'+rows+
+  '</table></td></tr>';
+}
+function mailTotalCard(o){
+  const total=(o.items||[]).reduce((s,i)=>s+(i.price||0),0);
+  return '<tr><td style="padding:24px 0 0;">'+
+  '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="background:#1f1f1f;border-radius:14px;padding:24px 28px;">'+
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">'+
+      '<tr><td style="font-family:Arial;font-size:15px;color:#c9c9c9;padding-bottom:10px;">Сумма товаров:</td>'+
+      '<td align="right" style="font-family:Arial;font-size:15px;color:#ffffff;padding-bottom:10px;white-space:nowrap;">'+mailFmtRub(total)+'</td></tr>'+
+      '<tr><td style="font-family:Arial;font-size:15px;color:#c9c9c9;padding-bottom:16px;">Стоимость доставки:</td>'+
+      '<td align="right" style="font-family:Arial;font-size:15px;color:#4caf7d;font-weight:bold;padding-bottom:16px;">Бесплатно</td></tr>'+
+      '<tr><td colspan="2" style="border-top:1px solid #3a3a3a;font-size:0;">&nbsp;</td></tr>'+
+      '<tr><td style="font-family:Arial;font-size:24px;font-weight:bold;color:#d9c87c;padding-top:6px;">Итого к оплате:</td>'+
+      '<td align="right" style="font-family:Arial;font-size:26px;font-weight:bold;color:#d9c87c;padding-top:6px;white-space:nowrap;">'+mailFmtRub(total)+'</td></tr>'+
+    '</table>'+
+  '</td></tr></table></td></tr>';
+}
+/* Фирменное письмо «Заказ в пути» */
+function transitMailHtml(o){
+  const steps='<tr><td style="padding:0 0 2px;">'+
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="background:#1f1f1f;border-radius:14px;padding:20px 16px;">'+
+      '<span style="font-family:Arial;font-size:14px;font-weight:bold;color:#4caf7d;">\u2713 Принят</span>'+
+      '<span style="font-family:Arial;font-size:14px;color:#555;">&nbsp;&nbsp;———&nbsp;&nbsp;</span>'+
+      '<span style="font-family:Arial;font-size:14px;font-weight:bold;color:#d9c87c;">\u25CF В пути</span>'+
+      '<span style="font-family:Arial;font-size:14px;color:#555;">&nbsp;&nbsp;———&nbsp;&nbsp;</span>'+
+      '<span style="font-family:Arial;font-size:14px;font-weight:bold;color:#777;">Готов к выдаче</span>'+
+    '</td></tr></table>'+
+  '</td></tr>';
+  const greet='<tr><td style="padding:14px 0 22px;">'+
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="background:#1f1f1f;border-radius:14px;padding:26px 28px;border-left:3px solid #d9c87c;">'+
+      '<div style="font-family:Arial;font-size:17px;color:#ffffff;line-height:1.7;"><span style="color:#d9c87c;font-weight:bold;">'+escHtml(o.name||'Здравствуйте')+'</span>, заказ подтверждён.</div>'+
+      '<div style="font-family:Arial;font-size:17px;color:#ffffff;line-height:1.7;margin-top:12px;">Товар уже в пути в наш магазин, срок — <b>1–2 дня</b>.</div>'+
+      '<div style="font-family:Arial;font-size:16px;color:#c9c9c9;line-height:1.7;margin-top:12px;">Следующее письмо придёт, когда заказ можно будет забрать.</div>'+
+    '</td></tr></table>'+
+  '</td></tr>';
+  return mailShell(
+    mailHead('Заказ в пути','\uD83D\uDE9A В ПУТИ','#7a6a1e', o.siteOrderNo||o.id)+
+    greet+steps+
+    mailItemsTable(o)+
+    mailTotalCard(o)
+  );
+}
+/* «Ждём товар» → письмо клиенту «Заказ в пути» (один раз на заказ) */
+function notifyOrderTransit(o){
+  try{
+    if(!o || o.transitNotified) return;
+    if(DATA.settings && DATA.settings.readyNotifyEnabled===false) return;
+    if(!(o.email && o.email!=='-' && DATA.settings && DATA.settings.mailRealSend)) return;
+    o.transitNotified=true;
+    sendRealMail(o.email, 'Ваш заказ №'+(o.siteOrderNo||o.id)+' в пути — IMAGNATE', transitMailHtml(o), true);
+    (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'note', comment:'\u2709 Письмо клиенту: заказ в пути'});
+    try{ fullSave(); }catch(e){}
+  }catch(e){}
+}
+function readyMailHtml(o){
+  const adr=(DATA.settings&&DATA.settings.readyMsgAddress)||'ТЦ «Лунный», Лунная ул. 4';
+  const mapUrl='https://yandex.ru/maps/?text='+encodeURIComponent(adr.replace(/[«»]/g,''));
+  const greet='<tr><td style="padding:14px 0 22px;">'+
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="background:#1f1f1f;border-radius:14px;padding:26px 28px;border-left:3px solid #4caf7d;">'+
+      '<div style="font-family:Arial;font-size:17px;color:#ffffff;line-height:1.7;"><span style="color:#d9c87c;font-weight:bold;">'+escHtml(o.name||'Здравствуйте')+'</span>, заказ можно забирать.</div>'+
+      '<div style="font-family:Arial;font-size:17px;color:#ffffff;line-height:1.7;margin-top:12px;">Товар в магазине, <b>проверен</b> и ждёт вас.</div>'+
+      '<div style="font-family:Arial;font-size:16px;color:#c9c9c9;line-height:1.7;margin-top:12px;">Выдача — ежедневно с 10:00 до 20:00, понадобится только <b style="color:#ffffff;">номер заказа</b>.</div>'+
+    '</td></tr></table>'+
+  '</td></tr>';
+  const steps='<tr><td style="padding:0 0 2px;">'+
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="background:#1f1f1f;border-radius:14px;padding:20px 16px;">'+
+      '<span style="font-family:Arial;font-size:14px;font-weight:bold;color:#4caf7d;">✓ Принят</span>'+
+      '<span style="font-family:Arial;font-size:14px;color:#555;">&nbsp;&nbsp;———&nbsp;&nbsp;</span>'+
+      '<span style="font-family:Arial;font-size:14px;font-weight:bold;color:#4caf7d;">✓ В пути</span>'+
+      '<span style="font-family:Arial;font-size:14px;color:#555;">&nbsp;&nbsp;———&nbsp;&nbsp;</span>'+
+      '<span style="font-family:Arial;font-size:14px;font-weight:bold;color:#d9c87c;">● Готов к выдаче</span>'+
+    '</td></tr></table>'+
+  '</td></tr>';
+  const adrBlock='<tr><td style="padding:28px 0 0;">'+
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="background:#1f1f1f;border:1px solid #d9c87c;border-radius:14px;padding:28px;">'+
+      '<div style="font-family:Arial;font-size:19px;font-weight:bold;color:#ffffff;line-height:1.6;">📍 Забрать заказ: <span style="color:#d9c87c;">'+escHtml(adr)+'</span></div>'+
+      '<div style="font-family:Arial;font-size:14px;color:#c9c9c9;margin-top:8px;">ежедневно с 10:00 до 20:00 · назовите номер заказа №'+escHtml(String(o.siteOrderNo||o.id))+'</div>'+
+      '<div style="margin-top:18px;"><a href="'+mapUrl+'" style="display:inline-block;background:#d9c87c;color:#000000;font-family:Arial;font-size:15px;font-weight:bold;text-decoration:none;padding:13px 28px;border-radius:24px;">Построить маршрут</a></div>'+
+    '</td></tr></table>'+
+  '</td></tr>';
+  return mailShell(
+    mailHead('Заказ готов к выдаче','ГОТОВ','#2e7d4f', o.siteOrderNo||o.id)+
+    greet+steps+
+    mailItemsTable(o)+
+    mailTotalCard(o)+
+    adrBlock
+  );
+}
+/* «Готов к выдаче» → сообщение клиенту: СМС, при недоступности — письмо */
+async function notifyOrderReady(o){
+  try{
+    if(!o || o.readyNotified) return;
+    if(DATA.settings && DATA.settings.readyNotifyEnabled===false) return;
+    o.readyNotified=true;   /* один раз на заказ */
+    const model=(o.items||[]).map(i=>i&&i.name).filter(Boolean).slice(0,2).join(', ');
+    const adr=(DATA.settings&&DATA.settings.readyMsgAddress)||'ТЦ «Лунный», Лунная ул. 4';
+    const mapUrl='https://yandex.ru/maps/?text='+encodeURIComponent(adr.replace(/[«»]/g,''));
+    const text='Ваш заказ №'+(o.siteOrderNo||o.id)+(model?' ('+model.slice(0,60)+')':'')+' готов к выдаче! Ждём вас: '+adr+'. Маршрут: '+mapUrl+' iMagnate';
+    let sent=false;
+    if(DATA.settings && DATA.settings.readySmsEnabled===true &&
+       o.phone && String(o.phone).replace(/\D/g,'').length>=10 && erpServerCreds()){
+      const r=await sendSms(o.phone, text);
+      if(r && r.ok){
+        sent=true;
+        (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'note', comment:'📩 СМС клиенту: заказ готов к выдаче'});
+      } else if(r && r.error && !window._smsWarned){
+        window._smsWarned=true;
+        toast('СМС клиенту не ушло: '+r.error,'info');
+      }
+    }
+    if(o.email && o.email!=='-' && DATA.settings && DATA.settings.mailRealSend){
+      sendRealMail(o.email, 'Ваш заказ №'+(o.siteOrderNo||o.id)+' готов к выдаче — IMAGNATE', readyMailHtml(o), true);
+      (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'note', comment:'✉ Фирменное письмо клиенту: заказ готов к выдаче'});
+      sent=true;
+    }
+    if(sent){ try{ fullSave(); }catch(e){} }
+  }catch(e){}
+}
 function setOrderStatus(o, newStatus){
   if(!o) return newStatus;
   if(!Array.isArray(o.statusHistory)) o.statusHistory=[];
@@ -4615,6 +4816,8 @@ function setOrderStatus(o, newStatus){
      отмена или возврат в работу — снимает заказ с рассылки. */
   if(newStatus==='done') scheduleReviewMail(o);
   else cancelReviewMail(o.id, newStatus==='cancel' ? 'Заказ отменён' : 'Заказ вернулся в работу');
+  if(newStatus==='ready'){ try{ notifyOrderReady(o); }catch(e){} }   /* клиенту: «готов к выдаче» */
+  if(newStatus==='awaiting_stock'){ try{ notifyOrderTransit(o); }catch(e){} }   /* клиенту: «заказ в пути» */
   return newStatus;
 }
 
@@ -4852,6 +5055,10 @@ function openOrderSettingsModal(){
     '<div class="drill-divider"></div><div class="drill-block-label">Боевые уведомления (через тот же сервер)</div>'+
     '<div class="toggle-row" style="margin:8px 0;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="setTgEnabled" '+(DATA.settings.tgEnabled?'checked':'')+'> Telegram-уведомления владельцу (упавшие заявки, просроченные ремонты, недостачи, заказы с сайта)</label></div>'+
     '<div class="toggle-row" style="margin:8px 0;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="setMailReal" '+(DATA.settings.mailRealSend?'checked':'')+'> Реальная отправка писем клиентам (подтверждение заказа, письмо-оценка)</label></div>'+
+    '<div class="toggle-row" style="margin:8px 0;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="setReadyNotify" '+(DATA.settings.readyNotifyEnabled===false?'':'checked')+'> ✉ Письмо клиенту при переводе заказа в «Готов к выдаче» (бесплатно)</label></div>'+
+    '<div class="toggle-row" style="margin:8px 0;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="setReadySms" '+(DATA.settings.readySmsEnabled===true?'checked':'')+'> 📩 Дублировать СМС (платно, ~3-4 ₽/шт, нужен ключ SMS_RU_API_ID) — по умолчанию выключено</label></div>'+
+    '<div class="field" style="margin:6px 0;"><label>Адрес в сообщении клиенту</label><input class="input-mini" id="setReadyAddr" style="width:100%;" value="'+escAttr((DATA.settings.readyMsgAddress)||'ТЦ «Лунный», Лунная ул. 4')+'"></div>'+
+    '<p class="tsub">СМС уходят, когда на сервере задан ключ SMS_RU_API_ID (кабинет sms.ru, ~2-4 ₽ за СМС). Без ключа система отправит письмо на email клиента (если включена почта выше).</p>'+
     '<p class="tsub">Для работы на сервере должны быть заданы TELEGRAM_BOT_TOKEN / SMTP-переменные — см. файл «НАСТРОЙКА-УВЕДОМЛЕНИЙ.md».</p>'+
     (tech?
       '<div class="drill-divider"></div><div class="drill-block-label">Локальный сервер данных (база на компьютере владельца)</div>'+
@@ -4886,6 +5093,9 @@ function openOrderSettingsModal(){
     if(!isNaN(fee)&&fee>=0) DATA.settings.cardFeePct=fee;
     const tgC=document.getElementById('setTgEnabled'); if(tgC) DATA.settings.tgEnabled=tgC.checked;
     const mrC=document.getElementById('setMailReal'); if(mrC) DATA.settings.mailRealSend=mrC.checked;
+    const rnC=document.getElementById('setReadyNotify'); if(rnC) DATA.settings.readyNotifyEnabled=rnC.checked;
+    const rsC=document.getElementById('setReadySms'); if(rsC) DATA.settings.readySmsEnabled=rsC.checked;
+    const raC=document.getElementById('setReadyAddr'); if(raC && raC.value.trim()) DATA.settings.readyMsgAddress=raC.value.trim();
     const laC=document.getElementById('setLocalApi'); if(laC) DATA.settings.localApiUrl=laC.value.trim();
     const csC=document.getElementById('setCloudSync'); if(csC) DATA.settings.cloudSyncEnabled=csC.checked;
     const stT=document.getElementById('setStrapiToken');
@@ -14571,6 +14781,8 @@ function applySiteOrderStatus(o, rawSt, stamp, dStore){
     o.confirmedAt=o.confirmedAt||stamp;   /* сайт двинул заказ — значит, он подтверждён */
     (o.statusHistory=o.statusHistory||[]).push({from, to:mapped, at:stamp, by:'Статус сайта'});
     (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'status', comment:'Сайт: заказ переведён во вкладку «'+((STATUS_LABELS[mapped]||[mapped])[0])+'»'});
+    if(mapped==='ready'){ try{ notifyOrderReady(o); }catch(e){} }
+    if(mapped==='awaiting_stock'){ try{ notifyOrderTransit(o); }catch(e){} }
     return true;
   }
   return false;
@@ -19420,7 +19632,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-60';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-68';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
