@@ -4187,6 +4187,7 @@ function renderOrders(c){
     }).join('')+
   '</div><div class="topbar-spacer"></div>'+
   (isBossRole()?'<button class="btn btn-sm" id="mailSettingsBtn" title="Настройки клиентских рассылок: подтверждение заказа и оценка после выдачи">✉ Рассылки</button>':'')+
+  (isBossRole()?'<button class="btn btn-sm" id="reviewsBtn" title="Оценки клиентов по звёздам из писем: кто доволен, кто нет, ответить клиенту">⭐ Оценки</button>':'')+
   ((isBossRole()||STATE.role==='senior')?'<button class="btn btn-sm" id="ordersArchiveBtn" title="Архив выданных заказов — только владелец и управляющий">'+ic('box')+' Архив'+(DATA.orders.some(o=>o.archived)?' ('+DATA.orders.filter(o=>o.archived).length+')':'')+'</button>':'')+
   ((isBossRole()||STATE.role==='admin')?'<button class="btn btn-sm" id="orderSettingsBtn" title="Настройки заказов">'+ic('gear')+'</button>':'')+
   (getStoreExcludedPages().includes('service')?'':'<button class="btn" id="newRepairBtn">🔧 Заявка на ремонт</button>')+
@@ -4315,7 +4316,162 @@ function renderOrders(c){
   if(archBtn) archBtn.addEventListener('click', ()=>{ STATE.ordersView='archive'; renderOrders(c); });
   const mailBtn=document.getElementById('mailSettingsBtn');
   if(mailBtn) mailBtn.addEventListener('click', openMailSettingsModal);
+  const rvBtn=document.getElementById('reviewsBtn');
+  if(rvBtn) rvBtn.addEventListener('click', openClientReviewsModal);
 
+}
+
+/* ============================================================
+   ОЦЕНКИ КЛИЕНТОВ — кнопка «⭐ Оценки» в «Заказах», только владелец.
+   Список оценок с сервера (клики по звёздам из писем) + комментарии.
+   По каждой можно ответить клиенту фирменным письмом-извинением
+   (текст правится перед отправкой, можно добавить компенсацию)
+   и отметить «отработано». Отметки хранятся в общей базе (DATA)
+   и видны со всех компьютеров.
+============================================================ */
+function reviewNotes(){
+  if(!DATA.reviewNotes) DATA.reviewNotes={};
+  return DATA.reviewNotes;
+}
+function reviewOrderOf(no){
+  return DATA.orders.find(o=>String(o.id)===String(no)) || null;
+}
+/* Письмо-извинение: фирменный стиль, текст владельца, опциональная компенсация */
+function apologyMailHtml(o, text, gift){
+  const nl=s=>escHtml(String(s||'')).replace(/\n/g,'<br>');
+  let rows='<tr><td align="center" style="padding:30px 0 6px;">'+
+      '<span style="font-family:Arial;font-size:28px;font-weight:bold;color:#ffffff;">Приносим свои извинения</span></td></tr>'+
+    '<tr><td align="center" style="font-family:Arial;font-size:15px;color:#d9c87c;font-weight:bold;padding:2px 0 24px;">заказ № '+escHtml(String(o.id))+'</td></tr>'+
+    '<tr><td style="border-top:1px solid #333333;font-size:0;line-height:0;">&nbsp;</td></tr>'+
+    '<tr><td style="padding:14px 0 0;">'+
+      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="background:#1f1f1f;border-radius:14px;padding:26px 28px;border-left:3px solid #d9c87c;">'+
+        '<div style="font-family:Arial;font-size:17px;color:#ffffff;line-height:1.7;"><span style="color:#d9c87c;font-weight:bold;">'+escHtml(o.name||'Уважаемый клиент')+'</span>,</div>'+
+        '<div style="font-family:Arial;font-size:16px;color:#e6e6e6;line-height:1.8;margin-top:12px;">'+nl(text)+'</div>'+
+      '</td></tr></table>'+
+    '</td></tr>';
+  if(String(gift||'').trim()){
+    rows+='<tr><td style="padding:16px 0 0;">'+
+      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="background:#1f1f1f;border:1px solid #d9c87c;border-radius:14px;padding:24px 28px;">'+
+        '<div style="font-family:Arial;font-size:13px;color:#9a9a9a;letter-spacing:1px;">В КАЧЕСТВЕ ИЗВИНЕНИЯ</div>'+
+        '<div style="font-family:Arial;font-size:19px;font-weight:bold;color:#d9c87c;margin-top:8px;line-height:1.5;">'+nl(gift)+'</div>'+
+        '<div style="font-family:Arial;font-size:13px;color:#c9c9c9;margin-top:8px;">Просто назовите номер заказа при обращении.</div>'+
+      '</td></tr></table>'+
+    '</td></tr>';
+  }
+  return mailShell(rows);
+}
+const APOLOGY_DEFAULT_TEXT='Спасибо, что рассказали о проблеме — это действительно важно.\n'+
+  'Нам жаль, что мы вас подвели: такого быть не должно, и мы уже разбираемся, чтобы это не повторилось.\n'+
+  'Если удобно, перезвоните нам или ответьте на это письмо — решим вопрос лично и быстро.';
+/* Список оценок */
+function openClientReviewsModal(){
+  if(!isBossRole()){ toast('Оценки клиентов доступны только владельцу', 'error'); return; }
+  const c=erpServerCreds();
+  if(!c){ toast('Нет связи с сервером — подключите систему (шестерёнка Заказов)', 'error'); return; }
+  openModal('⭐ Оценки клиентов', 'Клики по звёздам из писем «Как вам покупка?»',
+    '<div class="tsub" id="rvListBox">Загружаем оценки с сервера…</div>',
+    [{label:'Закрыть', cls:'btn', action:closeModal}]);
+  fetch(c.api+'/reviews',{headers:{'Authorization':'Bearer '+c.token}})
+    .then(r=>r.json())
+    .then(j=>{
+      const box=document.getElementById('rvListBox');
+      if(!box) return;
+      if(!j || !j.ok){ box.innerHTML='Не получилось загрузить: '+escHtml(String((j&&j.error)||'ошибка сервера')); return; }
+      renderClientReviews(box, j.reviews||{});
+    })
+    .catch(e=>{
+      const box=document.getElementById('rvListBox');
+      if(box) box.innerHTML='Нет связи с сервером: '+escHtml(String(e));
+    });
+}
+function renderClientReviews(box, reviews){
+  const notes=reviewNotes();
+  const list=Object.keys(reviews).map(no=>({no, r:reviews[no]}))
+    .sort((a,b)=>String(b.r.textAt||b.r.at||'').localeCompare(String(a.r.textAt||a.r.at||'')));
+  if(!list.length){ box.innerHTML='Пока ни одной оценки. Они появятся, когда клиенты начнут нажимать звёзды в письмах.'; return; }
+  const starRow=s=>'<span style="color:var(--gold,#d9c87c);letter-spacing:1px;">'+'★'.repeat(s)+'</span><span style="opacity:.25;letter-spacing:1px;">'+'★'.repeat(5-s)+'</span>';
+  let html='';
+  list.forEach(({no,r})=>{
+    const o=reviewOrderOf(no);
+    const note=notes[no]||{};
+    const bad=r.s<=2, mid=r.s===3;
+    const dt=String(r.textAt||r.at||'').replace('T',' ').slice(0,16);
+    html+='<div class="card" style="margin-bottom:10px;'+(bad&&!note.handled?'border-left:3px solid #c0392b;':'')+'">'+
+      '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;">'+
+        '<div><span style="font-size:16px;">'+starRow(r.s)+'</span> <b>'+r.s+'/5</b>'+
+          ' · заказ №'+escHtml(no)+
+          (o?' · '+escHtml(o.name||'—')+(o.phone?' · '+escHtml(o.phone):''):' · <span class="tsub">заказ не найден в базе</span>')+
+        '</div>'+
+        '<div class="tsub">'+escHtml(dt)+(note.handled?' · <span style="color:var(--positive,#4caf7d);font-weight:bold;">отработано'+(note.by?' · '+escHtml(note.by):'')+'</span>':'')+'</div>'+
+      '</div>'+
+      (r.text?'<div style="margin-top:8px;padding:10px 12px;background:var(--glass-1,rgba(255,255,255,.04));border-radius:8px;font-size:13px;line-height:1.6;">💬 '+escHtml(r.text)+'</div>'
+        :(bad||mid?'<div class="tsub" style="margin-top:6px;">Комментария нет — стоит перезвонить и спросить самим.</div>':''))+
+      '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">'+
+        (o&&orderEmailOf(o)?'<button class="btn btn-sm btn-primary" data-rv-reply="'+escHtml(no)+'">✉ Ответить клиенту</button>':'')+
+        (o&&o.phone?'<a class="btn btn-sm" href="tel:'+escHtml(String(o.phone).replace(/[^+\d]/g,''))+'">📞 Позвонить</a>':'')+
+        '<button class="btn btn-sm" data-rv-done="'+escHtml(no)+'">'+(note.handled?'Вернуть в работу':'✓ Отработано')+'</button>'+
+      '</div>'+
+    '</div>';
+  });
+  box.innerHTML=html;
+  box.querySelectorAll('[data-rv-reply]').forEach(b=>b.addEventListener('click', ()=>openReviewReplyModal(b.getAttribute('data-rv-reply'))));
+  box.querySelectorAll('[data-rv-done]').forEach(b=>b.addEventListener('click', ()=>{
+    const no=b.getAttribute('data-rv-done');
+    const notes2=reviewNotes();
+    if(notes2[no]&&notes2[no].handled) delete notes2[no];
+    else notes2[no]={handled:1, at:new Date().toISOString(), by:(typeof currentUserName==='function'?currentUserName():'')||(ROLES[STATE.role]&&ROLES[STATE.role].label)||STATE.role};
+    if(typeof lsSave==='function') lsSave();
+    openClientReviewsModal();
+  }));
+}
+/* Ответ клиенту: письмо правится перед отправкой, компенсация по желанию */
+function openReviewReplyModal(no){
+  const o=reviewOrderOf(no);
+  if(!o){ toast('Заказ №'+no+' не найден в базе', 'error'); return; }
+  const email=orderEmailOf(o);
+  if(!email){ toast('У заказа нет почты клиента — остаётся звонок', 'error'); return; }
+  openModal('✉ Письмо клиенту · заказ №'+no, escHtml((o.name||'')+' · '+email),
+    '<label class="tsub">Тема письма'+
+      '<input class="input-mini" id="rvRepSubject" value="IMAGNATE — приносим извинения за заказ №'+escHtml(no)+'" style="width:100%;display:block;margin-top:3px;margin-bottom:8px;"></label>'+
+    '<label class="tsub">Текст (от вашего имени, правьте свободно)'+
+      '<textarea class="input-mini" id="rvRepText" rows="6" style="width:100%;display:block;margin-top:3px;margin-bottom:8px;font-family:inherit;">'+APOLOGY_DEFAULT_TEXT.replace(/</g,'&lt;')+'</textarea></label>'+
+    '<label class="tsub">Компенсация (по желанию — попадёт в письмо золотой картой)'+
+      '<input class="input-mini" id="rvRepGift" placeholder="например: скидка 10% на следующую покупку или бесплатное стекло с поклейкой" style="width:100%;display:block;margin-top:3px;"></label>'+
+    '<div class="tsub" style="margin-top:8px;">Письмо уйдёт в фирменном стиле IMAGNATE (как остальные письма клиентам). Отправка идёт сразу, галочка «Реальная отправка» на неё не влияет.</div>',
+    [
+      {label:'Отправить письмо', cls:'btn-primary', action:()=>{
+        const g=id=>{const el=document.getElementById(id); return el?el.value:'';};
+        const text=g('rvRepText').trim();
+        if(!text){ toast('Текст письма пуст', 'error'); return; }
+        const mail={subject:g('rvRepSubject').trim()||('IMAGNATE — заказ №'+no), body:apologyMailHtml(o, text, g('rvRepGift').trim()), isHtml:true};
+        toast('Отправляем письмо…', 'info');
+        mailTestSend(email, mail).then(r=>{
+          if(r&&r.ok){
+            toast('Письмо ушло клиенту на '+email, 'success');
+            const notes=reviewNotes();
+            notes[no]={handled:1, at:new Date().toISOString(), by:(typeof currentUserName==='function'?currentUserName():'')||(ROLES[STATE.role]&&ROLES[STATE.role].label)||STATE.role, mailed:1};
+            if(typeof lsSave==='function') lsSave();
+          } else toast('Не ушло: '+String((r&&r.error)||'ошибка'), 'error');
+          openClientReviewsModal();
+        });
+      }},
+      {label:'Предпросмотр', cls:'btn', action:()=>{
+        const g=id=>{const el=document.getElementById(id); return el?el.value:'';};
+        const saved={s:g('rvRepSubject'), t:g('rvRepText'), gf:g('rvRepGift')};
+        openModal('Предпросмотр письма', 'Так его увидит клиент',
+          '<iframe id="rvPrevFrame" style="width:100%;height:55vh;border:1px solid var(--glass-border-soft);border-radius:8px;background:#000;"></iframe>',
+          [{label:'← Назад к письму', cls:'btn', action:()=>{
+            openReviewReplyModal(no);
+            setTimeout(()=>{
+              const s=document.getElementById('rvRepSubject'), t=document.getElementById('rvRepText'), gf=document.getElementById('rvRepGift');
+              if(s) s.value=saved.s; if(t) t.value=saved.t; if(gf) gf.value=saved.gf;
+            }, 50);
+          }}]);
+        const fr=document.getElementById('rvPrevFrame');
+        if(fr) fr.srcdoc=apologyMailHtml(o, saved.t, saved.gf);
+      }},
+      {label:'← К оценкам', cls:'btn', action:openClientReviewsModal},
+    ]);
 }
 
 /* ============================================================
@@ -19768,7 +19924,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-71';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-72';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
