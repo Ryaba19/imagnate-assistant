@@ -1505,6 +1505,14 @@ let DATA = {
       responsibilities:'Консультирует клиентов, оформляет и выдаёт заказы, ведёт соцсети магазина',
       schedule:{cycle:'2/2', start:'27.07.2026', period:4, work:2, hours:'10:00–21:00'},
       extraAccess:{expensesReview:false, analytics:false}},
+    {id:11, name:'Леонид', role:'Владелец', unit:'shop_c', storeId:'store_kashirka', phone:'—', baseSalary:null,
+      responsibilities:'Владелец: работает на Каширском ш. 8, управляет обеими точками',
+      schedule:{cycle:'2/2', start:'29.07.2026', period:4, work:2, hours:'10:00–21:00'},
+      extraAccess:{expensesReview:true, analytics:true}},
+    {id:12, name:'Лео', role:'Менеджер', unit:'shop_c', storeId:'store_lunnaya', phone:'—', baseSalary:null,
+      responsibilities:'Менеджер на Лунной 4 с административными правами: настройка системы, подключения, доступы',
+      schedule:{manual:true, hours:'10:00–21:00'},
+      extraAccess:{expensesReview:true, analytics:true}},
     /* ---- Служебные демо-профили (support:true): в списке «Команды» и графике
        не показываются, но нужны, чтобы роли Мастер/Курьер/Сборщик и их
        разделы (ремонт, доставки, закуп) работали в демо-режиме. ---- */
@@ -10691,7 +10699,7 @@ function openTaskTransferModal(taskId){
   const cur=taskParticipants(t).map(p=>p.name);
   /* Передавать можно только тем, у кого есть доступ к разделу «Задачи» —
      иначе сотрудник не увидит переданную задачу */
-  const ROLE_BY_TITLE={'Менеджер':'seller','Продавец':'seller','Старший менеджер':'senior','Старший продавец':'senior','Мастер':'master','Курьер':'courier','Сборщик':'collector'};
+  const ROLE_BY_TITLE={'Менеджер':'seller','Продавец':'seller','Старший менеджер':'senior','Старший продавец':'senior','Мастер':'master','Курьер':'courier','Сборщик':'collector','Владелец':'owner'};
   const candidates=DATA.employees.filter(e=>{
     if(e.noAccess || cur.includes(e.name)) return false;
     const rk=ROLE_BY_TITLE[e.role];
@@ -12974,6 +12982,7 @@ function ensureShiftData(){
 const ROLE_BUCKETS=['Менеджеры','Мастера','Сборщики'];
 function empRoleIcon(e){
   const r=String((e&&e.role)||e||'');
+  if(/владелец/i.test(r)) return '\u{1F451} ';      /* 👑 */
   if(/мастер/i.test(r)) return '\u{1F527} ';        /* 🔧 */
   if(/менеджер|продавец/i.test(r)) return '\u{1F4BC} '; /* 💼 */
   if(/курьер/i.test(r)) return '\u{1F69A} ';        /* 🚚 */
@@ -13131,6 +13140,7 @@ function scheduleCalendarHTML(){
       '<button class="btn btn-sm" id="schedPrev">←</button>'+
       '<button class="btn btn-sm" id="schedToday">Сегодня</button>'+
       '<button class="btn btn-sm" id="schedNext">→</button>'+
+      (isBossRole()?'<button class="btn btn-sm" id="schedRebuild" title="Стереть ручные правки и заново рассчитать карусель 2/2 по точкам">↻ Пересчитать график</button>':'')+
     '</div></div>';
 
   html+='<div class="cal-grid">';
@@ -13192,6 +13202,8 @@ function scheduleCalendarHTML(){
 }
 
 function wireScheduleCalendar(c){
+  const reb=c.querySelector('#schedRebuild');
+  if(reb) reb.addEventListener('click', scheduleRebuildAsk);
   const prev=c.querySelector('#schedPrev');
   const next=c.querySelector('#schedNext');
   const tod=c.querySelector('#schedToday');
@@ -19999,13 +20011,13 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-75';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-77';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
 const CRED_DEFAULTS={ site:{ apiUrl:(location&&location.protocol&&location.protocol.startsWith('http'))?'/api':'https://imagnate-assistant.onrender.com/api' } };
 const CRM_CHAIN=['new','working','waiting','won'];
-const EMP_ROLE_CHOICES=['Менеджер','Старший менеджер','Мастер','Курьер','Сборщик'];
+const EMP_ROLE_CHOICES=['Менеджер','Старший менеджер','Мастер','Курьер','Сборщик','Владелец'];
 const LEAD_EDIT_FIELDS={
   name:   {label:'Имя клиента',        ph:'Иван Иванович'},
   contact:{label:'Телефон / контакт',  ph:'+7 900 000-00-00 или ник соцсети'},
@@ -20506,7 +20518,7 @@ function openEmployeeModal(empId, c){
         toast('Сотрудник обновлён: '+name+' · '+role,'success');
       } else {
         const nid=Math.max(0,...DATA.employees.map(e=>typeof e.id==='number'?e.id:0))+1;
-        const sched = /продавец|менеджер/i.test(role)
+        const sched = /продавец|менеджер|владелец/i.test(role)
           ? {cycle:'2/2', start:ruDateStr(schedToday()), period:5, work:2, hours:'10:00–21:00'}
           : {manual:true};
         DATA.employees.push({id:nid, name:name, role:role, unit:'shop_c', storeId:storeSel, phone:phone||'—', baseSalary:null,
@@ -22055,6 +22067,85 @@ setInterval(async()=>{
     }
   }catch(e){ console.warn('linkSharedTeam:', e); }
 })();
+/* Расстановка реальной команды по точкам (решения владельца 02.08).
+   resetManual=true — дополнительно стереть все ручные правки календаря
+   (кнопка «Пересчитать график»); false — только мигрировать состав. */
+function staffRealignApply(d, resetManual){
+  const oldDemo=['Иванов Д.','Кузьмина Е.','Иванова О.','Олег П.','Сергей Т.','Марат Б.'];
+  for(let i=d.employees.length-1;i>=0;i--){
+    const e=d.employees[i];
+    if(oldDemo.includes(e.name) && !e.support) d.employees.splice(i,1);
+  }
+  const REAL=[
+    {name:'Алексей',   role:'Менеджер', store:'store_lunnaya',  start:'27.07.2026', salary:65000},
+    {name:'Вячеслав',  role:'Менеджер', store:'store_lunnaya',  start:'27.07.2026', salary:65000},
+    {name:'Владислав', role:'Менеджер', store:'store_lunnaya',  start:'29.07.2026', salary:68000},
+    {name:'Иван',      role:'Менеджер', store:'store_lunnaya',  start:'29.07.2026', salary:63000},
+    {name:'Дарья',     role:'Менеджер', store:'store_kashirka', start:'27.07.2026', salary:63000},
+    {name:'Леонид',    role:'Владелец', store:'store_kashirka', start:'29.07.2026', salary:null},
+    {name:'Лео',       role:'Менеджер', store:'store_lunnaya',  manual:true,        salary:null},
+  ];
+  REAL.forEach(p=>{
+    let e=d.employees.find(x=>!x.support && x.name===p.name);
+    if(!e){
+      const nid=Math.max(12, ...d.employees.map(x=>typeof x.id==='number'?x.id:0))+1;
+      const admin=(p.role==='Владелец' || p.name==='Лео');
+      e={id:nid, name:p.name, role:p.role, unit:'shop_c', phone:'—', baseSalary:p.salary,
+         salaryPlan:p.salary?{advance:25000, remainder:38000, bonus:7000}:null,
+         responsibilities:p.role==='Владелец'?'Владелец: работает на Каширском ш. 8, управляет обеими точками'
+           :(p.name==='Лео'?'Менеджер на Лунной 4 с административными правами: настройка системы, подключения, доступы'
+           :'Консультирует клиентов, оформляет и выдаёт заказы'),
+         extraAccess:{expensesReview:admin, analytics:admin}};
+      d.employees.push(e);
+    }
+    if(p.role==='Владелец') e.role='Владелец';
+    if(p.name==='Лео'){ e.extraAccess=Object.assign({}, e.extraAccess, {expensesReview:true, analytics:true}); }
+    e.storeId=p.store;
+    if(p.manual){
+      /* вне карусели: выходит по ручным отметкам в календаре */
+      if(!e.schedule || e.schedule.cycle) e.schedule={manual:true, hours:(e.schedule&&e.schedule.hours)||'10:00–21:00'};
+    } else {
+      e.schedule=Object.assign({}, e.schedule||{}, {cycle:'2/2', start:p.start, period:4, work:2,
+        hours:(e.schedule&&e.schedule.hours)||'10:00–21:00'});
+    }
+  });
+  /* мастер Виктор — на Лунной, график оставляем как есть */
+  if(resetManual){
+    d.shiftAssignments={};
+  } else {
+    const okIds=new Set(d.employees.map(e=>e.id));
+    Object.keys(d.shiftAssignments||{}).forEach(k=>{
+      const day=d.shiftAssignments[k];
+      if(day && typeof day==='object' && !Array.isArray(day))
+        Object.keys(day).forEach(sid=>{ day[sid]=(day[sid]||[]).filter(x=>okIds.has((x&&typeof x==='object')?x.id:x)); });
+    });
+  }
+}
+/* Кнопка «Пересчитать график»: подтверждение + полный пересчёт карусели */
+function scheduleRebuildAsk(){
+  openModal('↻ Пересчитать график',
+    'Вернуть автоматическую карусель',
+    '<div class="tsub" style="line-height:1.7;">Что произойдёт:<br>'+
+    '· все <b>ручные правки календаря</b> (клики по дням) будут стёрты;<br>'+
+    '· команда заново расставится по точкам: <b>Лунная 4</b> — пары менеджеров 2/2 (Алексей+Вячеслав ↔ Владислав+Иван) и мастер Виктор, <b>Каширское ш. 8</b> — Дарья и Леонид в противофазе 2/2;<br>'+
+    '· отметки посещаемости, штрафы и объяснительные <b>не трогаются</b>.</div>',
+    [
+      {label:'Пересчитать', cls:'btn-primary', action:()=>{
+        try{
+          Object.keys(STORE_DATA).forEach(sid=>{
+            const d=STORE_DATA[sid];
+            if(d && Array.isArray(d.employees)) staffRealignApply(d, true);
+          });
+          if(typeof lsSave==='function') lsSave();
+          closeModal();
+          renderPage();
+          toast('График пересчитан: карусель 2/2 по точкам восстановлена', 'success');
+        }catch(e){ toast('Не получилось: '+e.message, 'error'); }
+      }},
+      {label:'Отмена', cls:'btn', action:closeModal},
+    ]);
+}
+
 (function ensureSupportProfiles(){
   try{
     Object.keys(STORE_DATA).forEach(sid=>{
@@ -22090,41 +22181,9 @@ setInterval(async()=>{
       /* 29.07-74: реальный штат по точкам (решение владельца 02.08).
          Лунная 4 — основная: пары менеджеров 2/2 (Алексей+Вячеслав ↔ Владислав+Иван)
          + мастер Виктор; Каширское ш. 8 — Дарья. Старые демо-имена убираем. */
-      if(!d._staffRealign74){
-        d._staffRealign74=1;
-        const oldDemo=['Иванов Д.','Кузьмина Е.','Иванова О.','Олег П.','Сергей Т.','Марат Б.'];
-        for(let i=d.employees.length-1;i>=0;i--){
-          const e=d.employees[i];
-          if(oldDemo.includes(e.name) && !e.support) d.employees.splice(i,1);
-        }
-        const REAL=[
-          {name:'Алексей',   store:'store_lunnaya',  start:'27.07.2026'},
-          {name:'Вячеслав',  store:'store_lunnaya',  start:'27.07.2026'},
-          {name:'Владислав', store:'store_lunnaya',  start:'29.07.2026'},
-          {name:'Иван',      store:'store_lunnaya',  start:'29.07.2026'},
-          {name:'Дарья',     store:'store_kashirka', start:'27.07.2026'},
-        ];
-        REAL.forEach(p=>{
-          let e=d.employees.find(x=>!x.support && x.name===p.name);
-          if(!e){
-            const nid=Math.max(10, ...d.employees.map(x=>typeof x.id==='number'?x.id:0))+1;
-            e={id:nid, name:p.name, role:'Менеджер', unit:'shop_c', phone:'—', baseSalary:63000,
-               salaryPlan:{advance:25000, remainder:38000, bonus:7000},
-               responsibilities:'Консультирует клиентов, оформляет и выдаёт заказы',
-               extraAccess:{expensesReview:false, analytics:false}};
-            d.employees.push(e);
-          }
-          e.storeId=p.store;
-          e.schedule=Object.assign({}, e.schedule||{}, {cycle:'2/2', start:p.start, period:4, work:2,
-            hours:(e.schedule&&e.schedule.hours)||'10:00–21:00'});
-        });
-        /* из графика убрать тех, кого больше нет */
-        const okIds=new Set(d.employees.map(e=>e.id));
-        Object.keys(d.shiftAssignments||{}).forEach(k=>{
-          const day=d.shiftAssignments[k];
-          if(day && typeof day==='object' && !Array.isArray(day))
-            Object.keys(day).forEach(sid=>{ day[sid]=(day[sid]||[]).filter(x=>okIds.has((x&&typeof x==='object')?x.id:x)); });
-        });
+      if(!d._staffRealign77){
+        d._staffRealign77=1; d._staffRealign76=1; d._staffRealign74=1;
+        staffRealignApply(d, false);
       }
       /* всегда (идемпотентно): продавцы теперь называются менеджерами */
       d.employees.forEach(e=>{
