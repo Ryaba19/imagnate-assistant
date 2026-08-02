@@ -2908,6 +2908,23 @@ function sendRealMail(to, subject, body, isHtml){
       .then(function(r){ return r.json(); }).catch(function(e){ return {error:String(e)}; });
   }catch(e){ return Promise.resolve({error:String(e)}); }
 }
+/* Тестовое письмо себе: идёт даже при выключенной галочке «Реальная отправка» —
+   именно чтобы проверить SMTP и внешний вид до включения рассылок клиентам. */
+function mailTestSend(to, mail){
+  try{
+    const c=erpServerCreds();
+    if(!c) return Promise.resolve({error:'Нет связи с сервером — подключите систему (шестерёнка Заказов)'});
+    return fetch(c.api+'/send-mail',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.token},
+      body:JSON.stringify({to:to, subject:mail.subject, body:mail.body, isHtml:!!mail.isHtml})})
+      .then(function(r){ return r.json(); }).catch(function(e){ return {error:String(e)}; });
+  }catch(e){ return Promise.resolve({error:String(e)}); }
+}
+/* Если в системе ещё нет подходящего заказа — тест уходит с демо-данными */
+function mailTestDemoOrder(){
+  return { id:'TEST-1', name:'Алексей', phone:'+7 (900) 000-00-00', email:'client@example.ru',
+    method:'Самовывоз', date:DATA.today, clientComment:'—', store:'iMagnate',
+    items:[{name:'Часы Apple Watch SE (2024) 44mm Silver Aluminium Case, Sport Band (Denim)', price:22980}] };
+}
 
 /* ===== Мобильная Главная: маленькое меню-табличка сверху + краткая сводка (26.07) ===== */
 function isMobileView(){ try{ return window.matchMedia('(max-width:768px)').matches; }catch(e){ return false; } }
@@ -4354,6 +4371,7 @@ function openMailSettingsModal(){
           '<button class="btn btn-sm" id="'+p+'Remove" type="button">Убрать</button>'
         : '<span class="tsub">Файл не загружен — используется текст ниже</span>'+
           '<button class="btn btn-sm" id="'+p+'Preview" type="button">Предпросмотр</button>')+
+      '<button class="btn btn-sm" id="'+p+'Test" type="button" title="Отправить это письмо на вашу почту — проверить вид и SMTP">✈ Тест на почту</button>'+
     '</div>';
 
   let body='<div class="tsub" style="margin-bottom:12px;">Подстановки — в теме, тексте и HTML-шаблонах: '+
@@ -4453,7 +4471,40 @@ function openMailSettingsModal(){
     });
     const ed=document.getElementById(p+'Edit');
     if(ed) ed.addEventListener('click', ()=>{ sync(); openMailTemplateEditor(settings, title); });
+    const tst=document.getElementById(p+'Test');
+    if(tst) tst.addEventListener('click', ()=>{
+      sync();
+      const sample=DATA.orders.find(sampleFilter)||DATA.orders[0]||mailTestDemoOrder();
+      openMailTestModal(title, buildFn, sample);
+    });
   };
+  /* Окно теста: адрес запоминается, письмо помечается [ТЕСТ] */
+  function openMailTestModal(title, buildFn, sample){
+    if(!DATA.settings) DATA.settings={};
+    openModal('Тест: '+title, 'Письмо уйдёт на указанный адрес с данными заказа №'+sample.id,
+      '<label class="tsub">Ваша почта для теста'+
+        '<input class="input-mini" id="mailTestTo" type="email" value="'+String(DATA.settings.testMailTo||'').replace(/"/g,'&quot;')+'" placeholder="you@mail.ru" style="width:100%;display:block;margin-top:4px;"></label>'+
+      '<div class="tsub" style="margin-top:10px;">Тест отправляется даже при выключенной галочке «Реальная отправка писем» — чтобы проверить всё заранее. Нужен настроенный SMTP на сервере. Кнопки-звёзды в письме-оценке рабочие: можно нажать и пройти путь клиента.</div>',
+      [
+        {label:'Отправить тест', cls:'btn-primary', action:()=>{
+          const el=document.getElementById('mailTestTo');
+          const to=(el&&el.value||'').trim();
+          if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)){ toast('Укажите почту для теста', 'error'); return; }
+          DATA.settings.testMailTo=to;
+          if(typeof lsSave==='function') lsSave();
+          const mail=buildFn(sample);
+          mail.subject='[ТЕСТ] '+mail.subject;
+          toast('Отправляем тест на '+to+'…', 'info');
+          mailTestSend(to, mail).then(r=>{
+            if(r && r.ok) toast('Тестовое письмо ушло на '+to+' — проверьте почту (и «Спам»)', 'success');
+            else if(r && r.skipped) toast('Нет связи с сервером', 'error');
+            else toast('Не ушло: '+String((r&&r.error)||'ошибка'), 'error');
+          });
+          openMailSettingsModal();
+        }},
+        {label:'← К настройкам', cls:'btn', action:openMailSettingsModal},
+      ]);
+  }
   bindTpl('cmTpl', cm, confirmMailBuild, o=>o.status==='new', 'подтверждение заказа');
   bindTpl('rmTpl', rm, reviewMailBuild, o=>o.status==='done', 'оценка после выдачи');
 }
@@ -19717,7 +19768,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-70';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-71';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];

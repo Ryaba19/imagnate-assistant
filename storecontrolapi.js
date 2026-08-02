@@ -187,11 +187,16 @@ function sendFile(res, file) {
 const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TG_CHATS = (process.env.TELEGRAM_CHAT_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
 
-async function tgSend(text) {
+async function tgSend(text, extraChats) {
   if (!TG_TOKEN) return { error: 'TELEGRAM_BOT_TOKEN не задан в Environment' };
-  if (!TG_CHATS.length) return { error: 'TELEGRAM_CHAT_IDS не задан в Environment' };
+  /* владелец (env) + адресные получатели (сотрудники на смене) */
+  const extra = Array.isArray(extraChats)
+    ? extraChats.map(x => String(x).trim()).filter(x => /^-?\d{4,20}$/.test(x)).slice(0, 20)
+    : [];
+  const chats = [...new Set([...TG_CHATS, ...extra])];
+  if (!chats.length) return { error: 'TELEGRAM_CHAT_IDS не задан в Environment' };
   const results = [];
-  for (const chat of TG_CHATS) {
+  for (const chat of chats) {
     try {
       const r = await fetch('https://api.telegram.org/bot' + TG_TOKEN + '/sendMessage', {
         method: 'POST',
@@ -203,6 +208,94 @@ async function tgSend(text) {
     } catch (e) { results.push({ chat, ok: false, error: e.message }); }
   }
   return { ok: results.some(x => x.ok), results };
+}
+
+/* ---------- Оценки клиентов: звёзды из письма «Как вам покупка?» ----------
+   Клиент жмёт звезду в письме → GET /review?o=НОМЕР&s=1..5 → фирменная страница:
+   1–2 звезды — «что случилось», 3 — «чего не хватило», 4–5 — кнопка на Яндекс Карты.
+   Оценка пишется уже по клику; комментарий — POST /api/review-comment.
+   Владельцу уходит Telegram: клик со звёздами и отдельно комментарий. */
+const REVIEW_URL_DEFAULT = 'https://yandex.ru/maps/org/imagnate/158587470766/reviews/';
+let _reviews = null;                                   /* { 'номер': {s, at, text, textAt} } */
+async function reviewsLoad() {
+  if (_reviews) return _reviews;
+  try { _reviews = JSON.parse((await kvGet('reviews_json')) || '{}') || {}; }
+  catch (e) { _reviews = {}; }
+  return _reviews;
+}
+async function reviewsSave() {
+  try {
+    const keys = Object.keys(_reviews || {});
+    if (keys.length > 3000) for (const k of keys.slice(0, keys.length - 3000)) delete _reviews[k];
+    await kvSet('reviews_json', JSON.stringify(_reviews || {}));
+  } catch (e) { console.log('reviewsSave:', e.message); }
+}
+async function reviewPublicUrl() {
+  if (process.env.REVIEW_URL) return process.env.REVIEW_URL;
+  try { const u = await kvGet('review_url'); if (u) return u; } catch (e) {}
+  return REVIEW_URL_DEFAULT;
+}
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function reviewPage(o, s, yaUrl) {
+  const oo = escHtml(o);
+  const stars = '<span class="on">' + '★'.repeat(s) + '</span><span class="off">' + '★'.repeat(5 - s) + '</span>';
+  let title, sub, body;
+  const form = (ph) =>
+    '<textarea id="rvText" maxlength="2000" placeholder="' + ph + '"></textarea>' +
+    '<button class="btn" id="rvSend" onclick="rvSubmit()">Отправить</button>' +
+    '<div class="note">Ваша оценка уже записана. Комментарий увидит только магазин — не в публичный доступ.</div>';
+  if (s <= 2) {
+    title = 'Нам жаль, что что-то пошло не так';
+    sub = 'Расскажите, что разочаровало — разберёмся и постараемся всё исправить.';
+    body = form('Что случилось? Опишите своими словами…');
+  } else if (s === 3) {
+    title = 'Спасибо за оценку!';
+    sub = 'Похоже, всё было неплохо, но не идеально. Подскажите, чего не хватило до пяти звёзд — это лучшее, что вы можете для нас сделать.';
+    body = form('Что могло быть лучше? Пара слов…');
+  } else {
+    title = 'Спасибо! Рады, что вам понравилось';
+    sub = 'Если есть минута — поделитесь впечатлением публично. Для магазина это лучшая помощь.';
+    body = '<a class="btn" href="' + escHtml(yaUrl) + '">Оставить отзыв на Яндекс Картах</a>' +
+      '<a class="btn ghost" href="#" onclick="document.getElementById(\'rvExtra\').style.display=\'block\';this.style.display=\'none\';return false;">Написать пару слов нам напрямую</a>' +
+      '<div id="rvExtra" style="display:none;margin-top:14px;">' + form('Пара слов о покупке…') + '</div>' +
+      '<div class="note">Ваша оценка уже записана — спасибо!</div>';
+  }
+  return '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1"><title>Оценка — IMAGNATE</title><style>' +
+    '*{margin:0;padding:0;box-sizing:border-box;}' +
+    'body{background:#000;color:#fff;font-family:Arial,Helvetica,sans-serif;padding:34px 14px 44px;}' +
+    '.wrap{max-width:520px;margin:0 auto;}' +
+    '.logo{text-align:center;font-size:26px;letter-spacing:7px;font-weight:bold;color:#d9c87c;}' +
+    '.logo-line{height:2px;width:64%;max-width:280px;background:#d9c87c;margin:10px auto 28px;}' +
+    '.stars{text-align:center;font-size:40px;letter-spacing:6px;margin-bottom:6px;}' +
+    '.stars .on{color:#d9c87c;}.stars .off{color:#3a3a3a;}' +
+    'h1{text-align:center;font-size:22px;margin:10px 0 8px;}' +
+    '.sub{text-align:center;color:#c9c9c9;font-size:14.5px;line-height:1.7;margin-bottom:24px;}' +
+    '.card{background:#1f1f1f;border-radius:14px;padding:24px;}' +
+    'textarea{width:100%;background:#141414;border:1px solid #3a3a3a;border-radius:10px;color:#fff;font-family:Arial;font-size:15px;padding:14px;min-height:110px;resize:vertical;}' +
+    'textarea:focus{outline:none;border-color:#d9c87c;}' +
+    '.btn{display:block;width:100%;margin-top:16px;background:#d9c87c;color:#000;font-weight:bold;font-size:15px;text-align:center;text-decoration:none;padding:15px;border-radius:10px;border:none;cursor:pointer;font-family:Arial;}' +
+    '.btn.ghost{background:transparent;border:1px solid #d9c87c;color:#d9c87c;}' +
+    '.note{text-align:center;color:#9a9a9a;font-size:12.5px;margin-top:14px;line-height:1.7;}' +
+    '.ono{text-align:center;color:#d9c87c;font-size:13px;font-weight:bold;margin-bottom:18px;}' +
+    '.done{text-align:center;font-size:17px;color:#4caf7d;font-weight:bold;padding:18px 0 6px;}' +
+    '</style></head><body><div class="wrap">' +
+    '<div class="logo">IMAGNATE</div><div class="logo-line"></div>' +
+    '<div class="stars">' + stars + '</div>' +
+    '<h1>' + title + '</h1>' +
+    '<div class="ono">заказ № ' + oo + '</div>' +
+    '<div class="sub">' + sub + '</div>' +
+    '<div class="card" id="rvCard">' + body + '</div>' +
+    '<script>function rvSubmit(){var t=document.getElementById("rvText");var txt=(t&&t.value||"").trim();' +
+    'if(!txt){t.focus();return;}var b=document.getElementById("rvSend");if(b){b.disabled=true;b.textContent="Отправляем…";}' +
+    'fetch("/api/review-comment",{method:"POST",headers:{"Content-Type":"application/json"},' +
+    'body:JSON.stringify({o:' + JSON.stringify(String(o)) + ',s:' + s + ',text:txt})})' +
+    '.then(function(r){return r.json();}).then(function(j){' +
+    'document.getElementById("rvCard").innerHTML=j&&j.ok?\'<div class="done">Спасибо! Мы всё получили.</div>\':\'<div class="note">Не получилось отправить — попробуйте ещё раз или позвоните нам: 8 (993) 277-27-74</div>\';})' +
+    '.catch(function(){document.getElementById("rvCard").innerHTML=\'<div class="note">Нет связи — попробуйте позже</div>\';});}</script>' +
+    '</div></body></html>';
 }
 
 /* ---------- Почта (SMTP через nodemailer) ---------- */
@@ -766,7 +859,7 @@ const server = http.createServer((req, res) => {
 
   /* ---- Страницы ---- */
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return sendFile(res, 'index.html');
-  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-37' });
+  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-63' });
 
   /* ---- Автонастройка нового компа: открыл систему с сервера — она сама
      получила адрес API и ключ. Включается переменной AUTO_SETUP=1. ---- */
@@ -776,6 +869,67 @@ const server = http.createServer((req, res) => {
       strapiToken: !!process.env.STRAPI_API_TOKEN,
       storeToken: auto ? STORE_TOKEN : null,
       hint: auto ? 'автонастройка включена' : 'для полной автонастройки добавьте AUTO_SETUP=1 в Environment' });
+  }
+
+  /* ---- ОЦЕНКА ИЗ ПИСЬМА: клик по звезде ---- */
+  if (req.method === 'GET' && url.pathname === '/review') {
+    const o = String(url.searchParams.get('o') || '').trim().slice(0, 30);
+    const s = parseInt(url.searchParams.get('s')) || 0;
+    if (!/^[\wЀ-ӿ.-]{1,30}$/.test(o) || s < 1 || s > 5) { res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Некорректная ссылка'); }
+    return (async () => {
+      try {
+        await reviewsLoad();
+        const prev = _reviews[o];
+        if (!prev || prev.s !== s) {                       /* клик записываем сразу; повтор той же оценки не дублируем */
+          _reviews[o] = Object.assign({}, prev || {}, { s, at: new Date().toISOString() });
+          await reviewsSave();
+          const warn = s <= 2 ? '⚠️ ' : '';
+          tgSend(warn + '⭐'.repeat(s) + ' — оценка ' + s + '/5 по заказу №' + o + (prev ? ' (было ' + prev.s + '/5)' : ''));
+        }
+        const yaUrl = await reviewPublicUrl();
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(reviewPage(o, s, yaUrl));
+      } catch (e) { res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('Ошибка: ' + e.message); }
+    })();
+  }
+
+  /* ---- Комментарий к оценке (со страницы, без токена — но с защитой от потока) ---- */
+  if (req.method === 'POST' && url.pathname === '/api/review-comment') {
+    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?');
+    if (!floodOk('rvc_' + ip)) return sendJson(res, 429, { error: 'Слишком часто' });
+    return readBody(req, async b => {
+      try {
+        const o = String(b.o || '').trim().slice(0, 30);
+        const s = parseInt(b.s) || 0;
+        const text = String(b.text || '').trim().slice(0, 2000);
+        if (!/^[\wЀ-ӿ.-]{1,30}$/.test(o) || s < 1 || s > 5 || !text) return sendJson(res, 400, { error: 'Нет данных' });
+        await reviewsLoad();
+        _reviews[o] = Object.assign({}, _reviews[o] || { s, at: new Date().toISOString() }, { text, textAt: new Date().toISOString() });
+        await reviewsSave();
+        tgSend('💬 Комментарий к оценке ' + s + '/5, заказ №' + o + ':\n' + text);
+        sendJson(res, 200, { ok: true });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    });
+  }
+
+  /* ---- Оценки для ERP (по токену) + смена ссылки на Яндекс Карты без деплоя ---- */
+  if (req.method === 'GET' && url.pathname === '/api/reviews') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return (async () => {
+      try { await reviewsLoad(); sendJson(res, 200, { ok: true, reviews: _reviews }); }
+      catch (e) { sendJson(res, 500, { error: e.message }); }
+    })();
+  }
+  if (req.method === 'POST' && url.pathname === '/api/review-url') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return readBody(req, async b => {
+      try {
+        const u = String(b.url || '').trim().slice(0, 500);
+        if (!/^https:\/\//.test(u)) return sendJson(res, 400, { error: 'Нужна ссылка вида https://…' });
+        await kvSet('review_url', u);
+        sendJson(res, 200, { ok: true });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    });
   }
 
   /* ---- АВТОРИЗАЦИЯ КОМПЬЮТЕРА: новый комп вводит PIN сотрудника/владельца,
@@ -916,9 +1070,35 @@ const server = http.createServer((req, res) => {
     if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
     return readBody(req, async b => {
       if (!b.text) return sendJson(res, 400, { error: 'Нужен text' });
-      const r = await tgSend(b.text);
+      const r = await tgSend(b.text, b.chatIds);
       console.log('[telegram]', b.text.slice(0, 80), JSON.stringify(r).slice(0, 200));
       sendJson(res, r.ok ? 200 : 500, r);
+    });
+  }
+
+  /* ---- СМС клиенту через sms.ru. Env: SMS_RU_API_ID (обязательно),
+     SMS_FROM (буквенное имя отправителя, если согласовано) ---- */
+  if (req.method === 'POST' && url.pathname === '/api/send-sms') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return readBody(req, async b => {
+      const key = process.env.SMS_RU_API_ID || '';
+      if (!key) return sendJson(res, 200, { ok: false, error: 'СМС не настроены: добавьте SMS_RU_API_ID (кабинет sms.ru) в Environment' });
+      let to = String(b.to || '').replace(/\D/g, '');
+      if (to.length === 11 && to[0] === '8') to = '7' + to.slice(1);
+      if (to.length === 10) to = '7' + to;
+      if (!/^7\d{10}$/.test(to)) return sendJson(res, 400, { error: 'Неверный номер: ' + String(b.to || '') });
+      const text = String(b.text || '').slice(0, 600);
+      if (!text) return sendJson(res, 400, { error: 'Пустой текст' });
+      try {
+        const params = new URLSearchParams({ api_id: key, to, msg: text, json: '1' });
+        if (process.env.SMS_FROM) params.set('from', process.env.SMS_FROM);
+        const r = await fetch('https://sms.ru/sms/send?' + params.toString());
+        const j = await r.json();
+        const st = j && j.sms && j.sms[to];
+        const ok = !!(st && st.status === 'OK');
+        console.log('[смс] ' + to + ' → ' + (ok ? 'OK, осталось ' + (j.balance || '?') + ' ₽' : JSON.stringify(st || j).slice(0, 150)));
+        sendJson(res, 200, { ok, error: ok ? null : ((st && st.status_text) || (j && j.status_text) || 'ошибка провайдера'), balance: j && j.balance });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
     });
   }
 
