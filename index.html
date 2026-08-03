@@ -1916,17 +1916,75 @@ const STORE_DATA={};
 /* Типы точек — определяют, какие разделы показывать в меню.
    shop      — обычный магазин (без сервиса и запчастей)
    combined  — магазин + сервис (всё) */
+/* ============================================================
+   НАПРАВЛЕНИЯ ТОЧЕК — КОНСТРУКТОР ИЗ ТРЁХ МОДУЛЕЙ (03.08).
+   Каждая точка = набор галочек: devices / accessories / service.
+   Из них собираются меню и вкладки склада. Комбинаций — семь:
+   любые пары («аксы+сервис», «сервис+устройства», «аксы+устройства»),
+   одиночные и полный набор. Владелец меняет в Управлении.
+============================================================ */
+const STORE_MODULES={
+  devices:    {label:'📱 Устройства',  pages:['crm','orders','customers','purchase','pricing','deliveries','analytics','accounting','docs','connections'], whTabs:['tech','tradein']},
+  accessories:{label:'🎧 Аксессуары',  pages:[], whTabs:['accessories']},
+  service:    {label:'🔧 Сервис',      pages:['service'], whTabs:['parts']},
+};
+const STORE_BASE_PAGES=['dashboard','warehouse','team','manage','finance','expenses','tasks'];   /* есть у точки всегда */
+function storeModulesOf(sid){
+  try{
+    const H=(typeof chHomeStore==='function'?chHomeStore():DATA)||DATA;
+    if(!H.storeModules){
+      H.storeModules={};
+      /* миграция со старых профилей (combined/shop/accessories) либо дефолт 03.08 */
+      const legacy=H.storeTypes||{};
+      STORES.forEach(s=>{
+        const t=legacy[s.id]||(s.id==='store_kashirka'?'accessories':'combined');
+        H.storeModules[s.id]= t==='combined' ? {devices:true, accessories:true, service:true}
+                            : t==='shop'     ? {devices:true, accessories:true, service:false}
+                            :                  {devices:false, accessories:true, service:false};
+      });
+    }
+    if(!H.storeModules[sid]) H.storeModules[sid]={devices:true, accessories:true, service:true};
+    return H.storeModules[sid];
+  }catch(e){ return {devices:true, accessories:true, service:true}; }
+}
+function storeModulesLabel(sid){
+  const m=storeModulesOf(sid);
+  const on=Object.keys(STORE_MODULES).filter(k=>m[k]).map(k=>STORE_MODULES[k].label.replace(/^\S+ /,''));
+  return on.length===3?'все направления':(on.join(' + ')||'ничего не включено');
+}
+function applyStoreTypes(){
+  /* совместимость: s.type больше не источник правды, но держим его в согласии */
+  try{
+    STORES.forEach(s=>{
+      const m=storeModulesOf(s.id);
+      s.type = (m.devices&&m.service) ? 'combined' : (m.devices ? 'shop' : 'accessories');
+    });
+  }catch(e){}
+}
 const STORE_TYPES={
-  shop:     {label:'Магазин',                        hidePages:['service'], hideWarehouseTabs:['parts']},
-  combined: {label:'Магазин + сервис',               hidePages:[],          hideWarehouseTabs:[]},
+  shop:       {label:'Магазин'},
+  combined:   {label:'Магазин + сервис'},
+  accessories:{label:'Только аксессуары'},
 };
 function getCurrentStoreType(){
   const store=STORES.find(s=>s.id===STATE.activeStoreId);
   return store?.type||'combined';
 }
 function getStoreExcludedPages(){
-  const type=getCurrentStoreType();
-  return STORE_TYPES[type]?.hidePages||[];
+  try{
+    const m=storeModulesOf(STATE.activeStoreId);
+    const out=[];
+    Object.keys(STORE_MODULES).forEach(k=>{ if(!m[k]) out.push(...STORE_MODULES[k].pages); });
+    return out;
+  }catch(e){ return []; }
+}
+function getStoreHiddenWhTabs(){
+  try{
+    const m=storeModulesOf(STATE.activeStoreId);
+    const out=[];
+    Object.keys(STORE_MODULES).forEach(k=>{ if(!m[k]) out.push(...STORE_MODULES[k].whTabs); });
+    return out;
+  }catch(e){ return []; }
 }
 function getCurrentStore(){ return STORES.find(s=>s.id===STATE.activeStoreId)||STORES[0]; }
 
@@ -3083,6 +3141,10 @@ function renderPage(){
   }
   if(STATE.page!=='dashboard') STATE.dashFull=false;
   const renderers={dashboard:renderDashboard, crm:renderCrm, connections:renderConnections, orders:renderOrders, service:renderService, warehouse:renderWarehouse, purchase:renderPurchase, collection:renderCollection, receiving:renderReceiving, customers:renderCustomers, messages:renderMessages, pricing:renderPricing, finance:renderFinance, accounting:renderAccounting, expenses:renderExpenses, tasks:renderTasks, analytics:renderAnalytics, team:renderTeam, manage:renderManage, deliveries:renderDeliveries, docs:renderDocs};
+  /* страница скрыта направлением точки → на Главную (кроме владельца — ему видно всё) */
+  try{
+    if(STATE.role!=='owner' && getStoreExcludedPages().includes(STATE.page)) STATE.page='dashboard';
+  }catch(e){}
   renderers[STATE.page](c);
   if(STATE.page==='dashboard' && isMobileView() && STATE.dashFull){
     const back=document.createElement('button');
@@ -8215,8 +8277,7 @@ function whFreeOrphans(c){
 }
 function renderWarehouse(c){
   const role=ROLES[STATE.role];
-  const type=getCurrentStoreType();
-  const hiddenTabs=STORE_TYPES[type]?.hideWarehouseTabs||[];
+  const hiddenTabs=getStoreHiddenWhTabs();
   const tabs=role.warehouseTabs.filter(t=>!hiddenTabs.includes(t));
   if(!tabs.length){ c.innerHTML='<div class="card" style="text-align:center;padding:30px;"><div class="tsub">Для этого типа точки склад не настроен.</div></div>'; return; }
   if(!tabs.includes(STATE.whFilters.tab)) STATE.whFilters.tab=tabs[0];
@@ -8292,11 +8353,12 @@ function renderWarehouse(c){
     }
   } else {
     const isBu=STATE.whFilters.tab==='tradein';
+    const isAcc=STATE.whFilters.tab==='accessories';
     html+='<div class="table-wrap"><table><thead><tr>'+
       '<th>'+(hasImei?'IMEI':'Код')+'</th><th>Модель / товар</th>'+
       (role.seePurchase?'<th>Закупка</th>':'')+
       (hasImei?'<th>Цена продажи</th>':'<th>Остаток</th>')+
-      '<th>Статус</th><th>Местоположение</th>'+(isBu?'<th></th>':'')+'</tr></thead><tbody>';
+      '<th>Статус</th><th>Местоположение</th>'+((isBu||isAcc)?'<th></th>':'')+'</tr></thead><tbody>';
     if(items.length===0){
       html+='</tbody></table></div><div class="empty"><b>Ничего не найдено</b><span>Измените фильтры или запрос</span></div>';
     } else {
@@ -8309,7 +8371,8 @@ function renderWarehouse(c){
           (hasImei?'<td class="mono">'+(it.price?rub(it.price):'—')+'</td>':'<td class="mono">'+it.qty+' шт.</td>')+
           '<td><span class="badge '+st[1]+'">'+st[0]+'</span>'+((typeof isStale!=='undefined'&&isStale)?'<div class="tsub" style="color:var(--negative);font-weight:600;">⚠ не закрыт</div>':'')+'</td>'+
           '<td>'+it.location+'</td>'+
-          (isBu?('<td>'+(it.status==='instock'?'<button class="btn btn-sm btn-primary" data-sellbu="'+it.imei+'">Продать</button>':'')+'</td>'):'')+
+          (isBu?('<td>'+(it.status==='instock'?'<button class="btn btn-sm btn-primary" data-sellbu="'+it.imei+'">Продать</button>':'')+'</td>')
+            :(isAcc?('<td>'+((it.qty||0)>0?'<button class="btn btn-sm btn-primary" data-sellacc="'+escAttr(it.sku||it.model)+'">Продать</button>':'')+'</td>'):''))+
         '</tr>';
       });
       html+='</tbody></table></div>';
@@ -8392,6 +8455,7 @@ function renderWarehouse(c){
   const tiBtn=document.getElementById('whTradeinBtn');
   if(tiBtn) tiBtn.addEventListener('click', ()=>openTradeinAcceptModal(c));
   c.querySelectorAll('[data-sellbu]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation(); openSellBuModal(el.dataset.sellbu, c);}));
+  c.querySelectorAll('[data-sellacc]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation(); openSellAccModal(el.dataset.sellacc, c);}));
 }
 
 /* ============================================================
@@ -8565,6 +8629,37 @@ function openTradeinAcceptModal(c){
    Цена ниже закупа — можно, но с обязательным комментарием и
    уведомлением владельцу (решение владельца из опроса).
 ============================================================ */
+/* ПРОДАЖА АКСЕССУАРА СО СКЛАДА — точка аксессуаров живёт этой кнопкой (03.08).
+   Кол-во, цена, оплата → остаток минус, деньги в кассу точки, запись в продажи. */
+function openSellAccModal(code, c){
+  ensureMoneyData();
+  const it=(DATA.warehouse.accessories||[]).find(x=>(x.sku||x.model)===code);
+  if(!it || (it.qty||0)<=0){ toast('Товара нет в наличии', 'error'); return; }
+  let body='<div class="field-grid">'+
+    field('Товар', it.model)+field('Остаток', it.qty+' шт.')+
+    (isBossRole()?field('Закупка', rub(it.purchase||0)):'')+field('Цена', it.price?rub(it.price):'—')+
+  '</div>'+
+  '<div class="field" style="margin-top:12px;"><label>Количество</label><input class="input-mini" id="accQty" type="number" min="1" max="'+it.qty+'" value="1" style="width:100%;"></div>'+
+  '<div class="field" style="margin-top:8px;"><label>Цена за штуку</label><input class="input-mini" id="accPrice" type="number" min="0" style="width:100%;" value="'+(it.price||'')+'"></div>'+
+  '<div class="field" style="margin-top:8px;"><label>Оплата</label><select class="select-mini" id="accPay" style="width:100%;"><option>Наличные</option><option>Карта</option><option>QR-код</option></select></div>';
+  openModal('Продажа — '+it.model, 'Аксессуар со склада точки', body, [{label:'Продать', cls:'btn-primary', action:()=>{
+    const n=Math.max(1, Math.min(it.qty, parseInt(document.getElementById('accQty').value)||1));
+    const price=parseFloat(document.getElementById('accPrice').value);
+    if(isNaN(price)||price<=0){ toast('Укажите цену продажи', 'error'); return; }
+    const pay=document.getElementById('accPay').value;
+    const sum=Math.round(price*n);
+    it.qty-=n;
+    const cost=Math.round((it.purchase||0)*n);
+    if(pay==='Наличные'){ try{ cashBoxRef().amount+=sum; }catch(e){} } else DATA.assets.cashless+=sum;
+    DATA.salesLog.unshift({orderId:'акс: '+it.model, date:DATA.today, time:nowTime(), sum:sum, cost:cost, margin:sum-cost, payment:pay, via:'acc_store', by:currentEmployeeName()});
+    DATA.financeOps.unshift({date:DATA.today, type:'Продажа аксессуара', amount:sum, comment:it.model+' × '+n+' · '+pay, who:currentEmployeeName()});
+    if(DATA.finance){ DATA.finance.turnover.total+=sum; DATA.finance.revenue.total+=(sum-cost); }
+    if(it.qty<=2) pushNotif('Владелец', '📦 Заканчивается аксессуар «'+it.model+'»: остаток '+it.qty+' шт.');
+    if(typeof lsSave==='function') lsSave();
+    closeModal(); renderWarehouse(c); try{ beep('ok'); }catch(e){}
+    toast('Продано: '+it.model+' × '+n+' за '+rub(sum)+' ('+pay+')', 'success');
+  }}]);
+}
 function openSellBuModal(imei, c){
   ensureMoneyData();
   const it=DATA.warehouse.tradein.find(x=>x.imei===imei);
@@ -13642,6 +13737,20 @@ function controlPanelHTML(){
       '<div class="tsub" style="margin-top:4px;line-height:1.6;">Одним нажатием убрать всё демо, что могло остаться в рабочей базе: '+
       'демо-сотрудников Сергея Т. и Марата Б. (мастер Виктор остаётся — он ведёт Сервис), демо-уведомления и демо-идеи. Реальные данные не трогаются.</div>'+
       '<button class="btn btn-sm btn-danger" id="demoDetoxBtn" style="margin-top:10px;">Убрать демо-остатки</button></div>';
+  if(STATE.role==='owner'){
+    html+='<div class="card" style="margin-top:12px;"><div class="kpi-label">🏬 Направления точек</div>'+
+      '<div class="tsub" style="margin-top:4px;">Соберите направление точки из модулей — любая комбинация. Меню и склад у сотрудников точки подстроятся сами. Всегда остаются: Главная, Склад, Смены, Управление, Финансы и Расходы.</div>'+
+      STORES.map(s=>{
+        const m=storeModulesOf(s.id);
+        return '<div style="display:flex;align-items:center;gap:14px;margin-top:10px;flex-wrap:wrap;">'+
+          '<b style="min-width:150px;">'+escHtml(s.shortName)+'</b>'+
+          Object.keys(STORE_MODULES).map(k=>'<label class="tsub" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:normal;">'+
+            '<input type="checkbox" data-store-mod="'+s.id+'|'+k+'"'+(m[k]?' checked':'')+'> '+STORE_MODULES[k].label+'</label>').join('')+
+          '<span class="tsub" style="opacity:.6;">— '+escHtml(storeModulesLabel(s.id))+'</span>'+
+        '</div>';
+      }).join('')+
+    '</div>';
+  }
   }
   html+='<div class="section"><div class="section-head"><div class="section-title">Сотрудники и доступы</div>'+
     (isBossRole()||STATE.role==='admin'?'<button class="btn btn-sm" id="tgChatIdsBtn">✈ Найти chat_id</button>':'')+'</div>'+
@@ -13727,6 +13836,21 @@ function demoDetox(){
   return n;
 }
 function wireControlPanel(c){
+  document.querySelectorAll('[data-store-mod]').forEach(cb=>cb.addEventListener('change', ()=>{
+    const [sid,mod]=cb.dataset.storeMod.split('|');
+    const m=storeModulesOf(sid);
+    const next=Object.assign({}, m, {[mod]: cb.checked});
+    if(!next.devices && !next.accessories && !next.service){
+      cb.checked=true;
+      toast('Хотя бы один модуль должен остаться включённым', 'error');
+      return;
+    }
+    m[mod]=cb.checked;
+    applyStoreTypes();
+    if(typeof lsSave==='function') lsSave();
+    toast(escHtml((STORES.find(s=>s.id===sid)||{}).shortName||'')+': '+storeModulesLabel(sid), 'success');
+    renderSidebar(); renderPage();
+  }));
   const dx=document.getElementById('demoDetoxBtn');
   if(dx) dx.addEventListener('click',()=>{
     openModal('Убрать демо-остатки?','',
@@ -20301,7 +20425,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-92';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-94';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -22561,6 +22685,7 @@ function scheduleRebuildAsk(){
 
 (function ensureSupportProfiles(){
   try{
+    applyStoreTypes();
     Object.keys(STORE_DATA).forEach(sid=>{
       const d=STORE_DATA[sid];
       if(!d || !Array.isArray(d.employees)) return;
