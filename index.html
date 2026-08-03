@@ -12773,6 +12773,7 @@ function customerStats(cust){
 }
 
 function renderCustomers(c){
+  try{ customersRebuildFromOrders(); }catch(e){}   /* раздел всегда открывается со свежими данными */
   let html='<div class="toolbar">';
   html+='<input class="input-mini" id="custSearch" placeholder="Поиск по ФИО, телефону или e-mail" value="'+STATE.custQuery+'" style="width:280px;">';
   html+='<div class="toggle-row"><div class="toggle-switch '+(STATE.custConsentOnly?'on':'')+'" id="consentToggle"></div>Только с согласием на рассылку</div>';
@@ -15847,7 +15848,9 @@ async function strapiBackfill14d(){
       const ext='strapi_'+z.id;
       if((H.orders||[]).some(o=>o.externalId===ext)) return;
       const oid=Math.max(10000,...H.orders.map(o=>typeof o.id==='number'?o.id:0))+1;
-      H.orders.unshift(mapZakazToOrder(z, oid, false));
+      const _newOrd2=mapZakazToOrder(z, oid, false);
+      H.orders.unshift(_newOrd2);
+      try{ customerUpsertFromOrder(_newOrd2); }catch(e){}
       if(z.id>(H.siteLastZakazId||0)) H.siteLastZakazId=z.id;
       imported++;
     });
@@ -15917,7 +15920,9 @@ async function strapiOrdersSync(quiet){
         const ext='strapi_'+z.id;
         if((H.orders||[]).some(o=>o.externalId===ext)) return;
         const oid=Math.max(10000,...H.orders.map(o=>typeof o.id==='number'?o.id:0))+1;
-        H.orders.unshift(mapZakazToOrder(z, oid, false));   /* статусы разложатся по вкладкам */
+        const _newOrd=mapZakazToOrder(z, oid, false);
+        H.orders.unshift(_newOrd);   /* статусы разложатся по вкладкам */
+        try{ customerUpsertFromOrder(_newOrd); }catch(e){}
         imported++;
       });
       if(!maxId){
@@ -20449,7 +20454,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-95';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-97';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -20683,6 +20688,75 @@ function crmActiveCountOf(name){
   return (DATA.leads||[]).filter(l=>l.owner===name && ['working','waiting'].includes(l.stage)).length;
 }
 
+/* ============================================================
+   КЛИЕНТЫ ИЗ ЗАКАЗОВ (03.08): база клиентов живёт от реальных заказов.
+   customerUpsertFromOrder — вызывается на каждый новый заказ;
+   customersRebuildFromOrders — полная пересборка (кнопка в «Клиентах»).
+============================================================ */
+function customerUpsertFromOrder(o){
+  try{
+    if(!o || !o.phone) return null;
+    const p=normPhone(o.phone);
+    if(p.length<10) return null;
+    if(!Array.isArray(DATA.customers)) DATA.customers=[];
+    let cust=DATA.customers.find(c=>(c.phones||[]).some(ph=>normPhone(ph)===p));
+    if(!cust){
+      const nid=DATA.customers.reduce((m,c)=>Math.max(m, typeof c.id==='number'?c.id:0),0)+1;
+      cust={id:nid, name:String(o.name||'Без имени').slice(0,80), email:(o.email&&o.email!=='-')?o.email:null,
+        phones:[String(o.phone).slice(0,30)], consent:true, source:'Интернет-магазин', orders:[]};
+      DATA.customers.push(cust);
+    }
+    if(o.name && o.name!=='Без имени') cust.name=String(o.name).slice(0,80);      /* имя — по последнему заказу */
+    if(o.email && o.email!=='-' && !cust.email) cust.email=o.email;
+    if(!Array.isArray(cust.orders)) cust.orders=[];
+    if(!cust.orders.includes(o.id)) cust.orders.push(o.id);
+    /* суммы считаем по фактическим заказам этого телефона */
+    const his=(DATA.orders||[]).filter(x=>normPhone(x.phone)===p && x.status==='done');
+    cust.purchaseCount=his.length;
+    cust.totalSpent=his.reduce((s,x)=>{ try{ const v=orderPayablePrice(x); return s+(isFinite(v)?v:0); }catch(e){ return s; } },0);
+    return cust;
+  }catch(e){ return null; }
+}
+function customersRebuildFromOrders(){
+  /* один проход по заказам (быстро даже на тысячах) — вызывается автоматически */
+  if(!Array.isArray(DATA.customers)) DATA.customers=[];
+  const groups=new Map();
+  (DATA.orders||[]).forEach(o=>{
+    const p=normPhone(o.phone||'');
+    if(p.length<10) return;
+    let g=groups.get(p);
+    if(!g){ g={orders:[], done:0, total:0, name:'', email:'', raw:String(o.phone).slice(0,30)}; groups.set(p,g); }
+    g.orders.push(o.id);
+    if(o.name && o.name!=='Без имени') g.name=String(o.name).slice(0,80);
+    if(o.email && o.email!=='-' && !g.email) g.email=o.email;
+    if(o.status==='done'){
+      g.done++;
+      try{ const v=orderPayablePrice(o); if(isFinite(v)) g.total+=v; }catch(e){}
+    }
+  });
+  const byPhone=new Map();
+  DATA.customers.forEach(c=>(c.phones||[]).forEach(ph=>{ const p=normPhone(ph); if(p.length>=10 && !byPhone.has(p)) byPhone.set(p,c); }));
+  let created=0, updated=0;
+  groups.forEach((g,p)=>{
+    let c=byPhone.get(p);
+    if(!c){
+      const nid=DATA.customers.reduce((m,x)=>Math.max(m, typeof x.id==='number'?x.id:0),0)+1;
+      c={id:nid, name:g.name||'Без имени', email:g.email||null, phones:[g.raw], consent:true, source:'Интернет-магазин', orders:[]};
+      DATA.customers.push(c); byPhone.set(p,c); created++;
+    } else updated++;
+    if(g.name) c.name=g.name;
+    if(g.email && !c.email) c.email=g.email;
+    if(!Array.isArray(c.orders)) c.orders=[];
+    g.orders.forEach(id=>{ if(!c.orders.includes(id)) c.orders.push(id); });
+    c.purchaseCount=g.done;
+    c.totalSpent=Math.round(g.total);
+  });
+  return {created, updated};
+}
+/* Автообновление базы клиентов: после запуска (когда импорты отработали)
+   и далее каждые 5 минут — раздел «Клиенты» всегда актуален, кнопок не нужно. */
+setTimeout(()=>{ try{ const r=customersRebuildFromOrders(); if(r.created) console.log('Клиенты: автосборка, новых '+r.created); }catch(e){} }, 25000);
+setInterval(()=>{ try{ customersRebuildFromOrders(); }catch(e){} }, 300000);
 function crmEnsureCustomer(l, viaLabel){
   const p=normPhone(l.contact);
   if(p.length<10) return null;
@@ -22746,6 +22820,22 @@ function scheduleRebuildAsk(){
       if(!d._staffRealign77){
         d._staffRealign77=1; d._staffRealign76=1; d._staffRealign74=1;
         staffRealignApply(d, false);
+      }
+      /* 29.07-96: демо-клиенты из старых данных — удалить, если на их номера
+         нет реальных заказов (реальные приходят с сайта с externalId) */
+      if(!d._custClean96b){
+        d._custClean96b=1; d._custClean96=1;
+        const demoPhones=['79167000077','79214401209','79112208744','79056613002','79990142287','79021197765','79218876512','79163049018','79256601244','79032001187','79031002030','79162003040'].map(String);
+        if(Array.isArray(d.customers)){
+          for(let i=d.customers.length-1;i>=0;i--){
+            const cst=d.customers[i];
+            const ph=(cst.phones||[]).map(x=>String(x).replace(/\D/g,''));
+            if(ph.some(x=>demoPhones.includes(x))){
+              const hasReal=(d.orders||[]).some(o=>o.externalId && ph.includes(String(o.phone||'').replace(/\D/g,'')));
+              if(!hasReal) d.customers.splice(i,1);
+            }
+          }
+        }
       }
       /* всегда (идемпотентно): продавцы теперь называются менеджерами */
       d.employees.forEach(e=>{
