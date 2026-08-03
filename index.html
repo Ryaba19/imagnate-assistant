@@ -2905,8 +2905,24 @@ function shiftTgChatIds(){
   }catch(e){}
   return out;
 }
-/* Рабочие уведомления: владелец + сотрудники, которые сегодня на смене */
-function tgNotifyShift(text){ tgNotify(text, shiftTgChatIds()); }
+/* ДВА ПОТОКА (решение владельца 03.08).
+   «Сотрудники»: группа смены (chat_id в настройках) + личные чаты тех, кто на
+   смене — сюда идут только новые заказы и заявки. Владелец получает всё и так:
+   сервер всегда дублирует в TELEGRAM_CHAT_IDS (личка владельца).
+   «Владелец»: только личка владельца (+ опц. отдельная группа) — закупы,
+   висяки, контроль. Смене это не шлётся. */
+function tgStaffChat(){ const v=DATA.settings && DATA.settings.tgStaffChat; return v?String(v).trim():null; }
+function tgOwnerChat(){ const v=DATA.settings && DATA.settings.tgOwnerChat; return v?String(v).trim():null; }
+function tgNotifyShift(text){
+  const extra=shiftTgChatIds();
+  const g=tgStaffChat();
+  if(g) extra.push(g);
+  tgNotify(text, extra);
+}
+function tgNotifyOwner(text){
+  const g=tgOwnerChat();
+  tgNotify(text, g?[g]:[]);   /* пусто → уйдёт только в личку владельца (env сервера) */
+}
 function sendRealMail(to, subject, body, isHtml){
   try{
     if(!DATA.settings || !DATA.settings.mailRealSend) return Promise.resolve({skipped:true});
@@ -3490,6 +3506,15 @@ function renderDashboard(c){
   const revToday=todaySales.reduce((s,x)=>s+x.sum,0);
   const cnt=st=>DATA.orders.filter(o=>o.status===st).length;
   const newCnt=cnt('new'), readyCnt=cnt('ready'), delivCnt=cnt('delivering');
+  try{
+    const _stale=staleReadyOrders();
+    if(_stale.length){
+      html+='<div class="card clickable" id="dashStaleCard" style="margin-bottom:12px;border-color:var(--negative);">'+
+        '<div class="kpi-label" style="color:var(--negative);">⚠ Возможно выданы, но не закрыты: '+_stale.length+'</div>'+
+        '<div class="tsub" style="margin-top:4px;">'+_stale.slice(0,3).map(o=>'№'+o.id+' · '+(o.name||'—')).join(' · ')+(_stale.length>3?' · …':'')+' — нажмите, чтобы разобрать</div>'+
+      '</div>';
+    }
+  }catch(e){}
   html+='<div class="section"><div class="section-head"><div><div class="section-eyebrow">Сегодня · '+DATA.today+'</div><div class="section-title">Цифры дня</div></div></div>';
   html+='<div class="grid grid-4">'+
     '<div class="card clickable" data-dd="rev">'+kpiInner('Выручка сегодня', rub(revToday), todaySales.length+' продаж(и)')+'</div>'+
@@ -4168,6 +4193,93 @@ function orderFreshInfo(o){
   if(dd<=7) return {label:dd+' дн назад', cls:''};
   return {label:ruDateStr(d), cls:'opacity:.55;'};
 }
+/* ============================================================
+   «ВЫДАН, НО НЕ ЗАКРЫТ»: заказ в «Готов к выдаче», а дата выдачи
+   уже прошла — либо клиент не пришёл, либо выдали мимо системы.
+   Система не решает сама: подсвечивает, напоминает и даёт разобрать
+   в один клик. Вечером — Telegram владельцу и смене (тот же бот).
+============================================================ */
+function staleReadyOrders(){
+  const t0=todayDate();
+  const today0=new Date(t0.getFullYear(), t0.getMonth(), t0.getDate());
+  return DATA.orders.filter(o=>{
+    if(o.archived || o.status!=='ready') return false;
+    const dd=parseRuDate(o.desiredDate||'');
+    if(dd) return dd<today0;
+    /* даты выдачи нет — смотрим, когда заказ стал «Готов к выдаче» */
+    try{
+      const h=(o.statusHistory||[]).filter(x=>x.to==='ready').pop();
+      if(h && h.at){ const d=parseRuDate(String(h.at).split(' ')[0]); if(d) return d<today0; }
+    }catch(e){}
+    return false;
+  });
+}
+function openStaleReviewModal(c){
+  const list=staleReadyOrders();
+  if(!list.length){ toast('Незакрытых заказов с прошедшей датой нет', 'success'); return; }
+  let body='<div class="tsub" style="margin-bottom:10px;">Эти заказы стоят в «Готов к выдаче», хотя дата выдачи прошла. '+
+    'Если товар уже отдали клиенту — нажмите «Выдан»: откроется обычное окно выдачи со сканером, деньги лягут в кассу сегодняшним днём. '+
+    'Если клиент не пришёл — перенесите дату.</div>';
+  list.forEach(o=>{
+    body+='<div class="card" style="margin-bottom:8px;border-left:3px solid var(--negative);">'+
+      '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;">'+
+        '<div><b>№'+o.id+'</b> · '+escHtml(o.name||'—')+(o.phone?' · '+escHtml(o.phone):'')+
+          '<div class="tsub">'+escHtml((o.items||[]).map(i=>i.name).join(', ').slice(0,90))+'</div>'+
+          '<div class="tsub">Дата выдачи: <b style="color:var(--negative);">'+escHtml(o.desiredDate||'не назначена')+'</b> · '+rub(orderPayablePrice(o))+'</div></div>'+
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
+          '<button class="btn btn-sm btn-primary" data-stale-issue="'+o.id+'">✓ Выдан</button>'+
+          '<button class="btn btn-sm" data-stale-move="'+o.id+'">Клиент не пришёл</button>'+
+          '<button class="btn btn-sm btn-danger" data-stale-cancel="'+o.id+'">Отмена заказа</button>'+
+        '</div>'+
+      '</div></div>';
+  });
+  openModal('⚠ Не закрытые заказы: '+list.length, 'Дата выдачи прошла, статус не изменён', body,
+    [{label:'Закрыть', cls:'btn', action:closeModal}]);
+  document.querySelectorAll('[data-stale-issue]').forEach(b=>b.addEventListener('click', ()=>{
+    const id=parseInt(b.getAttribute('data-stale-issue'));
+    const o=findOrder(id);
+    if(o) (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'note', comment:'Разбор незакрытых: выдача была '+(o.desiredDate||'ранее')+', оформляем сейчас'});
+    closeModal();
+    openIssueModal(id);
+  }));
+  document.querySelectorAll('[data-stale-move]').forEach(b=>b.addEventListener('click', ()=>{
+    const id=parseInt(b.getAttribute('data-stale-move'));
+    closeModal();
+    openEditDateModal(id, c||document.getElementById('pageContent'));
+  }));
+  document.querySelectorAll('[data-stale-cancel]').forEach(b=>b.addEventListener('click', ()=>{
+    const id=parseInt(b.getAttribute('data-stale-cancel'));
+    const o=findOrder(id);
+    if(!o) return;
+    setOrderStatus(o,'cancel');
+    (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'note', comment:'Разбор незакрытых: клиент не забрал — заказ отменён'});
+    try{ releaseOrderItems(o); }catch(e){}
+    toast('Заказ №'+id+' отменён', 'info');
+    openStaleReviewModal(c);
+  }));
+}
+/* Вечерний Telegram по незакрытым: после 21:00, один раз в день, если есть что разбирать */
+function staleReadyTgCheck(){
+  try{
+    const list=staleReadyOrders();
+    if(!list.length) return;
+    if(new Date().getHours()<21) return;
+    if(DATA._staleTgDate===DATA.today) return;
+    DATA._staleTgDate=DATA.today;
+    if(typeof lsSave==='function') lsSave();
+    tgNotifyOwner('⚠ Не закрыты заказы с прошедшей датой выдачи: '+list.length+'\n'+
+      list.slice(0,10).map(o=>'№'+o.id+' · '+(o.name||'—')+' · выдача '+(o.desiredDate||'—')).join('\n')+
+      (list.length>10?'\n…и ещё '+(list.length-10):'')+
+      '\nЗайдите в «Заказы» → красная плашка → разобрать.');
+  }catch(e){}
+}
+setInterval(staleReadyTgCheck, 120000);
+document.addEventListener('click', e=>{ const b=e.target && e.target.closest && e.target.closest('#whFreeOrphansBtn'); if(b) whFreeOrphans(document.getElementById('pageContent')); });
+document.addEventListener('click', e=>{
+  const card=e.target && e.target.closest && e.target.closest('#dashStaleCard');
+  if(card){ STATE.page='orders'; renderPage(); setTimeout(()=>openStaleReviewModal(document.getElementById('pageContent')), 120); }
+});
+
 function renderOrders(c){
   /* Пересчёт состояния цены на всех заказах.
      Заказы в ожидании «дозревают» сами, когда подходит срок. */
@@ -4214,6 +4326,15 @@ function renderOrders(c){
       '<div class="tsub" style="margin-top:4px;">Подтвердить заказ, согласовать цену или прозвонить по истёкшей цене.</div>'+
     '</div>';
   }
+  const staleList=staleReadyOrders();
+  if(staleList.length && (STATE.ordersFilter==='all'||STATE.ordersFilter==='ready')){
+    html+='<div class="card clickable" id="staleReviewCard" style="margin-bottom:12px;border-color:var(--negative);">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">'+
+        '<div><div class="kpi-label" style="color:var(--negative);">⚠ Возможно выданы, но не закрыты: '+staleList.length+'</div>'+
+        '<div class="tsub" style="margin-top:4px;">Дата выдачи прошла, а заказ всё ещё «Готов к выдаче». Нажмите, чтобы разобрать.</div></div>'+
+        '<button class="btn btn-sm btn-primary" id="staleReviewBtn">Разобрать</button>'+
+      '</div></div>';
+  }
 
   const list=live.filter(o=>STATE.ordersFilter==='all'||o.status===STATE.ordersFilter);
 
@@ -4234,6 +4355,7 @@ function renderOrders(c){
          только потом согласовывать цену. */
       const notConfirmed  = o.status==='new' && !o.confirmedAt;
       const awaitingPrice = pl.status==='pending' && (o.status==='new'||o.status==='deferred');
+      const isStale = o.status==='ready' && staleList.some(s=>s.id===o.id);
       let actions='<button class="btn btn-sm" data-open="'+o.id+'">Открыть</button>';
       if(pl.status==='expired'){
         actions+='<button class="btn btn-sm btn-primary" data-chase="'+o.id+'">Прозвон</button>';
@@ -4265,6 +4387,7 @@ function renderOrders(c){
 
       /* СТАТУС — с пояснением, почему заказ в этом состоянии */
       let statusCell='<span class="badge '+st[1]+'">'+st[0]+'</span>';
+      if(isStale) statusCell+='<div class="tsub" style="margin-top:3px;color:var(--negative);font-weight:600;">⚠ не закрыт — дата выдачи прошла</div>';
       let hint='';
       if(notConfirmed)                  hint='Позвонить, уточнить дату выдачи';
       else if(awaitingPrice)            hint='Позвонить, согласовать цену';
@@ -4326,6 +4449,8 @@ function renderOrders(c){
   if(mailBtn) mailBtn.addEventListener('click', openMailSettingsModal);
   const rvBtn=document.getElementById('reviewsBtn');
   if(rvBtn) rvBtn.addEventListener('click', openClientReviewsModal);
+  const stCard=document.getElementById('staleReviewCard');
+  if(stCard) stCard.addEventListener('click', ()=>openStaleReviewModal(c));
 
 }
 
@@ -4763,8 +4888,10 @@ function whNameNorm(s){
     /* единицы: «256 ГБ»/«256ГБ»/«256 gb» → «256gb», так же ТБ и мм */
     .replace(/(\d+) ?(гб|gb)(?= |$)/g,'$1gb')
     .replace(/(\d+) ?(тб|tb)(?= |$)/g,'$1tb')
-    .replace(/(\d+) ?(мм|mm)(?= |$)/g,'$1mm');
+    .replace(/(\d+) ?(мм|mm)(?= |$)/g,'$1mm')
+    .replace(/(\d+) ?(м|m)(?= |$)/g,'$1m');
 }
+const WH_MODEL_MODS=new Set(['pro','max','ultra','plus','mini','lite','se','fe','air','note','prime']);
 function whNameEq(a, b){
   const na=whNameNorm(a), nb=whNameNorm(b);
   if(!na || !nb) return false;
@@ -4774,6 +4901,10 @@ function whNameEq(a, b){
   const sw=shortN.split(' ');
   if(sw.length<2) return false;                      /* одно слово — слишком слабый признак */
   if(!sw.every(w=>lw.has(w))) return false;          /* каждое слово короткого есть в длинном */
+  /* модификаторы моделей (Pro/Max/Ultra/Plus/mini/SE…) обязаны совпадать В ОБЕ стороны —
+     иначе «15 Pro» слипнется с «15», а «S24 Ultra» с «S24» */
+  const sws=new Set(sw);
+  for(const w of lw){ if(WH_MODEL_MODS.has(w) && !sws.has(w)) return false; }
   /* все числа длинного (память, диагональ, поколение) обязаны быть и в коротком, и наоборот */
   const digits=s=>s.split(' ').filter(w=>/\d/.test(w)).sort().join('|');
   return digits(shortN)===digits(longN) || digits(shortN)==='' ;
@@ -5305,6 +5436,12 @@ function openOrderSettingsModal(){
     '<div class="field" style="margin:6px 0;"><label>Адрес в сообщении клиенту</label><input class="input-mini" id="setReadyAddr" style="width:100%;" value="'+escAttr((DATA.settings.readyMsgAddress)||'ТЦ «Лунный», Лунная ул. 4')+'"></div>'+
     '<p class="tsub">СМС уходят, когда на сервере задан ключ SMS_RU_API_ID (кабинет sms.ru, ~2-4 ₽ за СМС). Без ключа система отправит письмо на email клиента (если включена почта выше).</p>'+
     '<p class="tsub">Для работы на сервере должны быть заданы TELEGRAM_BOT_TOKEN / SMTP-переменные — см. файл «НАСТРОЙКА-УВЕДОМЛЕНИЙ.md».</p>'+
+    '<div class="drill-divider"></div><div class="drill-block-label">Telegram: два потока</div>'+
+    '<div class="field" style="margin:6px 0;"><label>Группа сотрудников (chat_id) — сюда идут только новые заказы и заявки</label>'+
+      '<input class="input-mini" id="setTgStaff" style="width:100%;" placeholder="например -1001234567890 (пусто — только личные чаты смены)" value="'+escAttr(DATA.settings.tgStaffChat||'')+'"></div>'+
+    '<div class="field" style="margin:6px 0;"><label>Группа владельца (chat_id) — закупы, незакрытые заказы, контроль</label>'+
+      '<input class="input-mini" id="setTgOwner" style="width:100%;" placeholder="пусто — всё идёт в личку владельца (TELEGRAM_CHAT_IDS на сервере)" value="'+escAttr(DATA.settings.tgOwnerChat||'')+'"></div>'+
+    '<p class="tsub">Как настроить: создайте группу в Telegram, добавьте туда бота @iMagnate_Asistentbot, затем добавьте в группу @getmyid_bot (или перешлите любое сообщение из группы боту @userinfobot) — он покажет chat_id вида −100…, вставьте его сюда. Личка владельца получает все уведомления в любом случае.</p>'+
     (tech?
       '<div class="drill-divider"></div><div class="drill-block-label">Локальный сервер данных (база на компьютере владельца)</div>'+
       '<div class="field"><label>Адрес локального сервера</label><input class="input-mini" id="setLocalApi" style="width:100%;" placeholder="http://192.168.1.10:8787 (пусто = автоматически)" value="'+escAttr(DATA.settings.localApiUrl||'')+'"></div>'
@@ -5341,6 +5478,8 @@ function openOrderSettingsModal(){
     const rnC=document.getElementById('setReadyNotify'); if(rnC) DATA.settings.readyNotifyEnabled=rnC.checked;
     const rsC=document.getElementById('setReadySms'); if(rsC) DATA.settings.readySmsEnabled=rsC.checked;
     const raC=document.getElementById('setReadyAddr'); if(raC && raC.value.trim()) DATA.settings.readyMsgAddress=raC.value.trim();
+    const tsC=document.getElementById('setTgStaff'); if(tsC) DATA.settings.tgStaffChat=tsC.value.trim();
+    const toC=document.getElementById('setTgOwner'); if(toC) DATA.settings.tgOwnerChat=toC.value.trim();
     const laC=document.getElementById('setLocalApi'); if(laC) DATA.settings.localApiUrl=laC.value.trim();
     const csC=document.getElementById('setCloudSync'); if(csC) DATA.settings.cloudSyncEnabled=csC.checked;
     const stT=document.getElementById('setStrapiToken');
@@ -7956,6 +8095,24 @@ function openInventoryModal(c){
   });
 }
 
+/* Осиротевшие резервы: юнит стоит «в резерве», но его IMEI не привязан ни к одному
+   активному заказу — обычно после отмены заказа или разбора висяков. Такой юнит
+   нельзя ни продать, ни выдать. Показываем владельцу плашку и чиним в один клик. */
+function whOrphanReserved(){
+  try{
+    const active=new Set(DATA.orders.filter(o=>!['done','cancel'].includes(o.status)||!o.archived)
+      .filter(o=>!['done','cancel'].includes(o.status))
+      .flatMap(o=>(o.items||[]).map(it=>it.imei)).filter(x=>x&&x!=='—'));
+    return [...DATA.warehouse.tech, ...DATA.warehouse.tradein].filter(u=>u.status==='reserved' && !active.has(u.imei));
+  }catch(e){ return []; }
+}
+function whFreeOrphans(c){
+  const list=whOrphanReserved();
+  list.forEach(u=>{ u.status='instock'; });
+  toast('Освобождено из резерва: '+list.length+' шт', 'success');
+  if(typeof lsSave==='function') lsSave();
+  renderWarehouse(c||document.getElementById('pageContent'));
+}
 function renderWarehouse(c){
   const role=ROLES[STATE.role];
   const type=getCurrentStoreType();
@@ -7964,7 +8121,17 @@ function renderWarehouse(c){
   if(!tabs.length){ c.innerHTML='<div class="card" style="text-align:center;padding:30px;"><div class="tsub">Для этого типа точки склад не настроен.</div></div>'; return; }
   if(!tabs.includes(STATE.whFilters.tab)) STATE.whFilters.tab=tabs[0];
 
-  let html='<div class="grid grid-4" style="margin-bottom:18px;">'+tabs.map(t=>whCategoryCard(t)).join('')+'</div>';
+  let html='';
+  const orph=isBossRole()?whOrphanReserved():[];
+  if(orph.length){
+    html+='<div class="card" style="margin-bottom:12px;border-color:var(--warning);">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">'+
+        '<div><div class="kpi-label" style="color:var(--warning);">⚠ В резерве без заказа: '+orph.length+'</div>'+
+        '<div class="tsub" style="margin-top:4px;">'+orph.slice(0,3).map(u=>escHtml(u.model)).join(' · ')+(orph.length>3?' · …':'')+' — вероятно, заказ отменён, а резерв остался. Юниты нельзя продать, пока они в резерве.</div></div>'+
+        '<button class="btn btn-sm btn-primary" id="whFreeOrphansBtn">Освободить</button>'+
+      '</div></div>';
+  }
+  html+='<div class="grid grid-4" style="margin-bottom:18px;">'+tabs.map(t=>whCategoryCard(t)).join('')+'</div>';
   html+='<div class="toolbar"><div class="chip-tabs">'+
     tabs.map(t=>'<div class="chip-tab '+(STATE.whFilters.tab===t?'active':'')+'" data-wt="'+t+'">'+WH_TABS[t]+'</div>').join('')+
     '</div><div class="topbar-spacer"></div>'+
@@ -8040,7 +8207,7 @@ function renderWarehouse(c){
           '<td class="tname">'+it.model+'</td>'+
           (role.seePurchase?'<td class="mono">'+rub(it.purchase)+'</td>':'')+
           (hasImei?'<td class="mono">'+(it.price?rub(it.price):'—')+'</td>':'<td class="mono">'+it.qty+' шт.</td>')+
-          '<td><span class="badge '+st[1]+'">'+st[0]+'</span></td>'+
+          '<td><span class="badge '+st[1]+'">'+st[0]+'</span>'+((typeof isStale!=='undefined'&&isStale)?'<div class="tsub" style="color:var(--negative);font-weight:600;">⚠ не закрыт</div>':'')+'</td>'+
           '<td>'+it.location+'</td>'+
           (isBu?('<td>'+(it.status==='instock'?'<button class="btn btn-sm btn-primary" data-sellbu="'+it.imei+'">Продать</button>':'')+'</td>'):'')+
         '</tr>';
@@ -13128,6 +13295,7 @@ function scheduleCalendarHTML(){
   const daysInMonth=new Date(y, m+1, 0).getDate();
   let lead=(first.getDay()+6)%7;   // сколько пустых клеток до 1-го числа
 
+  try{ lunnayaMinTwoEnforce(); }catch(e){}
   let html='<div class="section-head" style="margin-bottom:10px;">'+
     '<div><div class="section-eyebrow">Рабочий график</div>'+
     '<div class="section-title">'+MONTH_NAMES[m]+' '+y+'</div>'+
@@ -14159,7 +14327,7 @@ function renderDeliveriesOverview(c){
             '<td class="tsub" style="max-width:190px;">'+escHtml(o.address||o.delivery||'—')+'</td>'+
             '<td class="mono">'+rub(orderPayablePrice(o))+'</td>'+
             '<td class="tsub">'+escHtml(o.payment||'—')+'</td>'+
-            '<td><span class="badge '+st[1]+'">'+st[0]+'</span></td>'+
+            '<td><span class="badge '+st[1]+'">'+st[0]+'</span>'+((typeof isStale!=='undefined'&&isStale)?'<div class="tsub" style="color:var(--negative);font-weight:600;">⚠ не закрыт</div>':'')+'</td>'+
             '<td class="row-actions">'+
               '<button class="btn btn-sm" data-open="'+o.id+'">Открыть</button>'+
               (o.status==='delivering'?'<button class="btn btn-sm btn-primary" data-reconcile="'+o.id+'">Принять от курьера</button>':'')+
@@ -20011,7 +20179,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-79';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-84';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -20433,6 +20601,18 @@ function normPhone(s){ let d=String(s||'').replace(/\D/g,''); if(d.length===11&&
 function notifyPurchaseNew(item, qty, from){
   notifyEmployee('Владелец','📦 Закуп: нужно дозаказать «'+item+'» × '+(qty||1)+(from?' ('+from+')':''));
   notifyEmployee('Директор','📦 Закуп: «'+item+'» × '+(qty||1)+(from?' ('+from+')':''));
+  /* Telegram владельцу: что купить, к какому заказу, когда клиент ждёт */
+  try{
+    let ctx='';
+    const m=String(from||'').match(/заказ №(\d+)/);
+    if(m){
+      const o=findOrder(parseInt(m[1]));
+      if(o) ctx='\nЗаказ №'+o.id+' · '+(o.name||'—')+
+        '\nВыдача клиенту: '+(o.desiredDate||'дата не назначена')+
+        (o.phone&&o.phone!=='-'?'\nТелефон: '+o.phone:'');
+    } else if(from) ctx='\nОткуда: '+from;
+    tgNotifyOwner('📦 Закуп: «'+item+'» × '+(qty||1)+ctx);   /* item — полное имя позиции, как на сайте */
+  }catch(e){}
   if(typeof renderSidebar==='function') renderSidebar();
 }
 
@@ -22158,6 +22338,50 @@ function scheduleContinueFromManual(){
   });
   return touched;
 }
+/* ПРАВИЛО (владелец, 03.08): на Лунной 4 не может быть одного менеджера
+   «по системе» — одиночная смена допустима только ручным выбором владельца.
+   Проверяем ближайшие 62 дня: если авто-карусель даёт ровно одного менеджера
+   (мастер не в счёт) и день НЕ задан вручную — дописываем второго:
+   менеджера Лунной, свободного в этот день, с наименьшим числом смен в месяце.
+   Свои автодописки помечаем и пересчитываем при каждом прогоне (idempotent). */
+function lunnayaMinTwoEnforce(){
+  try{
+    ensureShiftData();
+    const SID='store_lunnaya';
+    const isMgr=e=>/менеджер|продавец|владелец/i.test(String(e.role||''));
+    const t0=schedToday();
+    if(!DATA.shiftAutoFill) DATA.shiftAutoFill={};
+    let added=0;
+    for(let i=0;i<62;i++){
+      const date=new Date(t0.getFullYear(), t0.getMonth(), t0.getDate()+i);
+      const key=dkey(date);
+      const hasRec=DATA.shiftAssignments && DATA.shiftAssignments[key];
+      if(hasRec && !DATA.shiftAutoFill[key]) continue;          /* ручной день — выбор владельца */
+      let prevSnap=null;
+      if(hasRec && DATA.shiftAutoFill[key]){                    /* наша прошлая дописка — пересчитать заново */
+        prevSnap=JSON.stringify(DATA.shiftAssignments[key]);
+        delete DATA.shiftAssignments[key];
+        delete DATA.shiftAutoFill[key];
+      }
+      const working=DATA.employees.filter(e=>!e.support && isMgr(e) && shiftForAt(e, date, SID));
+      if(working.length!==1) continue;
+      const busyAnywhere=e=>STORES.some(s=>shiftForAt(e, date, s.id));
+      const candidates=DATA.employees.filter(e=>!e.support && isMgr(e) && e.schedule &&
+        empStoreId(e)===SID && e.id!==working[0].id && !busyAnywhere(e));
+      if(!candidates.length) continue;
+      const load=e=>{
+        let c=0; const y=date.getFullYear(), m=date.getMonth(), dim=new Date(y,m+1,0).getDate();
+        for(let d2=1; d2<=dim; d2++){ if(shiftFor(e, new Date(y,m,d2))) c++; }
+        return c;
+      };
+      candidates.sort((a,b)=>load(a)-load(b));
+      toggleDayPerson(key, candidates[0].id, true);
+      DATA.shiftAutoFill[key]=1;
+      if(prevSnap!==JSON.stringify(DATA.shiftAssignments[key])) added++;   /* без шума при повторных прогонах */
+    }
+    return added;
+  }catch(e){ console.warn('lunnayaMinTwoEnforce:', e); return 0; }
+}
 /* Кнопка «Пересчитать график»: два режима —
    продолжить карусель от ручных правок ИЛИ сбросить к карточкам. */
 function scheduleRebuildAsk(){
@@ -22174,6 +22398,8 @@ function scheduleRebuildAsk(){
       {label:'Продолжить от правок', cls:'btn-primary', action:()=>{
         try{
           const n=scheduleContinueFromManual();
+          const fixed=lunnayaMinTwoEnforce();
+          if(fixed) toast('Дни с одним менеджером на Лунной добиты вторым: '+fixed, 'info');
           if(typeof lsSave==='function') lsSave();
           closeModal();
           renderPage();
@@ -22192,6 +22418,8 @@ function scheduleRebuildAsk(){
             seen.add(d.shiftAssignments);
             Object.keys(d.shiftAssignments).forEach(k=>{ delete d.shiftAssignments[k]; });
           });
+          if(DATA.shiftAutoFill) DATA.shiftAutoFill={};
+          lunnayaMinTwoEnforce();
           if(typeof lsSave==='function') lsSave();
           closeModal();
           renderPage();
