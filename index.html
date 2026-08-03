@@ -1862,9 +1862,9 @@ let DATA = {
 
 /* --------------------------- PERMISSIONS --------------------------- */
 const ROLES = {
-  owner:{label:'Владелец', short:'ВЛ', menu:['dashboard','crm','orders','service','warehouse','purchase','customers','pricing','finance','accounting','expenses','analytics','tasks','team','manage','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:true, canConfirmPurchase:true, canPriceCollection:true},
-  director:{label:'Директор — Лунная 4', short:'Д1', homeStoreId:'store_lunnaya', menu:['dashboard','crm','orders','service','warehouse','purchase','customers','pricing','finance','accounting','expenses','analytics','tasks','team','manage','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:true, canConfirmPurchase:true, canPriceCollection:true},
-  director2:{label:'Директор — Каширское ш. 8', short:'Д2', homeStoreId:'store_kashirka', menu:['dashboard','crm','orders','service','warehouse','purchase','customers','pricing','finance','accounting','expenses','analytics','tasks','team','manage','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:true, canConfirmPurchase:true, canPriceCollection:true},
+  owner:{label:'Владелец', short:'ВЛ', menu:['dashboard','crm','orders','service','warehouse','purchase','customers','pricing','finance','accounting','expenses','analytics','tasks','team','manage','connections','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:true, canConfirmPurchase:true, canPriceCollection:true},
+  director:{label:'Директор — Лунная 4', short:'Д1', homeStoreId:'store_lunnaya', menu:['dashboard','crm','orders','service','warehouse','purchase','customers','pricing','finance','accounting','expenses','analytics','tasks','team','manage','connections','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:true, canConfirmPurchase:true, canPriceCollection:true},
+  director2:{label:'Директор — Каширское ш. 8', short:'Д2', homeStoreId:'store_kashirka', menu:['dashboard','crm','orders','service','warehouse','purchase','customers','pricing','finance','accounting','expenses','analytics','tasks','team','manage','connections','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:true, canConfirmPurchase:true, canPriceCollection:true},
   admin:{label:'Админ', short:'АД', menu:['dashboard','connections','orders','manage','team','tasks','docs'], seePurchase:false, seeProfit:false, warehouseTabs:[], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
   senior:{label:'Старший менеджер', short:'СМ', menu:['dashboard','crm','orders','service','warehouse','purchase','pricing','finance','expenses','analytics','tasks','team','manage','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:false, canConfirmPurchase:true, canPriceCollection:true},
   seller:{label:'Менеджер', short:'МН', menu:['dashboard','crm','orders','service','warehouse','finance','expenses','tasks','team','docs'], seePurchase:false, seeProfit:false, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
@@ -1916,17 +1916,75 @@ const STORE_DATA={};
 /* Типы точек — определяют, какие разделы показывать в меню.
    shop      — обычный магазин (без сервиса и запчастей)
    combined  — магазин + сервис (всё) */
+/* ============================================================
+   НАПРАВЛЕНИЯ ТОЧЕК — КОНСТРУКТОР ИЗ ТРЁХ МОДУЛЕЙ (03.08).
+   Каждая точка = набор галочек: devices / accessories / service.
+   Из них собираются меню и вкладки склада. Комбинаций — семь:
+   любые пары («аксы+сервис», «сервис+устройства», «аксы+устройства»),
+   одиночные и полный набор. Владелец меняет в Управлении.
+============================================================ */
+const STORE_MODULES={
+  devices:    {label:'📱 Устройства',  pages:['crm','orders','customers','purchase','pricing','deliveries','analytics','accounting','docs','connections'], whTabs:['tech','tradein']},
+  accessories:{label:'🎧 Аксессуары',  pages:[], whTabs:['accessories']},
+  service:    {label:'🔧 Сервис',      pages:['service'], whTabs:['parts']},
+};
+const STORE_BASE_PAGES=['dashboard','warehouse','team','manage','finance','expenses','tasks'];   /* есть у точки всегда */
+function storeModulesOf(sid){
+  try{
+    const H=(typeof chHomeStore==='function'?chHomeStore():DATA)||DATA;
+    if(!H.storeModules){
+      H.storeModules={};
+      /* миграция со старых профилей (combined/shop/accessories) либо дефолт 03.08 */
+      const legacy=H.storeTypes||{};
+      STORES.forEach(s=>{
+        const t=legacy[s.id]||(s.id==='store_kashirka'?'accessories':'combined');
+        H.storeModules[s.id]= t==='combined' ? {devices:true, accessories:true, service:true}
+                            : t==='shop'     ? {devices:true, accessories:true, service:false}
+                            :                  {devices:false, accessories:true, service:false};
+      });
+    }
+    if(!H.storeModules[sid]) H.storeModules[sid]={devices:true, accessories:true, service:true};
+    return H.storeModules[sid];
+  }catch(e){ return {devices:true, accessories:true, service:true}; }
+}
+function storeModulesLabel(sid){
+  const m=storeModulesOf(sid);
+  const on=Object.keys(STORE_MODULES).filter(k=>m[k]).map(k=>STORE_MODULES[k].label.replace(/^\S+ /,''));
+  return on.length===3?'все направления':(on.join(' + ')||'ничего не включено');
+}
+function applyStoreTypes(){
+  /* совместимость: s.type больше не источник правды, но держим его в согласии */
+  try{
+    STORES.forEach(s=>{
+      const m=storeModulesOf(s.id);
+      s.type = (m.devices&&m.service) ? 'combined' : (m.devices ? 'shop' : 'accessories');
+    });
+  }catch(e){}
+}
 const STORE_TYPES={
-  shop:     {label:'Магазин',                        hidePages:['service'], hideWarehouseTabs:['parts']},
-  combined: {label:'Магазин + сервис',               hidePages:[],          hideWarehouseTabs:[]},
+  shop:       {label:'Магазин'},
+  combined:   {label:'Магазин + сервис'},
+  accessories:{label:'Только аксессуары'},
 };
 function getCurrentStoreType(){
   const store=STORES.find(s=>s.id===STATE.activeStoreId);
   return store?.type||'combined';
 }
 function getStoreExcludedPages(){
-  const type=getCurrentStoreType();
-  return STORE_TYPES[type]?.hidePages||[];
+  try{
+    const m=storeModulesOf(STATE.activeStoreId);
+    const out=[];
+    Object.keys(STORE_MODULES).forEach(k=>{ if(!m[k]) out.push(...STORE_MODULES[k].pages); });
+    return out;
+  }catch(e){ return []; }
+}
+function getStoreHiddenWhTabs(){
+  try{
+    const m=storeModulesOf(STATE.activeStoreId);
+    const out=[];
+    Object.keys(STORE_MODULES).forEach(k=>{ if(!m[k]) out.push(...STORE_MODULES[k].whTabs); });
+    return out;
+  }catch(e){ return []; }
 }
 function getCurrentStore(){ return STORES.find(s=>s.id===STATE.activeStoreId)||STORES[0]; }
 
@@ -2365,7 +2423,7 @@ function renderSidebar(){
               '<div class="role-meta"><b>'+role.label+'</b><span>Демо-режим просмотра роли</span></div>'+
             '</div>'+
             '<select class="role-select" id="roleSelect">'+
-              Object.keys(ROLES).map(k=>'<option value="'+k+'" '+(k===STATE.role?'selected':'')+'>'+ROLES[k].label+'</option>').join('')+
+              Object.keys(ROLES).filter(k=>k!=='admin').map(k=>'<option value="'+k+'" '+(k===STATE.role?'selected':'')+'>'+ROLES[k].label+'</option>').join('')+
             '</select>'+
             '<div class="role-hint">Переключение роли меняет доступные разделы и видимость закупочных цен / прибыли — согласно правам из проектной документации.</div>'+
           '</div>')+
@@ -2478,13 +2536,30 @@ function openMobileMoreSheet(){
       (pinModeOn()
         ? '<button class="btn btn-sm" id="msheetPinLock" style="width:100%;">🔒 '+escHtml(currentEmployeeName())+' · сменить пользователя</button>'
         : '<select class="role-select" id="msheetRole">'+
-            Object.keys(ROLES).map(k=>'<option value="'+k+'" '+(k===STATE.role?'selected':'')+'>'+ROLES[k].label+'</option>').join('')+
+            Object.keys(ROLES).filter(k=>k!=='admin').map(k=>'<option value="'+k+'" '+(k===STATE.role?'selected':'')+'>'+ROLES[k].label+'</option>').join('')+
           '</select>')+
       '<button class="btn btn-sm" id="msheetFeedback" style="width:100%;margin-top:8px;">💬 Обратная связь</button>'+
       '<div class="tsub" style="margin-top:8px;text-align:center;">Store Control · сборка '+BUILD_TAG+'</div>'+
     '</div>'+
   '</div>';
   document.body.appendChild(ov);
+  /* Вход по логину: находит сотрудника и открывает его PIN-панель */
+  (function(){
+    const li=document.getElementById('pinLoginInput');
+    if(!li) return;
+    li.addEventListener('keydown', ev=>{
+      if(ev.key!=='Enter') return;
+      const v=(li.value||'').trim().toLowerCase();
+      const msg=document.getElementById('pinLoginMsg');
+      if(!v) return;
+      const e=pinAllEmployees().find(x=>x && x.login===v);
+      if(!e){ if(msg) msg.innerHTML='<span style="color:var(--negative);">Логин не найден</span>'; return; }
+      if(msg) msg.textContent='';
+      li.value='';
+      const t=ov.querySelector('[data-pin-user="emp'+e.id+'"]');
+      if(t) t.click();
+    });
+  })();
   ov.addEventListener('click', e=>{ if(e.target===ov) closeMobileMoreSheet(); });
   ov.querySelectorAll('[data-spage]').forEach(el=>el.addEventListener('click', ()=>{ closeMobileMoreSheet(); navigate(el.dataset.spage); }));
   const rs=document.getElementById('msheetRole');
@@ -2578,6 +2653,7 @@ function pinAllEmployees(){
 }
 function empRoleKey(e){
   const r=String(e.role||'');
+  if(/владелец/i.test(r)) return 'owner';   /* Леонид: вход по своему PIN = полные права владельца */
   if(/директор/i.test(r)) return (e.storeId==='store_kashirka')?'director2':'director';
   if(/старший/i.test(r)) return 'senior';
   if(/продавец/i.test(r)) return 'seller';
@@ -2636,6 +2712,8 @@ async function erpAutoConnect(force){
     try{
       const b=await (await fetch(base+'/api/bootstrap')).json();
       if(!(b && b.ok)) continue;
+      /* сервер 29.07-65 сам сторожит новые заказы 24/7 — вкладки не дублируют TG */
+      try{ if(DATA.settings) DATA.settings._serverOrderWatch=!!b.orderWatch; }catch(e){}
       const saveCreds=(tok)=>{
         let i2=integrationFor('site');
         if(!i2){ i2={channel:'site'}; DATA.integrations.push(i2); }
@@ -2681,7 +2759,38 @@ function deviceAuthShow(saveCreds, base){
     try{
       const r=await fetch((base||location.origin)+'/api/device-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin})});
       const j=await r.json();
-      if(j && j.ok && j.storeToken){
+      if(j && j.ok && j.verifyRequired){
+        /* устройство не подтверждено: владельцу улетел код (почта/Telegram) */
+        inp.style.display='none';
+        document.getElementById('devAuthGo').style.display='none';
+        let vRow=document.getElementById('devVerifyRow');
+        if(!vRow){
+          vRow=document.createElement('div');
+          vRow.id='devVerifyRow';
+          vRow.innerHTML='<input class="input-mini" id="devVerifyCode" inputmode="numeric" maxlength="6" placeholder="код из 6 цифр" style="width:100%;text-align:center;font-size:22px;letter-spacing:6px;margin-top:6px;">'+
+            '<button class="btn btn-primary" id="devVerifyGo" style="width:100%;margin-top:8px;padding:12px 0;">Подтвердить устройство</button>';
+          document.getElementById('devAuthMsg').after(vRow);
+        }
+        msg('Компьютер не подтверждён. Код отправлен на '+(j.channel||'владельцу')+' — введите его сюда (действует 10 минут).');
+        const vGo=async()=>{
+          const code=(document.getElementById('devVerifyCode').value||'').trim();
+          if(!/^\d{6}$/.test(code)){ msg('Код — 6 цифр', true); return; }
+          msg('Проверяю код…');
+          try{
+            const r2=await fetch((base||location.origin)+'/api/device-verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vid:j.vid, code})});
+            const j2=await r2.json();
+            if(j2 && j2.ok && j2.storeToken){
+              saveCreds(j2.storeToken);
+              try{ fullSave(); }catch(e){}
+              msg('Устройство подтверждено! Здравствуйте, '+(j2.who||'')+'. Загружаю данные…');
+              setTimeout(()=>location.reload(), 800);
+            } else msg((j2&&j2.error)||'Не получилось', true);
+          }catch(e){ msg('Нет связи с сервером: '+e.message, true); }
+        };
+        document.getElementById('devVerifyGo').addEventListener('click', vGo);
+        document.getElementById('devVerifyCode').addEventListener('keydown', ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); vGo(); } });
+        setTimeout(()=>document.getElementById('devVerifyCode').focus(), 100);
+      } else if(j && j.ok && j.storeToken){
         saveCreds(j.storeToken);
         try{ fullSave(); }catch(e){}
         msg('Готово! Здравствуйте, '+(j.who||'')+'. Загружаю данные…');
@@ -2708,7 +2817,11 @@ function pinLockShow(){
     '<div id="pinTiles" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">'+
       tile('owner','Владелец','полный доступ')+
       tile('admin','Админ','доступы · роли · обратная связь')+
-      emps.map(e=>tile('emp'+e.id, e.name, e.role+(e.pinHash?'':' · PIN не задан'))).join('')+
+      emps.map(e=>tile('emp'+e.id, e.name, e.role+(e.login?' · '+escHtml(e.login):'')+(e.pinHash?'':' · PIN не задан'))).join('')+
+    '</div>'+
+    '<div id="pinLoginRow" style="max-width:280px;margin:14px auto 0;text-align:center;">'+
+      '<input class="input-mini" id="pinLoginInput" placeholder="или введите логин и нажмите Enter" style="width:100%;text-align:center;" autocomplete="off">'+
+      '<div id="pinLoginMsg" class="tsub" style="min-height:16px;margin-top:4px;"></div>'+
     '</div>'+
     '<div id="pinPad" style="display:none;max-width:260px;margin:18px auto 0;text-align:center;">'+
       '<div id="pinWho" style="font-weight:700;margin-bottom:6px;"></div>'+
@@ -2727,9 +2840,26 @@ function pinLockShow(){
   let sel=null, buf='';
   const dots=()=>{ document.getElementById('pinDots').textContent=buf?('•'.repeat(buf.length)):'····'; };
   const msg=(t,neg)=>{ const m=document.getElementById('pinMsg'); m.textContent=t||''; m.style.color=neg?'var(--negative)':'var(--text-2)'; };
+  /* Вход по логину: Enter → PIN-панель этого сотрудника */
+  (function(){
+    const li=document.getElementById('pinLoginInput');
+    if(!li) return;
+    li.addEventListener('keydown', ev=>{
+      if(ev.key!=='Enter') return;
+      const v=(li.value||'').trim().toLowerCase();
+      const lm=document.getElementById('pinLoginMsg');
+      if(!v) return;
+      const e=pinAllEmployees().find(x=>x && x.login===v);
+      if(!e){ if(lm) lm.innerHTML='<span style="color:var(--negative);">Логин не найден</span>'; return; }
+      if(lm) lm.textContent='';
+      li.value='';
+      pick('emp'+e.id);
+    });
+  })();
   const pick=(id)=>{
     sel=id; buf='';
     document.getElementById('pinTiles').style.display='none';
+    const lr=document.getElementById('pinLoginRow'); if(lr) lr.style.display='none';
     document.getElementById('pinPad').style.display='block';
     const who=(id==='owner')?'Владелец':(id==='admin'?'Админ':((emps.find(e=>'emp'+e.id===id)||{}).name||''));
     document.getElementById('pinWho').textContent=who;
@@ -3011,6 +3141,10 @@ function renderPage(){
   }
   if(STATE.page!=='dashboard') STATE.dashFull=false;
   const renderers={dashboard:renderDashboard, crm:renderCrm, connections:renderConnections, orders:renderOrders, service:renderService, warehouse:renderWarehouse, purchase:renderPurchase, collection:renderCollection, receiving:renderReceiving, customers:renderCustomers, messages:renderMessages, pricing:renderPricing, finance:renderFinance, accounting:renderAccounting, expenses:renderExpenses, tasks:renderTasks, analytics:renderAnalytics, team:renderTeam, manage:renderManage, deliveries:renderDeliveries, docs:renderDocs};
+  /* страница скрыта направлением точки → на Главную (кроме владельца — ему видно всё) */
+  try{
+    if(STATE.role!=='owner' && getStoreExcludedPages().includes(STATE.page)) STATE.page='dashboard';
+  }catch(e){}
   renderers[STATE.page](c);
   if(STATE.page==='dashboard' && isMobileView() && STATE.dashFull){
     const back=document.createElement('button');
@@ -3431,14 +3565,19 @@ function renderAdminDashboard(c){
     renderPage();
   }));
 }
-/* Раздел «Подключения» — та же панель интеграций, но отдельной страницей (для админа) */
+/* Раздел «Подключения» — панель интеграций отдельной страницей (владелец и директора).
+   УСТРОЙСТВА — зона ТОЛЬКО владельца (решение 03.08): коды подтверждения летят
+   владельцу, и только владелец видит и отзывает авторизованные компьютеры. */
 function renderConnections(c){
+  const ownerOnly=(STATE.role==='owner');
   c.innerHTML=renderIntegrationsTab()+
-    '<div class="card" style="margin-top:12px;"><div class="kpi-label">🖥 Авторизованные компьютеры</div>'+
-    '<div class="tsub" style="margin-top:4px;">Каждый комп при авторизации по PIN получает свой личный ключ. «Отозвать» — комп теряет связь с сервером, для работы придётся авторизоваться заново.</div>'+
-    '<div id="devListBox"><div class="tsub" style="margin-top:8px;">Загружаю список с сервера…</div></div></div>';
+    (ownerOnly
+      ? '<div class="card" style="margin-top:12px;"><div class="kpi-label">🖥 Авторизованные компьютеры</div>'+
+        '<div class="tsub" style="margin-top:4px;">Каждый комп при авторизации по PIN получает свой личный ключ, а подтверждается кодом, который приходит только владельцу. «Отозвать» — комп теряет связь с сервером.</div>'+
+        '<div id="devListBox"><div class="tsub" style="margin-top:8px;">Загружаю список с сервера…</div></div></div>'
+      : '<div class="card" style="margin-top:12px;"><div class="tsub">🖥 Авторизованные компьютеры и подтверждение новых устройств — только у владельца: коды подтверждения приходят ему.</div></div>');
   wireIntegrations(c);
-  loadDeviceList();
+  if(ownerOnly) loadDeviceList();
 }
 async function loadDeviceList(){
   const box=document.getElementById('devListBox'); if(!box) return;
@@ -5413,7 +5552,7 @@ function daysUntilRu(dateRu){
 function openOrderSettingsModal(){
   const int=integrationFor('site');
   const creds=(int&&int.creds)||{};
-  const tech=(STATE.role==='admin');   /* технические поля (адреса, токены) — только админ */
+  const tech=(STATE.role==='admin'||isBossRole());   /* технические поля (адреса, токены) — владелец и директора (админ упразднён 03.08) */
   const stLine = !int||!int.creds||!int.creds.apiUrl ? '<span class="badge b-grey">Сайт не подключён</span>'
     : int.status==='error' ? '<span class="badge b-cancel">Ошибка</span> <span class="tsub">'+escHtml(int.error||'')+'</span>'
     : '<span class="badge b-done">Подключён</span> <span class="tsub">последняя проверка: '+(int.lastSync||'—')+'</span>';
@@ -6249,7 +6388,8 @@ function openOrderModal(id, c){
       '<td class="tname">'+escHtml(it.name)+avLabel(avByItem[i])+'</td>'+
       '<td class="mono tsub">'+(bound?it.imei:(itemRequiresSerial(it)?'<span style="color:var(--warning);">не привязан</span>':'—'))+'</td>'+
       '<td class="mono">'+rub(it.price)+'</td>'+
-      '<td>'+(!bound && itemRequiresSerial(it) ? '<button class="btn btn-sm" data-bind-item="'+i+'">Привязать</button>' : '')+'</td>'+
+      '<td>'+(!bound && itemRequiresSerial(it) ? '<button class="btn btn-sm" data-bind-item="'+i+'">Привязать</button>'
+        : (bound && !['done','cancel'].includes(o.status) ? '<button class="btn btn-sm" data-unbind-item="'+i+'" title="Снять этот серийник с заказа — юнит вернётся в наличие">Открепить</button>' : ''))+'</td>'+
     '</tr>';
   });
   body+='</tbody></table></div>';
@@ -6315,6 +6455,52 @@ function openOrderModal(id, c){
   openModal('Заказ №'+o.id, '<span class="badge '+st[1]+'">'+st[0]+'</span>', body, foot);
 
   document.querySelectorAll('[data-bind-item]').forEach(el=>el.addEventListener('click',()=>{ closeModal(); openBindModal(o.id, parseInt(el.dataset.bindItem)); }));
+  /* Открепить неправильно приписанный серийник: юнит возвращается в наличие,
+     заказ ждёт правильную коробку (привязка или скан при выдаче). 03.08 */
+  document.querySelectorAll('[data-unbind-item]').forEach(el=>el.addEventListener('click',()=>{
+    const i=parseInt(el.dataset.unbindItem);
+    const it=o.items[i];
+    if(!it || !it.imei || it.imei==='—') return;
+    if(!window._unbindArm || window._unbindArm!==o.id+'_'+i){
+      window._unbindArm=o.id+'_'+i;
+      toast('Нажмите «Открепить» ещё раз — серийник '+it.imei+' будет снят с заказа','info');
+      setTimeout(()=>{ if(window._unbindArm===o.id+'_'+i) window._unbindArm=null; }, 5000);
+      return;
+    }
+    window._unbindArm=null;
+    const imei=it.imei;
+    const wh=[...DATA.warehouse.tech, ...DATA.warehouse.tradein].find(x=>x.imei===imei);
+    if(wh && wh.status==='reserved') wh.status='instock';
+    it.imei='';
+    (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'bind', comment:'Серийник '+imei+' ОТКРЕПЛЁН от «'+it.name+'» ('+(typeof currentEmployeeName==='function'?(currentEmployeeName()||''):'')+') — юнит возвращён в наличие'});
+    /* ПОСЛЕДСТВИЯ ОТКРЕПЛЕНИЯ (03.08): серийник сняли — а есть ли вообще товар?
+       Если другой свободной коробки этой модели на точке нет, заказ не может
+       оставаться «Готов к выдаче» — возвращаем в «Ждём товар» и создаём заявку
+       поставщику. Если клиенту уже уходило письмо «готов к выдаче» — тревога. */
+    try{
+      if(o.status==='ready' && !orderReadyByStock(o)){
+        setOrderStatus(o,'awaiting_stock');
+        (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'status', comment:'⚠ После открепления серийника свободной «'+it.name+'» на точке нет — заказ возвращён в «Ждём товар»'});
+        o.items.forEach(x=>{
+          if(itemRequiresSerial(x) && !itemIsBound(x)){
+            try{ const av=checkItemAvailability(x,o); if(av.status==='none') logAvailabilityCheck(o,x,av); }catch(e){}
+          }
+        });
+        if(o.readyNotified){
+          toast('⚠ ВНИМАНИЕ: клиент уже получил письмо «Готов к выдаче», а товара нет! Свяжитесь: '+(o.phone||'—'), 'error');
+          try{ pushNotif('Владелец','⚠ Заказ №'+o.id+' возвращён в «Ждём товар» после открепления серийника, но клиент УЖЕ получил письмо «готов к выдаче». '+(o.name||'')+' · '+(o.phone||'')); }catch(e){}
+          try{ tgNotifyOwner('⚠ Заказ №'+o.id+' ('+(o.name||'—')+'): серийник откреплён, товара нет в наличии, а клиенту уже уходило письмо «Готов к выдаче».\nТелефон: '+(o.phone||'—')+'\nСвяжитесь с клиентом и уточните сроки.'); }catch(e){}
+        } else {
+          toast('Свободной коробки этой модели нет — заказ возвращён в «Ждём товар», заявка поставщику создана','info');
+        }
+      } else if(['deferred','awaiting_stock'].includes(o.status)){
+        try{ recomputeOrderFulfillment(o); }catch(e){}
+      }
+    }catch(e){}
+    try{ if(typeof lsSave==='function') lsSave(); }catch(e){}
+    toast('Серийник '+imei+' откреплён — юнит снова в наличии на складе','success');
+    openOrderModal(o.id, c);
+  }));
   const pob=document.querySelector('[data-print-order]');
   if(pob) pob.addEventListener('click', ()=>printOrderBlank(o.id));
   const pbu=document.querySelector('[data-print-bu]');
@@ -8115,8 +8301,7 @@ function whFreeOrphans(c){
 }
 function renderWarehouse(c){
   const role=ROLES[STATE.role];
-  const type=getCurrentStoreType();
-  const hiddenTabs=STORE_TYPES[type]?.hideWarehouseTabs||[];
+  const hiddenTabs=getStoreHiddenWhTabs();
   const tabs=role.warehouseTabs.filter(t=>!hiddenTabs.includes(t));
   if(!tabs.length){ c.innerHTML='<div class="card" style="text-align:center;padding:30px;"><div class="tsub">Для этого типа точки склад не настроен.</div></div>'; return; }
   if(!tabs.includes(STATE.whFilters.tab)) STATE.whFilters.tab=tabs[0];
@@ -8192,11 +8377,12 @@ function renderWarehouse(c){
     }
   } else {
     const isBu=STATE.whFilters.tab==='tradein';
+    const isAcc=STATE.whFilters.tab==='accessories';
     html+='<div class="table-wrap"><table><thead><tr>'+
       '<th>'+(hasImei?'IMEI':'Код')+'</th><th>Модель / товар</th>'+
       (role.seePurchase?'<th>Закупка</th>':'')+
       (hasImei?'<th>Цена продажи</th>':'<th>Остаток</th>')+
-      '<th>Статус</th><th>Местоположение</th>'+(isBu?'<th></th>':'')+'</tr></thead><tbody>';
+      '<th>Статус</th><th>Местоположение</th>'+((isBu||isAcc)?'<th></th>':'')+'</tr></thead><tbody>';
     if(items.length===0){
       html+='</tbody></table></div><div class="empty"><b>Ничего не найдено</b><span>Измените фильтры или запрос</span></div>';
     } else {
@@ -8209,7 +8395,8 @@ function renderWarehouse(c){
           (hasImei?'<td class="mono">'+(it.price?rub(it.price):'—')+'</td>':'<td class="mono">'+it.qty+' шт.</td>')+
           '<td><span class="badge '+st[1]+'">'+st[0]+'</span>'+((typeof isStale!=='undefined'&&isStale)?'<div class="tsub" style="color:var(--negative);font-weight:600;">⚠ не закрыт</div>':'')+'</td>'+
           '<td>'+it.location+'</td>'+
-          (isBu?('<td>'+(it.status==='instock'?'<button class="btn btn-sm btn-primary" data-sellbu="'+it.imei+'">Продать</button>':'')+'</td>'):'')+
+          (isBu?('<td>'+(it.status==='instock'?'<button class="btn btn-sm btn-primary" data-sellbu="'+it.imei+'">Продать</button>':'')+'</td>')
+            :(isAcc?('<td>'+((it.qty||0)>0?'<button class="btn btn-sm btn-primary" data-sellacc="'+escAttr(it.sku||it.model)+'">Продать</button>':'')+'</td>'):''))+
         '</tr>';
       });
       html+='</tbody></table></div>';
@@ -8292,6 +8479,7 @@ function renderWarehouse(c){
   const tiBtn=document.getElementById('whTradeinBtn');
   if(tiBtn) tiBtn.addEventListener('click', ()=>openTradeinAcceptModal(c));
   c.querySelectorAll('[data-sellbu]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation(); openSellBuModal(el.dataset.sellbu, c);}));
+  c.querySelectorAll('[data-sellacc]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation(); openSellAccModal(el.dataset.sellacc, c);}));
 }
 
 /* ============================================================
@@ -8465,6 +8653,37 @@ function openTradeinAcceptModal(c){
    Цена ниже закупа — можно, но с обязательным комментарием и
    уведомлением владельцу (решение владельца из опроса).
 ============================================================ */
+/* ПРОДАЖА АКСЕССУАРА СО СКЛАДА — точка аксессуаров живёт этой кнопкой (03.08).
+   Кол-во, цена, оплата → остаток минус, деньги в кассу точки, запись в продажи. */
+function openSellAccModal(code, c){
+  ensureMoneyData();
+  const it=(DATA.warehouse.accessories||[]).find(x=>(x.sku||x.model)===code);
+  if(!it || (it.qty||0)<=0){ toast('Товара нет в наличии', 'error'); return; }
+  let body='<div class="field-grid">'+
+    field('Товар', it.model)+field('Остаток', it.qty+' шт.')+
+    (isBossRole()?field('Закупка', rub(it.purchase||0)):'')+field('Цена', it.price?rub(it.price):'—')+
+  '</div>'+
+  '<div class="field" style="margin-top:12px;"><label>Количество</label><input class="input-mini" id="accQty" type="number" min="1" max="'+it.qty+'" value="1" style="width:100%;"></div>'+
+  '<div class="field" style="margin-top:8px;"><label>Цена за штуку</label><input class="input-mini" id="accPrice" type="number" min="0" style="width:100%;" value="'+(it.price||'')+'"></div>'+
+  '<div class="field" style="margin-top:8px;"><label>Оплата</label><select class="select-mini" id="accPay" style="width:100%;"><option>Наличные</option><option>Карта</option><option>QR-код</option></select></div>';
+  openModal('Продажа — '+it.model, 'Аксессуар со склада точки', body, [{label:'Продать', cls:'btn-primary', action:()=>{
+    const n=Math.max(1, Math.min(it.qty, parseInt(document.getElementById('accQty').value)||1));
+    const price=parseFloat(document.getElementById('accPrice').value);
+    if(isNaN(price)||price<=0){ toast('Укажите цену продажи', 'error'); return; }
+    const pay=document.getElementById('accPay').value;
+    const sum=Math.round(price*n);
+    it.qty-=n;
+    const cost=Math.round((it.purchase||0)*n);
+    if(pay==='Наличные'){ try{ cashBoxRef().amount+=sum; }catch(e){} } else DATA.assets.cashless+=sum;
+    DATA.salesLog.unshift({orderId:'акс: '+it.model, date:DATA.today, time:nowTime(), sum:sum, cost:cost, margin:sum-cost, payment:pay, via:'acc_store', by:currentEmployeeName()});
+    DATA.financeOps.unshift({date:DATA.today, type:'Продажа аксессуара', amount:sum, comment:it.model+' × '+n+' · '+pay, who:currentEmployeeName()});
+    if(DATA.finance){ DATA.finance.turnover.total+=sum; DATA.finance.revenue.total+=(sum-cost); }
+    if(it.qty<=2) pushNotif('Владелец', '📦 Заканчивается аксессуар «'+it.model+'»: остаток '+it.qty+' шт.');
+    if(typeof lsSave==='function') lsSave();
+    closeModal(); renderWarehouse(c); try{ beep('ok'); }catch(e){}
+    toast('Продано: '+it.model+' × '+n+' за '+rub(sum)+' ('+pay+')', 'success');
+  }}]);
+}
 function openSellBuModal(imei, c){
   ensureMoneyData();
   const it=DATA.warehouse.tradein.find(x=>x.imei===imei);
@@ -9397,7 +9616,28 @@ const SITE_POLL_MS=15000;   /* заявки с сайта подтягивают
 function tgWatchNewSiteItems(){
   try{
     if(!DATA || !DATA.settings || !DATA.settings.tgEnabled) return;
-    if(!erpServerCreds()) return;
+    const c=erpServerCreds();
+    if(!c) return;
+    /* Выяснить один раз за запуск, сторожит ли сервер заказы сам (29.07-89).
+       Раньше это узнавали только при ПЕРВОМ подключении компа — уже привязанные
+       вкладки не знали и слали дубли к серверным уведомлениям. */
+    if(window._sowState===undefined){
+      window._sowState='fetching';
+      fetch(c.api+'/bootstrap').then(r=>r.json()).then(j=>{
+        DATA.settings._serverOrderWatch=!!(j && j.orderWatch);
+        window._sowState='done';
+        if(typeof lsSave==='function') lsSave();
+      }).catch(()=>{ window._sowState='done'; });
+      return;   /* один тик подождём ответа, чтобы не задублировать */
+    }
+    if(window._sowState==='fetching') return;
+    /* сервер сам шлёт уведомления о сайтовых заказах/ремонтах (24/7) —
+       вкладка только помечает их, чтобы при смене сервера не заспамить историей */
+    if(DATA.settings._serverOrderWatch){
+      (DATA.orders||[]).forEach(o=>{ if(o.externalId && /^(site|strapi)_/.test(String(o.externalId))) o.tgNotified=true; });
+      (DATA.service||[]).forEach(t=>{ if(t.externalId && /^(site|strapi)_/.test(String(t.externalId))) t.tgNotified=true; });
+      return;
+    }
     (DATA.orders||[]).forEach(o=>{
       if(!o.externalId || !/^(site|strapi)_/.test(String(o.externalId)) || o.tgNotified) return;
       o.tgNotified=true;
@@ -10866,7 +11106,7 @@ function openTaskTransferModal(taskId){
   const cur=taskParticipants(t).map(p=>p.name);
   /* Передавать можно только тем, у кого есть доступ к разделу «Задачи» —
      иначе сотрудник не увидит переданную задачу */
-  const ROLE_BY_TITLE={'Менеджер':'seller','Продавец':'seller','Старший менеджер':'senior','Старший продавец':'senior','Мастер':'master','Курьер':'courier','Сборщик':'collector','Владелец':'owner'};
+  const ROLE_BY_TITLE={'Менеджер':'seller','Продавец':'seller','Старший менеджер':'senior','Старший продавец':'senior','Директор':'director','Мастер':'master','Курьер':'courier','Сборщик':'collector','Владелец':'owner'};
   const candidates=DATA.employees.filter(e=>{
     if(e.noAccess || cur.includes(e.name)) return false;
     const rk=ROLE_BY_TITLE[e.role];
@@ -13150,6 +13390,7 @@ const ROLE_BUCKETS=['Менеджеры','Мастера','Сборщики'];
 function empRoleIcon(e){
   const r=String((e&&e.role)||e||'');
   if(/владелец/i.test(r)) return '\u{1F451} ';      /* 👑 */
+  if(/директор/i.test(r)) return '\u2B50 ';          /* ⭐ */
   if(/мастер/i.test(r)) return '\u{1F527} ';        /* 🔧 */
   if(/менеджер|продавец/i.test(r)) return '\u{1F4BC} '; /* 💼 */
   if(/курьер/i.test(r)) return '\u{1F69A} ';        /* 🚚 */
@@ -13520,6 +13761,20 @@ function controlPanelHTML(){
       '<div class="tsub" style="margin-top:4px;line-height:1.6;">Одним нажатием убрать всё демо, что могло остаться в рабочей базе: '+
       'демо-сотрудников Сергея Т. и Марата Б. (мастер Виктор остаётся — он ведёт Сервис), демо-уведомления и демо-идеи. Реальные данные не трогаются.</div>'+
       '<button class="btn btn-sm btn-danger" id="demoDetoxBtn" style="margin-top:10px;">Убрать демо-остатки</button></div>';
+  if(STATE.role==='owner'){
+    html+='<div class="card" style="margin-top:12px;"><div class="kpi-label">🏬 Направления точек</div>'+
+      '<div class="tsub" style="margin-top:4px;">Соберите направление точки из модулей — любая комбинация. Меню и склад у сотрудников точки подстроятся сами. Всегда остаются: Главная, Склад, Смены, Управление, Финансы и Расходы.</div>'+
+      STORES.map(s=>{
+        const m=storeModulesOf(s.id);
+        return '<div style="display:flex;align-items:center;gap:14px;margin-top:10px;flex-wrap:wrap;">'+
+          '<b style="min-width:150px;">'+escHtml(s.shortName)+'</b>'+
+          Object.keys(STORE_MODULES).map(k=>'<label class="tsub" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:normal;">'+
+            '<input type="checkbox" data-store-mod="'+s.id+'|'+k+'"'+(m[k]?' checked':'')+'> '+STORE_MODULES[k].label+'</label>').join('')+
+          '<span class="tsub" style="opacity:.6;">— '+escHtml(storeModulesLabel(s.id))+'</span>'+
+        '</div>';
+      }).join('')+
+    '</div>';
+  }
   }
   html+='<div class="section"><div class="section-head"><div class="section-title">Сотрудники и доступы</div>'+
     (isBossRole()||STATE.role==='admin'?'<button class="btn btn-sm" id="tgChatIdsBtn">✈ Найти chat_id</button>':'')+'</div>'+
@@ -13605,6 +13860,21 @@ function demoDetox(){
   return n;
 }
 function wireControlPanel(c){
+  document.querySelectorAll('[data-store-mod]').forEach(cb=>cb.addEventListener('change', ()=>{
+    const [sid,mod]=cb.dataset.storeMod.split('|');
+    const m=storeModulesOf(sid);
+    const next=Object.assign({}, m, {[mod]: cb.checked});
+    if(!next.devices && !next.accessories && !next.service){
+      cb.checked=true;
+      toast('Хотя бы один модуль должен остаться включённым', 'error');
+      return;
+    }
+    m[mod]=cb.checked;
+    applyStoreTypes();
+    if(typeof lsSave==='function') lsSave();
+    toast(escHtml((STORES.find(s=>s.id===sid)||{}).shortName||'')+': '+storeModulesLabel(sid), 'success');
+    renderSidebar(); renderPage();
+  }));
   const dx=document.getElementById('demoDetoxBtn');
   if(dx) dx.addEventListener('click',()=>{
     openModal('Убрать демо-остатки?','',
@@ -20179,13 +20449,13 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-84';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-95';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
 const CRED_DEFAULTS={ site:{ apiUrl:(location&&location.protocol&&location.protocol.startsWith('http'))?'/api':'https://imagnate-assistant.onrender.com/api' } };
 const CRM_CHAIN=['new','working','waiting','won'];
-const EMP_ROLE_CHOICES=['Менеджер','Старший менеджер','Мастер','Курьер','Сборщик','Владелец'];
+const EMP_ROLE_CHOICES=['Менеджер','Старший менеджер','Директор','Мастер','Курьер','Сборщик','Владелец'];
 const LEAD_EDIT_FIELDS={
   name:   {label:'Имя клиента',        ph:'Иван Иванович'},
   contact:{label:'Телефон / контакт',  ph:'+7 900 000-00-00 или ник соцсети'},
@@ -20682,6 +20952,7 @@ function openEmployeeModal(empId, c){
       STORES.map(s=>'<option value="'+s.id+'"'+((emp?empStoreId(emp):'store_kashirka')===s.id?' selected':'')+'>'+escHtml(s.shortName)+'</option>').join('')+
     '</select></div>'+
     '<div><div class="tsub" style="margin-bottom:4px;">Телефон (необязательно)</div><input class="input-mini" id="empPhone" value="'+(emp?escAttr(emp.phone||''):'')+'" placeholder="+7 ..." style="width:100%;"></div>'+
+    '<div><div class="tsub" style="margin-bottom:4px;">Логин для входа (необязательно)</div><input class="input-mini" id="empLogin" value="'+(emp?escAttr(emp.login||''):'')+'" placeholder="например: alexey (латиница/цифры, без пробелов)" style="width:100%;" autocomplete="off"></div>'+
   '</div>'+
   (emp?'':'<div class="tsub" style="margin-top:10px;">Менеджер сразу попадает в карусель 2/2; мастера и другие роли выходят по ручным назначениям — нажмите на день в календаре и отметьте их.</div>');
   const actions=[
@@ -20689,11 +20960,15 @@ function openEmployeeModal(empId, c){
       const name=document.getElementById('empName').value.trim();
       const role=document.getElementById('empRole').value;
       const phone=document.getElementById('empPhone').value.trim();
+      const login=(document.getElementById('empLogin').value||'').trim().toLowerCase();
       if(!name){ toast('Укажите имя','error'); return; }
+      if(login && !/^[a-z0-9._-]{2,20}$/.test(login)){ toast('Логин: 2–20 символов, латиница/цифры/точка/дефис','error'); return; }
+      if(login && DATA.employees.some(e=>e.login===login && (!emp || e.id!==emp.id))){ toast('Логин «'+login+'» уже занят','error'); return; }
       const storeSel=document.getElementById('empStore').value;
       if(emp){
         const oldRole=emp.role;
         emp.name=name; emp.role=role; emp.phone=phone; emp.storeId=storeSel;
+        if(login) emp.login=login; else delete emp.login;
         if(oldRole!=='Мастер' && role==='Мастер' && emp.schedule && emp.schedule.cycle) emp.schedule={manual:true};
         toast('Сотрудник обновлён: '+name+' · '+role,'success');
       } else {
@@ -20701,8 +20976,10 @@ function openEmployeeModal(empId, c){
         const sched = /продавец|менеджер|владелец/i.test(role)
           ? {cycle:'2/2', start:ruDateStr(schedToday()), period:5, work:2, hours:'10:00–21:00'}
           : {manual:true};
-        DATA.employees.push({id:nid, name:name, role:role, unit:'shop_c', storeId:storeSel, phone:phone||'—', baseSalary:null,
-          responsibilities:'', schedule:sched, extraAccess:{expensesReview:false, analytics:false}});
+        const newEmp={id:nid, name:name, role:role, unit:'shop_c', storeId:storeSel, phone:phone||'—', baseSalary:null,
+          responsibilities:'', schedule:sched, extraAccess:{expensesReview:false, analytics:false}};
+        if(login) newEmp.login=login;
+        DATA.employees.push(newEmp);
         toast('Добавлен: '+name+' · '+role,'success');
       }
       closeModal(); renderTeam(c);
@@ -22432,6 +22709,7 @@ function scheduleRebuildAsk(){
 
 (function ensureSupportProfiles(){
   try{
+    applyStoreTypes();
     Object.keys(STORE_DATA).forEach(sid=>{
       const d=STORE_DATA[sid];
       if(!d || !Array.isArray(d.employees)) return;
@@ -22563,7 +22841,7 @@ function pinLockShow(){
     if(!/^\d{4,6}$/.test(pin)){ msg('PIN — от 4 до 6 цифр', true); return; }
     let t=null;
     if(lg==='boss'||lg==='владелец') t={type:'owner', hash:pinCfg().ownerPinHash, salt:'owner', who:'Владелец', sub:'Полный доступ'};
-    else if(lg==='admin'||lg==='админ') t={type:'admin', hash:pinCfg().adminPinHash, salt:'admin', who:'Админ', sub:'Доступы · роли · обратная связь'};
+    /* роль «Админ» упразднена 03.08 — этим занимаются директора точек */
     else{
       const e=pinAllEmployees().find(x=>String(x.login||'').toLowerCase()===lg);
       if(e) t={type:'emp', id:e.id, hash:e.pinHash, salt:'emp'+e.id, who:e.name, sub:e.role||'', emp:e};
@@ -22628,10 +22906,11 @@ function pinLockShow(){
 (async function seedLoginsPins(){
   try{
     const H=(typeof chHomeStore==='function'?chHomeStore():DATA)||DATA;
-    if(H._loginSeed2) return;
+    if(H._loginSeed3) return;                      /* v3: добавлены Леонид и Лео */
     const preset={
       1:['alex','3417'], 2:['slava','8254'], 3:['vlad','6139'], 4:['ivan','7825'], 5:['dasha','1946'],
-      8:['sergey','8461'], 9:['marat','3592'], 10:['viktor','5273']
+      8:['sergey','8461'], 9:['marat','3592'], 10:['viktor','5273'],
+      11:['leonid','2907'], 12:['leo','8412']
     };
     let touched=false;
     for(const e of pinAllEmployees()){
@@ -22639,9 +22918,8 @@ function pinLockShow(){
       if(!e.login){ e.login=(p?p[0]:('user'+e.id)); touched=true; }
       if(!e.pinHash && p){ e.pinHash=await sha256Hex('storecontrol|emp'+e.id+'|'+p[1]); touched=true; }
     }
-    if(!pinCfg().adminPinHash){ pinCfg().adminPinHash=await sha256Hex('storecontrol|admin|4692'); touched=true; }
     if(!pinCfg().ownerPinHash){ pinCfg().ownerPinHash=await sha256Hex('storecontrol|owner|5871'); touched=true; }
-    H._loginSeed2=1;
+    H._loginSeed2=1; H._loginSeed3=1;
     if(touched){ try{ fullSave(); }catch(e){} }
   }catch(e){ console.warn('seed logins:', e); }
 })();
