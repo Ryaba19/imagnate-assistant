@@ -852,6 +852,99 @@ function readBody(req, cb) {
   req.on('end', () => { let b = {}; try { b = JSON.parse(raw || '{}'); } catch (e) {} cb(b); });
 }
 
+/* ============================================================
+   СТОРОЖ НОВЫХ ЗАКАЗОВ/РЕМОНТОВ (24/7, решение владельца 03.08).
+   Раньше Telegram слала открытая вкладка ERP — если все компы спали,
+   уведомление ждало первого входа (задержки по 20+ минут).
+   Теперь сервер раз в 60 сек спрашивает Strapi и шлёт сам.
+   Курсоры в kv: последний увиденный id заказа/ремонта.
+   Первый запуск — только запоминаем максимум, историю не спамим.
+============================================================ */
+async function strapiGet(path) {
+  const tok = process.env.STRAPI_API_TOKEN || '';
+  if (!tok) return null;
+  const r = await fetch('https://admin.imagnate.ru' + path, { headers: { 'Authorization': 'Bearer ' + tok } });
+  if (!r.ok) return null;
+  return r.json();
+}
+async function staffChatFromState() {
+  try {
+    const cur = await stateLoad();
+    for (const sid of Object.keys((cur && cur.state && cur.state.stores) || {})) {
+      const st = (cur.state.stores[sid] || {}).settings || {};
+      if (st.tgStaffChat && /^-?\d{4,20}$/.test(String(st.tgStaffChat).trim())) return String(st.tgStaffChat).trim();
+    }
+  } catch (e) {}
+  return null;
+}
+const RU_M = { 0:'января',1:'февраля',2:'марта',3:'апреля',4:'мая',5:'июня',6:'июля',7:'августа',8:'сентября',9:'октября',10:'ноября',11:'декабря' };
+function ruStamp(iso) {
+  try { const d = new Date(iso); const p = n => String(n).padStart(2, '0');
+    return p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  } catch (e) { return String(iso || '').slice(0, 16); }
+}
+let _watchBusy = false;
+async function orderWatchTick() {
+  if (_watchBusy) return;
+  if (!process.env.STRAPI_API_TOKEN || !TG_TOKEN || !TG_CHATS.length) return;
+  _watchBusy = true;
+  try {
+    const staff = await staffChatFromState();
+    const extra = staff ? [staff] : [];
+    /* --- заказы --- */
+    try {
+      const j = await strapiGet('/api/zakazies?sort[0]=id:desc&pagination[pageSize]=10&populate=*');
+      const rows = (j && j.data) || [];
+      const norm = rows.map(x => Object.assign({ id: x.id }, x.attributes || x));
+      if (norm.length) {
+        const maxId = Math.max(...norm.map(x => x.id));
+        const seen = parseInt(await kvGet('watch_zakaz_seen'));
+        if (!seen) { await kvSet('watch_zakaz_seen', maxId); }
+        else if (maxId > seen) {
+          const fresh = norm.filter(x => x.id > seen).sort((a, b) => a.id - b.id).slice(0, 10);
+          for (const z of fresh) {
+            const items = (z.items || []).map(it => String(it.name || 'Товар') + (it.count > 1 ? ' × ' + it.count : '')).join('\n· ');
+            const sum = String(z.summary || '').replace(/\s/g, '');
+            await tgSend('Поступил новый заказ ✅\n' +
+              'Номер заказа: №' + (z.identificator || z.id) + '\n' +
+              'Клиент: ' + (z.name || 'Без имени') + (z.phone ? '\nТелефон: ' + z.phone : '') +
+              (items ? '\nСостав:\n· ' + items : '') +
+              (sum && sum !== '0' ? '\nСумма: ' + Number(sum).toLocaleString('ru-RU') + ' ₽' : '') +
+              '\nОформлен: ' + ruStamp(z.createdAt), extra);
+          }
+          await kvSet('watch_zakaz_seen', maxId);
+          console.log('[сторож заказов] отправлено уведомлений: ' + fresh.length);
+        }
+      }
+    } catch (e) { console.log('[сторож заказов] ' + e.message); }
+    /* --- ремонты --- */
+    try {
+      const j = await strapiGet('/api/remonts?sort[0]=id:desc&pagination[pageSize]=10');
+      const rows = (j && j.data) || [];
+      const norm = rows.map(x => Object.assign({ id: x.id }, x.attributes || x));
+      if (norm.length) {
+        const maxId = Math.max(...norm.map(x => x.id));
+        const seen = parseInt(await kvGet('watch_remont_seen'));
+        if (!seen) { await kvSet('watch_remont_seen', maxId); }
+        else if (maxId > seen) {
+          const fresh = norm.filter(x => x.id > seen).sort((a, b) => a.id - b.id).slice(0, 10);
+          for (const t of fresh) {
+            await tgSend('Поступила новая заявка на ремонт ✅\n' +
+              'Заявка сайта: №' + t.id +
+              (t.name ? '\nКлиент: ' + t.name : '') + (t.phone ? '\nТелефон: ' + t.phone : '') +
+              (t.device || t.model ? '\nУстройство: ' + (t.device || t.model) : '') +
+              '\nОформлена: ' + ruStamp(t.createdAt), extra);
+          }
+          await kvSet('watch_remont_seen', maxId);
+          console.log('[сторож ремонтов] отправлено уведомлений: ' + fresh.length);
+        }
+      }
+    } catch (e) { console.log('[сторож ремонтов] ' + e.message); }
+  } finally { _watchBusy = false; }
+}
+setInterval(() => { orderWatchTick().catch(e => console.log('orderWatch:', e.message)); }, 60000);
+setTimeout(() => { orderWatchTick().catch(() => {}); }, 8000);
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -859,13 +952,14 @@ const server = http.createServer((req, res) => {
 
   /* ---- Страницы ---- */
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return sendFile(res, 'index.html');
-  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-63' });
+  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-65' });
 
   /* ---- Автонастройка нового компа: открыл систему с сервера — она сама
      получила адрес API и ключ. Включается переменной AUTO_SETUP=1. ---- */
   if (req.method === 'GET' && url.pathname === '/api/bootstrap') {
     const auto = process.env.AUTO_SETUP === '1';
     return sendJson(res, 200, { ok: true, apiUrl: '/api',
+      orderWatch: !!(process.env.STRAPI_API_TOKEN && TG_TOKEN && TG_CHATS.length),
       strapiToken: !!process.env.STRAPI_API_TOKEN,
       storeToken: auto ? STORE_TOKEN : null,
       hint: auto ? 'автонастройка включена' : 'для полной автонастройки добавьте AUTO_SETUP=1 в Environment' });
@@ -935,6 +1029,7 @@ const server = http.createServer((req, res) => {
   /* ---- АВТОРИЗАЦИЯ КОМПЬЮТЕРА: новый комп вводит PIN сотрудника/владельца,
      сервер сверяет его с облачной базой и выдаёт ключ связи. Один раз на комп.
      Защита: 5 попыток в минуту с адреса. ---- */
+  /* Ожидающие подтверждения устройств: vid -> {code, who, ip, ua, attempts, exp} */
   if (req.method === 'POST' && url.pathname === '/api/device-auth') {
     const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?');
     if (!floodOk('dev_' + ip)) return sendJson(res, 429, { error: 'Слишком много попыток. Подождите минуту.' });
@@ -961,19 +1056,96 @@ const server = http.createServer((req, res) => {
           console.log('[авторизация компа] неверный PIN с ' + ip);
           return sendJson(res, 401, { error: 'PIN не найден. Проверьте или попросите владельца задать вам PIN.' });
         }
+        /* ПОДТВЕРЖДЕНИЕ УСТРОЙСТВА (решение владельца 03.08): PIN — это «кто ты»,
+           а «можно ли этому компьютеру» решает владелец: ему уходит 6-значный код
+           (почта OWNER_EMAIL; если почта не настроена — Telegram). Без кода ключ
+           не выдаётся. Если не настроены ни почта, ни Telegram — старое поведение,
+           чтобы не заблокировать самих себя. */
+        const mailReady = !!(nodemailer && process.env.SMTP_HOST && process.env.SMTP_USER && process.env.OWNER_EMAIL);
+        const tgReady = !!(TG_TOKEN && TG_CHATS.length);
+        if (mailReady || tgReady) {
+          global._devVerify = global._devVerify || {};
+          /* подчистить протухшие */
+          for (const k of Object.keys(global._devVerify)) if (global._devVerify[k].exp < Date.now()) delete global._devVerify[k];
+          if (Object.keys(global._devVerify).length > 50) return sendJson(res, 429, { error: 'Слишком много ожидающих подтверждений — попробуйте позже' });
+          const code = String(crypto.randomInt(100000, 1000000));
+          const vid = 'v' + crypto.randomBytes(9).toString('hex');
+          global._devVerify[vid] = { code, who, ip: String(ip).slice(0, 60),
+            ua: String(req.headers['user-agent'] || '').slice(0, 120),
+            attempts: 0, exp: Date.now() + 10 * 60 * 1000 };
+          const info = 'Сотрудник: ' + who + '\nIP: ' + ip + '\nВремя: ' + new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+          let channel = null;
+          if (mailReady) {
+            try {
+              const r = await mailSend(process.env.OWNER_EMAIL, 'Store Control — код подтверждения устройства: ' + code,
+                'Кто-то подключает новый компьютер к Store Control.\n\nКод подтверждения: ' + code + '\n\n' + info +
+                '\n\nЕсли это не ваш сотрудник — не сообщайте код никому и смените PIN-коды.', false);
+              if (r && r.ok) channel = 'почту владельца';
+            } catch (e) { console.log('device-verify mail:', e.message); }
+          }
+          if (!channel && tgReady) {
+            const r = await tgSend('🖥 Код подтверждения нового устройства: ' + code + '\n' + info + '\nЕсли это не ваш сотрудник — никому не сообщайте код.');
+            if (r && r.ok) channel = 'Telegram владельца';
+          } else if (channel && tgReady) {
+            /* дублируем в TG для скорости */
+            tgSend('🖥 Код подтверждения нового устройства: ' + code + '\n' + info);
+          }
+          if (!channel) {
+            delete global._devVerify[vid];
+            return sendJson(res, 500, { error: 'Не получилось отправить код владельцу — проверьте SMTP/Telegram на сервере' });
+          }
+          console.log('[авторизация компа] код отправлен (' + channel + '): ' + who + ' (' + ip + ')');
+          return sendJson(res, 200, { ok: true, verifyRequired: true, vid, channel });
+        }
+        /* ни почты, ни Telegram — старое поведение */
         await devicesLoad();
         const tok = 'dev_' + crypto.randomBytes(18).toString('hex');
         _devices.unshift({
           id: 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-          token: tok, who,
+          token: tok, who, verified: 'auto',
           ip: String(ip).slice(0, 60),
           ua: String(req.headers['user-agent'] || '').slice(0, 120),
           at: new Date().toISOString(), lastSeen: new Date().toISOString()
         });
         if (_devices.length > 100) _devices.length = 100;
         await devicesSave();
-        console.log('[авторизация компа] личный ключ выдан: ' + who + ' (' + ip + ')');
+        console.log('[авторизация компа] личный ключ выдан без кода (нет каналов): ' + who + ' (' + ip + ')');
         sendJson(res, 200, { ok: true, storeToken: tok, who });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    });
+  }
+
+  /* ---- Подтверждение устройства кодом владельца ---- */
+  if (req.method === 'POST' && url.pathname === '/api/device-verify') {
+    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?');
+    if (!floodOk('dvf_' + ip)) return sendJson(res, 429, { error: 'Слишком часто. Подождите минуту.' });
+    return readBody(req, async b => {
+      try {
+        const vid = String(b.vid || '').slice(0, 40);
+        const code = String(b.code || '').trim();
+        const pend = (global._devVerify || {})[vid];
+        if (!pend) return sendJson(res, 400, { error: 'Запрос не найден или устарел — начните заново' });
+        if (pend.exp < Date.now()) { delete global._devVerify[vid]; return sendJson(res, 400, { error: 'Код устарел (10 минут) — начните заново' }); }
+        if (!/^\d{6}$/.test(code)) return sendJson(res, 400, { error: 'Код — 6 цифр' });
+        if (pend.code !== code) {
+          pend.attempts = (pend.attempts || 0) + 1;
+          if (pend.attempts >= 5) { delete global._devVerify[vid]; return sendJson(res, 401, { error: '5 неверных попыток — начните заново' }); }
+          return sendJson(res, 401, { error: 'Неверный код (' + pend.attempts + ' из 5)' });
+        }
+        delete global._devVerify[vid];
+        const crypto = require('crypto');
+        await devicesLoad();
+        const tok = 'dev_' + crypto.randomBytes(18).toString('hex');
+        _devices.unshift({
+          id: 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          token: tok, who: pend.who, verified: true,
+          ip: pend.ip, ua: pend.ua,
+          at: new Date().toISOString(), lastSeen: new Date().toISOString()
+        });
+        if (_devices.length > 100) _devices.length = 100;
+        await devicesSave();
+        console.log('[авторизация компа] устройство ПОДТВЕРЖДЕНО кодом: ' + pend.who + ' (' + pend.ip + ')');
+        sendJson(res, 200, { ok: true, storeToken: tok, who: pend.who });
       } catch (e) { sendJson(res, 500, { error: e.message }); }
     });
   }

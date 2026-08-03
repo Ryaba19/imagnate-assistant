@@ -2485,6 +2485,23 @@ function openMobileMoreSheet(){
     '</div>'+
   '</div>';
   document.body.appendChild(ov);
+  /* Вход по логину: находит сотрудника и открывает его PIN-панель */
+  (function(){
+    const li=document.getElementById('pinLoginInput');
+    if(!li) return;
+    li.addEventListener('keydown', ev=>{
+      if(ev.key!=='Enter') return;
+      const v=(li.value||'').trim().toLowerCase();
+      const msg=document.getElementById('pinLoginMsg');
+      if(!v) return;
+      const e=pinAllEmployees().find(x=>x && x.login===v);
+      if(!e){ if(msg) msg.innerHTML='<span style="color:var(--negative);">Логин не найден</span>'; return; }
+      if(msg) msg.textContent='';
+      li.value='';
+      const t=ov.querySelector('[data-pin-user="emp'+e.id+'"]');
+      if(t) t.click();
+    });
+  })();
   ov.addEventListener('click', e=>{ if(e.target===ov) closeMobileMoreSheet(); });
   ov.querySelectorAll('[data-spage]').forEach(el=>el.addEventListener('click', ()=>{ closeMobileMoreSheet(); navigate(el.dataset.spage); }));
   const rs=document.getElementById('msheetRole');
@@ -2578,6 +2595,7 @@ function pinAllEmployees(){
 }
 function empRoleKey(e){
   const r=String(e.role||'');
+  if(/владелец/i.test(r)) return 'owner';   /* Леонид: вход по своему PIN = полные права владельца */
   if(/директор/i.test(r)) return (e.storeId==='store_kashirka')?'director2':'director';
   if(/старший/i.test(r)) return 'senior';
   if(/продавец/i.test(r)) return 'seller';
@@ -2636,6 +2654,8 @@ async function erpAutoConnect(force){
     try{
       const b=await (await fetch(base+'/api/bootstrap')).json();
       if(!(b && b.ok)) continue;
+      /* сервер 29.07-65 сам сторожит новые заказы 24/7 — вкладки не дублируют TG */
+      try{ if(DATA.settings) DATA.settings._serverOrderWatch=!!b.orderWatch; }catch(e){}
       const saveCreds=(tok)=>{
         let i2=integrationFor('site');
         if(!i2){ i2={channel:'site'}; DATA.integrations.push(i2); }
@@ -2681,7 +2701,38 @@ function deviceAuthShow(saveCreds, base){
     try{
       const r=await fetch((base||location.origin)+'/api/device-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin})});
       const j=await r.json();
-      if(j && j.ok && j.storeToken){
+      if(j && j.ok && j.verifyRequired){
+        /* устройство не подтверждено: владельцу улетел код (почта/Telegram) */
+        inp.style.display='none';
+        document.getElementById('devAuthGo').style.display='none';
+        let vRow=document.getElementById('devVerifyRow');
+        if(!vRow){
+          vRow=document.createElement('div');
+          vRow.id='devVerifyRow';
+          vRow.innerHTML='<input class="input-mini" id="devVerifyCode" inputmode="numeric" maxlength="6" placeholder="код из 6 цифр" style="width:100%;text-align:center;font-size:22px;letter-spacing:6px;margin-top:6px;">'+
+            '<button class="btn btn-primary" id="devVerifyGo" style="width:100%;margin-top:8px;padding:12px 0;">Подтвердить устройство</button>';
+          document.getElementById('devAuthMsg').after(vRow);
+        }
+        msg('Компьютер не подтверждён. Код отправлен на '+(j.channel||'владельцу')+' — введите его сюда (действует 10 минут).');
+        const vGo=async()=>{
+          const code=(document.getElementById('devVerifyCode').value||'').trim();
+          if(!/^\d{6}$/.test(code)){ msg('Код — 6 цифр', true); return; }
+          msg('Проверяю код…');
+          try{
+            const r2=await fetch((base||location.origin)+'/api/device-verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vid:j.vid, code})});
+            const j2=await r2.json();
+            if(j2 && j2.ok && j2.storeToken){
+              saveCreds(j2.storeToken);
+              try{ fullSave(); }catch(e){}
+              msg('Устройство подтверждено! Здравствуйте, '+(j2.who||'')+'. Загружаю данные…');
+              setTimeout(()=>location.reload(), 800);
+            } else msg((j2&&j2.error)||'Не получилось', true);
+          }catch(e){ msg('Нет связи с сервером: '+e.message, true); }
+        };
+        document.getElementById('devVerifyGo').addEventListener('click', vGo);
+        document.getElementById('devVerifyCode').addEventListener('keydown', ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); vGo(); } });
+        setTimeout(()=>document.getElementById('devVerifyCode').focus(), 100);
+      } else if(j && j.ok && j.storeToken){
         saveCreds(j.storeToken);
         try{ fullSave(); }catch(e){}
         msg('Готово! Здравствуйте, '+(j.who||'')+'. Загружаю данные…');
@@ -2708,7 +2759,11 @@ function pinLockShow(){
     '<div id="pinTiles" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">'+
       tile('owner','Владелец','полный доступ')+
       tile('admin','Админ','доступы · роли · обратная связь')+
-      emps.map(e=>tile('emp'+e.id, e.name, e.role+(e.pinHash?'':' · PIN не задан'))).join('')+
+      emps.map(e=>tile('emp'+e.id, e.name, e.role+(e.login?' · '+escHtml(e.login):'')+(e.pinHash?'':' · PIN не задан'))).join('')+
+    '</div>'+
+    '<div id="pinLoginRow" style="max-width:280px;margin:14px auto 0;text-align:center;">'+
+      '<input class="input-mini" id="pinLoginInput" placeholder="или введите логин и нажмите Enter" style="width:100%;text-align:center;" autocomplete="off">'+
+      '<div id="pinLoginMsg" class="tsub" style="min-height:16px;margin-top:4px;"></div>'+
     '</div>'+
     '<div id="pinPad" style="display:none;max-width:260px;margin:18px auto 0;text-align:center;">'+
       '<div id="pinWho" style="font-weight:700;margin-bottom:6px;"></div>'+
@@ -2727,9 +2782,26 @@ function pinLockShow(){
   let sel=null, buf='';
   const dots=()=>{ document.getElementById('pinDots').textContent=buf?('•'.repeat(buf.length)):'····'; };
   const msg=(t,neg)=>{ const m=document.getElementById('pinMsg'); m.textContent=t||''; m.style.color=neg?'var(--negative)':'var(--text-2)'; };
+  /* Вход по логину: Enter → PIN-панель этого сотрудника */
+  (function(){
+    const li=document.getElementById('pinLoginInput');
+    if(!li) return;
+    li.addEventListener('keydown', ev=>{
+      if(ev.key!=='Enter') return;
+      const v=(li.value||'').trim().toLowerCase();
+      const lm=document.getElementById('pinLoginMsg');
+      if(!v) return;
+      const e=pinAllEmployees().find(x=>x && x.login===v);
+      if(!e){ if(lm) lm.innerHTML='<span style="color:var(--negative);">Логин не найден</span>'; return; }
+      if(lm) lm.textContent='';
+      li.value='';
+      pick('emp'+e.id);
+    });
+  })();
   const pick=(id)=>{
     sel=id; buf='';
     document.getElementById('pinTiles').style.display='none';
+    const lr=document.getElementById('pinLoginRow'); if(lr) lr.style.display='none';
     document.getElementById('pinPad').style.display='block';
     const who=(id==='owner')?'Владелец':(id==='admin'?'Админ':((emps.find(e=>'emp'+e.id===id)||{}).name||''));
     document.getElementById('pinWho').textContent=who;
@@ -9398,6 +9470,13 @@ function tgWatchNewSiteItems(){
   try{
     if(!DATA || !DATA.settings || !DATA.settings.tgEnabled) return;
     if(!erpServerCreds()) return;
+    /* сервер сам шлёт уведомления о сайтовых заказах/ремонтах (24/7) —
+       вкладка только помечает их, чтобы при смене сервера не заспамить историей */
+    if(DATA.settings._serverOrderWatch){
+      (DATA.orders||[]).forEach(o=>{ if(o.externalId && /^(site|strapi)_/.test(String(o.externalId))) o.tgNotified=true; });
+      (DATA.service||[]).forEach(t=>{ if(t.externalId && /^(site|strapi)_/.test(String(t.externalId))) t.tgNotified=true; });
+      return;
+    }
     (DATA.orders||[]).forEach(o=>{
       if(!o.externalId || !/^(site|strapi)_/.test(String(o.externalId)) || o.tgNotified) return;
       o.tgNotified=true;
@@ -20179,7 +20258,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-84';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-88';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -20682,6 +20761,7 @@ function openEmployeeModal(empId, c){
       STORES.map(s=>'<option value="'+s.id+'"'+((emp?empStoreId(emp):'store_kashirka')===s.id?' selected':'')+'>'+escHtml(s.shortName)+'</option>').join('')+
     '</select></div>'+
     '<div><div class="tsub" style="margin-bottom:4px;">Телефон (необязательно)</div><input class="input-mini" id="empPhone" value="'+(emp?escAttr(emp.phone||''):'')+'" placeholder="+7 ..." style="width:100%;"></div>'+
+    '<div><div class="tsub" style="margin-bottom:4px;">Логин для входа (необязательно)</div><input class="input-mini" id="empLogin" value="'+(emp?escAttr(emp.login||''):'')+'" placeholder="например: alexey (латиница/цифры, без пробелов)" style="width:100%;" autocomplete="off"></div>'+
   '</div>'+
   (emp?'':'<div class="tsub" style="margin-top:10px;">Менеджер сразу попадает в карусель 2/2; мастера и другие роли выходят по ручным назначениям — нажмите на день в календаре и отметьте их.</div>');
   const actions=[
@@ -20689,11 +20769,15 @@ function openEmployeeModal(empId, c){
       const name=document.getElementById('empName').value.trim();
       const role=document.getElementById('empRole').value;
       const phone=document.getElementById('empPhone').value.trim();
+      const login=(document.getElementById('empLogin').value||'').trim().toLowerCase();
       if(!name){ toast('Укажите имя','error'); return; }
+      if(login && !/^[a-z0-9._-]{2,20}$/.test(login)){ toast('Логин: 2–20 символов, латиница/цифры/точка/дефис','error'); return; }
+      if(login && DATA.employees.some(e=>e.login===login && (!emp || e.id!==emp.id))){ toast('Логин «'+login+'» уже занят','error'); return; }
       const storeSel=document.getElementById('empStore').value;
       if(emp){
         const oldRole=emp.role;
         emp.name=name; emp.role=role; emp.phone=phone; emp.storeId=storeSel;
+        if(login) emp.login=login; else delete emp.login;
         if(oldRole!=='Мастер' && role==='Мастер' && emp.schedule && emp.schedule.cycle) emp.schedule={manual:true};
         toast('Сотрудник обновлён: '+name+' · '+role,'success');
       } else {
@@ -20701,8 +20785,10 @@ function openEmployeeModal(empId, c){
         const sched = /продавец|менеджер|владелец/i.test(role)
           ? {cycle:'2/2', start:ruDateStr(schedToday()), period:5, work:2, hours:'10:00–21:00'}
           : {manual:true};
-        DATA.employees.push({id:nid, name:name, role:role, unit:'shop_c', storeId:storeSel, phone:phone||'—', baseSalary:null,
-          responsibilities:'', schedule:sched, extraAccess:{expensesReview:false, analytics:false}});
+        const newEmp={id:nid, name:name, role:role, unit:'shop_c', storeId:storeSel, phone:phone||'—', baseSalary:null,
+          responsibilities:'', schedule:sched, extraAccess:{expensesReview:false, analytics:false}};
+        if(login) newEmp.login=login;
+        DATA.employees.push(newEmp);
         toast('Добавлен: '+name+' · '+role,'success');
       }
       closeModal(); renderTeam(c);
@@ -22628,10 +22714,11 @@ function pinLockShow(){
 (async function seedLoginsPins(){
   try{
     const H=(typeof chHomeStore==='function'?chHomeStore():DATA)||DATA;
-    if(H._loginSeed2) return;
+    if(H._loginSeed3) return;                      /* v3: добавлены Леонид и Лео */
     const preset={
       1:['alex','3417'], 2:['slava','8254'], 3:['vlad','6139'], 4:['ivan','7825'], 5:['dasha','1946'],
-      8:['sergey','8461'], 9:['marat','3592'], 10:['viktor','5273']
+      8:['sergey','8461'], 9:['marat','3592'], 10:['viktor','5273'],
+      11:['leonid','2907'], 12:['leo','8412']
     };
     let touched=false;
     for(const e of pinAllEmployees()){
@@ -22641,7 +22728,7 @@ function pinLockShow(){
     }
     if(!pinCfg().adminPinHash){ pinCfg().adminPinHash=await sha256Hex('storecontrol|admin|4692'); touched=true; }
     if(!pinCfg().ownerPinHash){ pinCfg().ownerPinHash=await sha256Hex('storecontrol|owner|5871'); touched=true; }
-    H._loginSeed2=1;
+    H._loginSeed2=1; H._loginSeed3=1;
     if(touched){ try{ fullSave(); }catch(e){} }
   }catch(e){ console.warn('seed logins:', e); }
 })();
