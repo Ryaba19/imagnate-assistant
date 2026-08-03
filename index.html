@@ -1026,6 +1026,7 @@ body.light .ld-vip{color:#8a6100;}
       <div class="store-selector" id="storeSelector" style="display:none;">
         <select class="select-mini" id="storeSelectorSelect" style="font-weight:600;min-width:180px;"></select>
       </div>
+      <div id="demoBadge" style="display:none;align-items:center;gap:6px;padding:4px 10px;border-radius:8px;background:rgba(245,158,11,.15);color:#f59e0b;font-size:12px;font-weight:800;white-space:nowrap;cursor:help;"></div>
       <div class="topbar-spacer"></div>
       <div class="topbar-icon-btn" id="themeBtn" title="Светлая / тёмная тема"></div>
       <div class="topbar-icon-btn" id="bellBtn"><span class="dot-badge"></span></div>
@@ -4326,6 +4327,7 @@ setInterval(()=>{ try{ orderTimesBackfill(); }catch(e){} }, 300000);
 ============================================================ */
 let _prBusy=false;
 async function strapiPriceBackfill(){
+  if(!window._importGateOpen) return 0;
   if(_prBusy) return 0;
   const H=chHomeStore();
   if(H._priceRefetch100) return 0;          /* v100: полная сверка всех импортированных */
@@ -5556,6 +5558,7 @@ function archiveOrder(o, mailStatus){
     comment:'Заказ перенесён в архив ('+(mailStatus==='sent'?'письмо-оценка отправлено':'письмо не отправлено: у клиента нет e-mail')+'). Архив доступен владельцу и управляющему.'});
 }
 function processReviewMailQueue(){
+  if(!window._importGateOpen) return false;   /* демо-комп не шлёт письма клиентам */
   if(reviewMailSettings().enabled===false) return false; // пауза: ждущие письма не отправляются
   const now=reviewMailNow();
   let changed=false;
@@ -9882,6 +9885,7 @@ let _hbTick=0, _hbBusy=false;
 window._hbLastAt=null;
 window._hbLastResult={};
 async function integrationsHeartbeat(){
+  if(!window._importGateOpen) return;   /* облачная база ещё не решена / демо-режим */
   if(_hbBusy) return;
   _hbBusy=true;
   _hbTick++;
@@ -9906,13 +9910,13 @@ async function integrationsHeartbeat(){
   _hbBusy=false;
 }
 setTimeout(()=>{ try{ integrationsHeartbeat(); }catch(e){} }, 2000);
-setTimeout(()=>{ try{ channelsSyncNow(false, true); }catch(e){} }, 10000);   /* догон недели диалогов при запуске */
+setTimeout(()=>{ try{ if(window._importGateOpen) channelsSyncNow(false, true); }catch(e){} }, 10000);   /* догон недели диалогов при запуске */
 setTimeout(()=>{ try{ annShowUnseen(); }catch(e){} }, 2600);
 setInterval(()=>{ try{ integrationsHeartbeat(); }catch(e){} }, HEARTBEAT_MS);
 /* сообщения каналов забираем чаще всех — каждые 5 секунд: вебхук кладёт их
    на сервер мгновенно, забор лёгкий (платформы сервер опрашивает сам, не
    чаще раза в 20 секунд, повторные вызовы просто читают базу) */
-setInterval(()=>{ try{ channelsSyncNow(false); }catch(e){} }, 5000);
+setInterval(()=>{ try{ if(window._importGateOpen) channelsSyncNow(false); }catch(e){} }, 5000);
 
 /* ============================================================
    КАНАЛЫ ВОРОНКИ (боевые): Авито / Telegram-личка / ВК / MAX.
@@ -15849,6 +15853,7 @@ async function strapiStatusRefresh(){
    телефонам. Выполняется один раз; при ошибке сети повторяется сам. */
 let _fhBusy=false;
 async function strapiFullHistoryImport(){
+  if(!window._importGateOpen) return 0;   /* без облака историю не строим */
   if(_fhBusy) return 0;
   const H=chHomeStore();
   if(H._fullHist47) return 0;
@@ -16163,6 +16168,7 @@ async function strapiReq(path, method, body){
    сервер-прокси (не упираемся в CORS). Все модели сайта с ценами. */
 let _catBusy=false;
 async function siteCatalogAutoBuild(){
+  if(!window._importGateOpen) return 0;
   if(_catBusy) return 0;
   try{
     if((DATA.siteCatalog||[]).length) return 0;   /* каталог уже есть */
@@ -16205,6 +16211,7 @@ setInterval(()=>{ try{ siteCatalogAutoBuild(); }catch(e){} }, 300000);
    с сайта и обновляем карточки каталога — инвентаризация всегда с ценами. */
 let _ppBusy=false;
 async function dbPullPricesAuto(){
+  if(!window._importGateOpen) return 0;
   if(_ppBusy) return 0;
   try{
     if(!apiToken()) return 0;
@@ -20587,7 +20594,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-102';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-103';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -22361,6 +22368,7 @@ function cloudSyncPush(payload, force){
   try{
     if(DATA && DATA.settings && DATA.settings.cloudSyncEnabled===false) return;
     const c=erpServerCreds(); if(!c) return;
+    if(window._cloudForeignLock) return;   /* в облаке другая база — этот комп только читает до перезагрузки */
     /* пишут только компы, за которыми реально работают: вкладка видима
        и было действие за последние 3 минуты. Простаивающая вкладка на другом
        компе больше НЕ затирает чужие свежие изменения своим старым снимком. */
@@ -22372,6 +22380,8 @@ function cloudSyncPush(payload, force){
     if(!force && now-window._cloudSync.lastPush<60000) return;
     window._cloudSync.lastPush=now;
     const doPush=()=>{
+      if(window._demoBorn) return;   /* демо-снимок в облако не уходит никогда */
+      try{ if(!payload._baseId) payload._baseId=erpBaseIdEnsure(); }catch(e){}
       fetch(c.api+'/state',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.token},
         body:JSON.stringify({savedAtMs:payload.savedAtMs||Date.now(), savedBy:(ROLES[STATE.role]||{}).label||'', state:payload})})
         .then(r=>r.json())
@@ -22388,7 +22398,12 @@ function cloudSyncPush(payload, force){
       .then(r=>r.json())
       .then(j=>{
         if(!(j && j.ok)){ window._cloudSync.status='error'; window._cloudSync.lastError='облако недоступно'; return; }
-        if(j.empty){ window._cloudPullOk=true; doPush(); return; }
+        if(j.empty){
+          /* облако пустое — мы первые: наша база становится главной */
+          window._cloudPullOk=true; window._demoBorn=false; payload._demoBorn=false;
+          try{ erpBaseIdEnsure(); updateDemoBadge(); }catch(e){}
+          doPush(); return;
+        }
         window._cloudSync.status='error';
         window._cloudSync.lastError='в облаке есть база — этот комп её ещё не загрузил';
         if(!window._cloudGuardToasted){
@@ -22402,6 +22417,7 @@ function cloudSyncPush(payload, force){
 function localSyncPush(payload){
   const base=localSyncUrl();
   if(!base) return;
+  if(window._cloudForeignLock) return;   /* в облаке главная база другая — свою копию не разносим */
   const now=Date.now();
   if(now-window._localSync.lastPush<4000) return;   /* не чаще автосохранения */
   window._localSync.lastPush=now;
@@ -22433,6 +22449,8 @@ async function localSyncPull(){
 
 function buildFullPayload(){
   return {stores:STORE_DATA, storeId:STATE.activeStoreId, savedAt:nowTime(), savedAtMs:Date.now(),
+      _baseId:(function(){ try{ return erpBaseIdGet(); }catch(e){ return null; } })(),
+      _demoBorn: !!window._demoBorn,
       ui:{role:STATE.role, page:STATE.page, ordersFilter:STATE.ordersFilter, crmView:STATE.crmView,
           crmTab:STATE.crmTab, whTab:STATE.whFilters&&STATE.whFilters.tab, schedEmp:STATE.schedEmp, taskFilter:STATE.taskFilter}};
 }
@@ -22489,11 +22507,43 @@ function fullLoad(){
       if(p.ui.schedEmp) STATE.schedEmp=p.ui.schedEmp;
       if(p.ui.taskFilter) STATE.taskFilter=p.ui.taskFilter;
     }
+    window._demoBorn = !!p._demoBorn;   /* база, рождённая из демо, помнит об этом */
     return true;
   }catch(e){ console.warn('autosave load error:', e); return false; }
 }
 const _fullLoaded=fullLoad();
 if(_fullLoaded) updateStoreSelector();
+if(!_fullLoaded) window._demoBorn=true;   /* стартовали с вшитого демо */
+/* ПАСПОРТ БАЗЫ (29.07-103): у главной базы есть постоянный id. Компьютер,
+   принявший облачный снимок, запоминает его паспорт; снимки без паспорта или
+   с чужим паспортом не имеют права писать в облако. */
+function erpBaseIdGet(){ try{ return localStorage.getItem('erp_base_id')||null; }catch(e){ return null; } }
+function erpBaseIdEnsure(){
+  let id=erpBaseIdGet();
+  if(!id){ id='base_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10); try{ localStorage.setItem('erp_base_id', id); }catch(e){} }
+  return id;
+}
+function erpBaseIdAdopt(st){ try{ if(st && st._baseId) localStorage.setItem('erp_base_id', String(st._baseId)); }catch(e){} }
+window._importGateOpen=false;    /* импорт с сайта заперт, пока не решён вопрос с облаком */
+window._cloudForeignLock=false;  /* в облаке чужая база — писать туда нельзя */
+function updateDemoBadge(){
+  try{
+    const el=document.getElementById('demoBadge'); if(!el) return;
+    if(window._demoBorn){
+      el.style.display='inline-flex';
+      el.textContent='🧪 ДЕМО-ДАННЫЕ';
+      el.title='Компьютер не подключён к облачной базе магазина — всё на экране не настоящее. Подключение: PIN + код подтверждения у владельца.';
+    } else {
+      el.style.display='none';
+    }
+  }catch(e){}
+}
+try{
+  const _db=document.getElementById('demoBadge');
+  if(_db) _db.addEventListener('click', ()=>{ try{ toast('Это демо-данные: компьютер не связан с облачной базой магазина. Обновите страницу и введите PIN — после кода подтверждения от владельца загрузится настоящая база.','info'); }catch(e){} });
+}catch(e){}
+setTimeout(updateDemoBadge, 500);
+setInterval(updateDemoBadge, 15000);
 
 /* ============================================================
    РЕАЛЬНЫЕ ДАТЫ (решение владельца 28.07.2026).
@@ -22677,12 +22727,18 @@ setInterval(async()=>{
     const raw=localStorage.getItem(LS_FULL_KEY);
     const mine=raw?((JSON.parse(raw)||{}).savedAtMs||0):0;
     const j=await (await fetch(c.api+'/state',{headers:{'Authorization':'Bearer '+c.token}})).json();
-    if(j && j.ok && !j.empty && (j.savedAtMs||0)>mine+2000){
-      whStashLostUnits(j.state);
-      try{ localStorage.setItem(LS_FULL_KEY, JSON.stringify(j.state)); }catch(e){}
-      window._skipAutosave=true;
-      console.log('Фоновая сверка: в облаке свежее — обновляюсь');
-      location.reload();
+    if(j && j.ok && !j.empty){
+      const cid=(j.state && j.state._baseId)||null;
+      const mineId=(typeof erpBaseIdGet==='function'?erpBaseIdGet():null);
+      const foreign = window._demoBorn || (cid && (!mineId || cid!==mineId));
+      if((j.savedAtMs||0)>mine+2000 || foreign){
+        whStashLostUnits(j.state);
+        try{ erpBaseIdAdopt(j.state); }catch(e){}
+        try{ localStorage.setItem(LS_FULL_KEY, JSON.stringify(j.state)); }catch(e){}
+        window._skipAutosave=true;
+        console.log(foreign?'Фоновая сверка: в облаке главная база — принимаю её':'Фоновая сверка: в облаке свежее — обновляюсь');
+        location.reload();
+      }
     }
   }catch(e){}
 }, 60000);
@@ -22711,6 +22767,17 @@ setInterval(async()=>{
     }
   }catch(e){}
   try{ await erpAutoConnect(); }catch(e){}
+  /* свежий компьютер с ключом: держим шторку дольше обычных 4 секунд —
+     дождаться облачную базу важнее, чем мигнуть демо-данными (Render
+     после сна отвечает не сразу) */
+  try{
+    if(!_fullLoaded && erpServerCreds() && veil){
+      if(veilTimer) clearTimeout(veilTimer);
+      veilTimer=setTimeout(veilOff, 25000);
+      const bm0=document.getElementById('bootVeilMsg');
+      if(bm0) bm0.textContent='Подключаюсь к облачной базе магазина…';
+    }
+  }catch(e){}
   let bestMs=0, best=null, bestSrc='';
   try{ const raw=localStorage.getItem(LS_FULL_KEY); if(raw) bestMs=(JSON.parse(raw).savedAtMs)||0; }catch(e){}
   const lbase=localSyncUrl();
@@ -22721,11 +22788,43 @@ setInterval(async()=>{
     }catch(e){}
   }
   const creds=erpServerCreds();
+  let cloudDecided=false, cloudEmptyConfirmed=false;
   if(creds && !(DATA && DATA.settings && DATA.settings.cloudSyncEnabled===false)){
     try{
       const j=await (await fetch(creds.api+'/state',{headers:{'Authorization':'Bearer '+creds.token}})).json();
-      if(j && j.ok) window._cloudPullOk=true;   /* облако прочитано — можно и отправлять */
-      if(j && j.ok && !j.empty && (j.savedAtMs||0)>bestMs){ bestMs=j.savedAtMs; best=j.state; bestSrc='облачной базы'; }
+      if(j && j.ok){
+        cloudDecided=true;
+        if(j.empty){
+          /* облако пустое — этот компьютер первый, его база станет главной */
+          cloudEmptyConfirmed=true;
+          window._cloudPullOk=true;
+          window._demoBorn=false;
+          try{ erpBaseIdEnsure(); }catch(e){}
+        } else {
+          const cid=(j.state && j.state._baseId)||null;
+          const mineId=erpBaseIdGet();
+          const sameBase=!!(cid && mineId && cid===mineId);
+          /* ГЛАВНОЕ ПРАВИЛО (29.07-103): облачная база ОБЯЗАТЕЛЬНА, если
+             (а) компьютер свежий — локальной базы не было;
+             (б) локальная база рождена из демо;
+             (в) в облаке база с другим паспортом (_baseId) — чужая копия.
+             Свежесть по времени сравниваем ТОЛЬКО между копиями одной базы —
+             именно сравнение времени позволяло свежему демо «побеждать»
+             настоящую базу и плодить тестовые данные. */
+          const cloudDemo=!!(j.state && j.state._demoBorn);
+          /* защита от цикла: если и облако демо-рождённое, и мы, и облако не
+             новее — принудительный приём не нужен (иначе вечная перезагрузка) */
+          const mustTakeCloud = (!_fullLoaded || window._demoBorn || (cid && !sameBase))
+            && !(cloudDemo && window._demoBorn && (j.savedAtMs||0)<=bestMs);
+          if(mustTakeCloud){
+            best=j.state; bestMs=(j.savedAtMs||0); bestSrc='облачной базы';
+            window._cloudForeignLock=true;   /* до перезагрузки в облако не пишем */
+          } else {
+            window._cloudPullOk=true;   /* та же база — обычная сверка по свежести */
+            if((j.savedAtMs||0)>bestMs){ bestMs=j.savedAtMs; best=j.state; bestSrc='облачной базы'; }
+          }
+        }
+      }
     }catch(e){}
   }
   if(best){
@@ -22740,6 +22839,7 @@ setInterval(async()=>{
     }catch(e){}
     if(allow){
       try{ whStashLostUnits(best); }catch(e){}
+      try{ erpBaseIdAdopt(best); }catch(e){}   /* запоминаем паспорт принятой базы */
       try{ localStorage.setItem(LS_FULL_KEY, JSON.stringify(best)); }catch(e){}
       window._skipAutosave=true;
       if(veilTimer) clearTimeout(veilTimer);
@@ -22755,6 +22855,17 @@ setInterval(async()=>{
     try{ const p=buildFullPayload(); localSyncPush(p); cloudSyncPush(p); }catch(e){}
   }
   try{ sessionStorage.setItem('erp_boot_reloads', JSON.stringify({n:0, t:Date.now()})); }catch(e){}
+  /* ВОРОТА ИМПОРТА (29.07-103): тянуть данные с сайта можно только когда решён
+     вопрос с облачной базой. Демо-комп без облака НИКОГДА не строит свою
+     параллельную базу — раньше именно это плодило «тестовые данные». */
+  window._importGateOpen = !best && ( window._demoBorn ? cloudEmptyConfirmed : (cloudDecided || !creds) );
+  if(!best && !window._importGateOpen){
+    console.warn('Импорт с сайта отключён: компьютер не связан с облачной базой (демо-режим или облако недоступно)');
+  }
+  try{ updateDemoBadge(); }catch(e){}
+  if(window._demoBorn && !best){
+    try{ toast('Вы видите ДЕМО-ДАННЫЕ — компьютер не подключён к облачной базе магазина. Обновите страницу и введите PIN: после кода подтверждения от владельца загрузится настоящая база.','info'); }catch(e){}
+  }
   if(veilTimer) clearTimeout(veilTimer);
   veilOff();
 })();
