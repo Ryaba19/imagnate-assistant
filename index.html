@@ -9783,6 +9783,56 @@ function tgWatchNewSiteItems(){
   }catch(e){}
 }
 
+/* Тестовая заявка (создавалась ссылкой /api/lead-test при проверках связи):
+   телефон +7 900 000-00-00, имя «ТЕСТ …», пометка в комментарии.
+   Такие записи в систему не попадают и вычищаются, если уже попали. */
+function isTestLeadRec(name, phone, comment){
+  const np=String(phone||'').replace(/\D/g,'');
+  if(np==='79000000000') return true;
+  if(/^ТЕСТ(\s|$)/.test(String(name||'').trim())) return true;
+  const cm=String(comment||'');
+  if(cm.indexOf('/api/lead-test')>=0) return true;
+  if(cm.indexOf('Тестовая заявка')>=0) return true;
+  return false;
+}
+function testDataPurge(){
+  try{
+    let removed=0;
+    Object.values(STORE_DATA).forEach(d=>{
+      if(!d) return;
+      if(Array.isArray(d.orders)){
+        const b=d.orders.length;
+        d.orders=d.orders.filter(o=>!isTestLeadRec(o.name, o.phone, String(o.clientComment||'')));
+        removed+=b-d.orders.length;
+      }
+      if(Array.isArray(d.service)){
+        const b=d.service.length;
+        d.service=d.service.filter(t=>!isTestLeadRec(t.client, t.phone, String(t.issue||'')));
+        removed+=b-d.service.length;
+      }
+      if(Array.isArray(d.leads)){
+        const b=d.leads.length;
+        d.leads=d.leads.filter(l=>!isTestLeadRec(l.name, l.phone||l.contact, String(l.comment||'')));
+        removed+=b-d.leads.length;
+      }
+      if(Array.isArray(d.customers)){
+        const b=d.customers.length;
+        d.customers=d.customers.filter(c=>!isTestLeadRec(c.name, ((c.phones||[])[0])||'', ''));
+        removed+=b-d.customers.length;
+      }
+    });
+    if(removed){
+      if(typeof lsSave==='function') lsSave();
+      console.log('Уборка тест-заявок: удалено записей — '+removed);
+      try{ toast('🧹 Вычищено тестовых записей: '+removed,'info'); }catch(e){}
+      try{ if(['orders','service','crm','customers'].includes(STATE.page)) renderPage(); }catch(e){}
+    }
+    return removed;
+  }catch(e){ return 0; }
+}
+setTimeout(()=>{ try{ testDataPurge(); }catch(e){} }, 2500);
+setInterval(()=>{ try{ testDataPurge(); }catch(e){} }, 300000);
+
 function importSiteLeads(arr){
   /* Заявки с сайта теперь падают НЕ в воронку CRM, а сразу в раздел
      «Заказы» со статусом «Новый» — дальше обычная логика заказа:
@@ -9791,6 +9841,11 @@ function importSiteLeads(arr){
   (arr||[]).forEach(s=>{
     if(s==null || s.id==null) return;
     const ext='site_'+s.id;
+    if(isTestLeadRec(s.name, s.phone||s.contact, s.comment)){
+      const tid=parseInt(s.id);
+      if(tid>(DATA.siteLastLeadId||0)) DATA.siteLastLeadId=tid;   /* курсор проходит мимо теста */
+      return;
+    }
     if((DATA.orders||[]).some(o=>o.externalId===ext)) return;   // защита от дублей
     if((DATA.leads||[]).some(l=>l.externalId===ext)) return;    // уже импортирован раньше (в CRM)
     if((DATA.service||[]).some(t=>t.externalId===ext)) return;  // уже принят в сервис
@@ -10862,6 +10917,51 @@ function crmArchiveHTML(list, won, lost){
 }
 
 /* Доска — колонки с внутренней прокруткой, чтобы 50 заявок не ломали страницу */
+/* ЗАЯВКА СЧИТАЕТСЯ ОБРАБОТАННОЙ (05.08): в диалоге есть наше исходящее
+   сообщение — либо за нас ответил автоответчик Авито. Такая заявка не имеет
+   права висеть в «Новых / Не отвечали», собирать «никто не взял N дн.»
+   и попадать в напоминания ассистента. */
+function leadAnsweredByUs(l){
+  try{
+    const ms=(l&&l.msgs)||[];
+    if(ms.some(m=>m && m.dir==='out')) return true;
+    if(ms.some(m=>m && m.dir==='in' && /Ассистент Авито ответил/i.test(String(m.text||'')))) return true;
+    return false;
+  }catch(e){ return false; }
+}
+function crmAutoProcessAnswered(){
+  let moved=0;
+  try{
+    Object.values(STORE_DATA).forEach(d=>{
+      if(!d) return;
+      (d.leads||[]).forEach(l=>{
+        if(!l || l.stage!=='new') return;
+        if(!leadAnsweredByUs(l)) return;
+        l.stage='working';
+        l.fellBack=false;
+        l.workingSince=(d.today||DATA.today)+' '+nowTime();
+        l.lastTouch=d.today||DATA.today;
+        if(!l.owner){
+          const out=(l.msgs||[]).slice().reverse().find(m=>m && m.dir==='out' && m.author);
+          if(out) l.owner=out.author;
+        }
+        (l.notes=l.notes||[]).unshift({date:(d.today||DATA.today), text:'Автоматически: в диалоге уже есть наш ответ — заявка обработана, перенесена в «Общение»'});
+        moved++;
+      });
+    });
+    if(moved){
+      if(typeof lsSave==='function') lsSave();
+      console.log('CRM: обработанных заявок перенесено из «Новых» в «Общение» — '+moved);
+      try{
+        if(STATE.page==='crm' && !document.querySelector('#modalOverlay.show')) renderPage();
+      }catch(e){}
+    }
+  }catch(e){}
+  return moved;
+}
+setTimeout(()=>{ try{ crmAutoProcessAnswered(); }catch(e){} }, 3500);
+setInterval(()=>{ try{ crmAutoProcessAnswered(); }catch(e){} }, 60000);
+
 function crmKanbanHTML(list){
   const cols=[...LEAD_STAGES, ARCHIVE_STAGES[0]];   /* «Оформленные» видят все роли */
   let html='<div class="kanban">';
@@ -10880,7 +10980,7 @@ function crmKanbanHTML(list){
     } else {
       items.forEach(l=>{
         const idle=daysIdle(l);
-        const isStale=(l.stage==='new') && idle>=2;   /* только свободные: в «Общении» авто-перенос, в «Ожидании» дедлайн */
+        const isStale=(l.stage==='new') && idle>=2 && !leadAnsweredByUs(l);   /* отвеченные — не «зависшие» */
         const alarm=!!(l.fellBack||l.callbackDue);
         /* Незавершённый диалог в «Общении»: клиент написал последним или есть
            непрочитанные — карточка обводится оранжевым (нужно ответить) */
@@ -13904,6 +14004,16 @@ function controlPanelHTML(){
         '</div>';
       }).join('')+
     '</div>';
+    html+='<div class="card" style="margin-top:12px;"><div class="kpi-label">☁️ Облачная база</div>'+
+      '<div class="tsub" style="margin-top:4px;line-height:1.7;">Паспорт базы: <span class="mono">'+escHtml((typeof erpBaseIdGet==='function'&&erpBaseIdGet())||'ещё не присвоен')+'</span>'+
+      (window._demoBorn?' · <b style="color:var(--warning);">эта копия рождена из демо</b>':'')+
+      '<br>Если на каком-то компьютере оказались не те данные: «Назначить главной» нажимается на компе с ПРАВИЛЬНЫМИ данными — остальные примут её сами. '+
+      '«Принять заново» нажимается на компе с мусором. «История облака» — откат всей облачной базы к одному из прошлых снимков (сервер хранит до 20, шаг 30 минут).</div>'+
+      '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">'+
+        '<button class="btn btn-sm btn-danger" id="cloudMasterBtn">⚠ Назначить эту базу главной</button>'+
+        '<button class="btn btn-sm" id="cloudRepullBtn">⟳ Принять главную базу заново</button>'+
+        '<button class="btn btn-sm" id="cloudHistBtn">🕘 История облака</button>'+
+      '</div></div>';
   }
   }
   html+='<div class="section"><div class="section-head"><div class="section-title">Сотрудники и доступы</div>'+
@@ -13989,7 +14099,104 @@ function demoDetox(){
   try{ fullSave(); }catch(e){}
   return n;
 }
+/* Комп с правильными данными становится ИСТОЧНИКОМ: новый паспорт базы,
+   принудительная отправка в облако. Остальные компы увидят чужой паспорт
+   и обязаны будут принять эту базу (правило 29.07-103). */
+async function cloudForceMaster(){
+  const c=erpServerCreds();
+  if(!c){ toast('Нет подключения к серверу — сначала подключите этот компьютер','error'); return false; }
+  try{
+    const id='base_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10);
+    try{ localStorage.setItem('erp_base_id', id); }catch(e){}
+    window._demoBorn=false; window._cloudForeignLock=false; window._cloudPullOk=true; window._importGateOpen=true;
+    try{ testDataPurge(); }catch(e){}
+    const payload=buildFullPayload(); payload._baseId=id; payload._demoBorn=false;
+    const r=await fetch(c.api+'/state',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.token},
+      body:JSON.stringify({savedAtMs:Date.now(), savedBy:'владелец — назначение главной базы', state:payload})});
+    const j=await r.json();
+    if(j&&j.ok){
+      try{ localStorage.setItem(LS_FULL_KEY, JSON.stringify(payload)); }catch(e){}
+      try{ updateDemoBadge(); }catch(e){}
+      toast('✅ Эта база назначена главной. Остальные компьютеры примут её сами (в течение минуты в фоне или при обновлении страницы).','success');
+      return true;
+    }
+    toast('Не получилось: '+((j&&j.error)||'сервер не ответил'),'error');
+    return false;
+  }catch(e){ toast('Ошибка связи: '+e.message,'error'); return false; }
+}
+/* История облачной базы (нужен сервер 29.07-66): список снимков и откат */
+async function cloudHistoryShow(){
+  const c=erpServerCreds();
+  if(!c){ toast('Нет подключения к серверу','error'); return; }
+  toast('Загружаю историю облака…','info');
+  try{
+    const j=await (await fetch(c.api+'/state-history',{headers:{'Authorization':'Bearer '+c.token}})).json();
+    if(!(j&&j.ok)){ toast('История недоступна: '+((j&&j.error)||'обновите сервер до 29.07-66'),'error'); return; }
+    if(!(j.items||[]).length){ toast((j.hint||'В истории пока нет снимков'),'info'); return; }
+    let h='<div class="tsub" style="margin-bottom:10px;line-height:1.7;">Сервер сам сохраняет снимок облачной базы не чаще раза в 30 минут (до 20 последних). '+
+      'Восстановление вернёт облако к выбранному снимку — текущая версия перед этим тоже уйдёт в историю, так что откат обратим. '+
+      'После восстановления этот компьютер перезагрузится и примет восстановленную базу; остальные подтянут её сами.</div>';
+    j.items.forEach(it=>{
+      const d=new Date(it.savedAtMs||0);
+      h+='<div class="card" style="margin-bottom:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'+
+        '<div style="flex:1;min-width:220px;"><b>'+d.toLocaleString('ru-RU')+'</b>'+
+        '<div class="tsub">заказов: '+(it.orders==null?'?':it.orders)+' · склад (техника): '+(it.units==null?'?':it.units)+' · '+(it.sizeKb||'?')+' КБ</div></div>'+
+        '<button class="btn btn-sm btn-danger" data-hist-restore="'+it.id+'">Восстановить</button></div>';
+    });
+    renderDrill('🕘 История облачной базы', 'выберите снимок для отката', h);
+    setTimeout(()=>{
+      document.querySelectorAll('[data-hist-restore]').forEach(btn=>btn.addEventListener('click', async()=>{
+        if(btn.dataset.armed!=='1'){
+          btn.dataset.armed='1'; btn.textContent='Точно восстановить?';
+          setTimeout(()=>{ btn.dataset.armed='0'; btn.textContent='Восстановить'; }, 6000);
+          return;
+        }
+        btn.disabled=true; btn.textContent='Восстанавливаю…';
+        try{
+          const r=await fetch(c.api+'/state-restore',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.token},
+            body:JSON.stringify({id:parseInt(btn.dataset.histRestore)})});
+          const jr=await r.json();
+          if(jr&&jr.ok){
+            toast('✅ Облако восстановлено. Перезагружаюсь с принятой базой…','success');
+            window._skipAutosave=true;
+            try{ localStorage.removeItem(LS_FULL_KEY); localStorage.removeItem('erp_base_id'); }catch(e){}
+            setTimeout(()=>location.reload(), 900);
+          } else {
+            toast('Не получилось: '+((jr&&jr.error)||'ошибка'),'error');
+            btn.disabled=false; btn.textContent='Восстановить';
+          }
+        }catch(e){
+          toast('Ошибка связи: '+e.message,'error');
+          btn.disabled=false; btn.textContent='Восстановить';
+        }
+      }));
+    }, 80);
+  }catch(e){ toast('Ошибка: '+e.message,'error'); }
+}
 function wireControlPanel(c){
+  const cmb=document.getElementById('cloudMasterBtn');
+  if(cmb) cmb.addEventListener('click', ()=>{
+    if(cmb.dataset.armed!=='1'){
+      cmb.dataset.armed='1'; cmb.textContent='Точно? Эта база затрёт облачную';
+      setTimeout(()=>{ cmb.dataset.armed='0'; cmb.textContent='⚠ Назначить эту базу главной'; }, 7000);
+      return;
+    }
+    cmb.dataset.armed='0'; cmb.disabled=true; cmb.textContent='Отправляю…';
+    cloudForceMaster().then(()=>{ try{ renderManage(document.getElementById('pageContent')); }catch(e){} });
+  });
+  const crb=document.getElementById('cloudRepullBtn');
+  if(crb) crb.addEventListener('click', ()=>{
+    if(crb.dataset.armed!=='1'){
+      crb.dataset.armed='1'; crb.textContent='Точно? Несохранённое на этом компе пропадёт';
+      setTimeout(()=>{ crb.dataset.armed='0'; crb.textContent='⟳ Принять главную базу заново'; }, 7000);
+      return;
+    }
+    window._skipAutosave=true;
+    try{ localStorage.removeItem(LS_FULL_KEY); localStorage.removeItem('erp_base_id'); }catch(e){}
+    location.reload();
+  });
+  const chb=document.getElementById('cloudHistBtn');
+  if(chb) chb.addEventListener('click', ()=>cloudHistoryShow());
   document.querySelectorAll('[data-store-mod]').forEach(cb=>cb.addEventListener('change', ()=>{
     const [sid,mod]=cb.dataset.storeMod.split('|');
     const m=storeModulesOf(sid);
@@ -20594,7 +20801,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-103';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-105';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -21448,6 +21655,21 @@ function openLeadDialog(id, c){
       closeModal(); refreshCrm(c);
       toast('Заказ закреплён за вами — клиент в «Общении»'+(wasNew&&wasNew.source&&wasNew.source.indexOf('CRM')===0?' и добавлен в базу':''),'success');
     }});
+  }
+  /* Ручные решения по заявке (05.08): менеджер сам помечает итог из «Новых» */
+  if(l.stage==='new'){
+    actions.push({label:'✅ Обработана — в «Общение»', action:()=>{
+      l.stage='working'; l.fellBack=false;
+      if(!l.owner) l.owner=me;
+      l.workingSince=DATA.today+' '+nowTime(); l.lastTouch=DATA.today;
+      (l.notes=l.notes||[]).unshift({date:DATA.today, text:'Отмечена обработанной — '+me});
+      crmEnsureCustomer(l, 'в «Общении»');
+      closeModal(); refreshCrm(c);
+      toast('Заявка отмечена обработанной — переносится в «Общение»','success');
+    }});
+  }
+  if(['new','working'].includes(l.stage)){
+    actions.push({label:'🚫 Не актуальна', cls:'btn-danger', action:()=>{ closeModal(); openLeadCancelModal(l.id, c); }});
   }
   /* В «Ожидание» заявка попадает сама — по таймеру crmWaitHours (ручной кнопки нет) */
   if(l.stage==='waiting'){

@@ -982,7 +982,7 @@ const server = http.createServer((req, res) => {
 
   /* ---- Страницы ---- */
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return sendFile(res, 'index.html');
-  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-67' });
+  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-68' });
 
   /* ---- Автонастройка нового компа: открыл систему с сервера — она сама
      получила адрес API и ключ. Включается переменной AUTO_SETUP=1. ---- */
@@ -1782,7 +1782,11 @@ async function serverSideChecks() {
         }
       }
       for (const l of (d.leads || [])) {
-        if (l.fellBack && l.stage === 'new') {
+        /* 29.07-68: если в диалоге уже есть наш ответ (или ответ автоответчика
+           Авито) — заявка обработана, «упавшей» её не объявляем */
+        const answered = ((l.msgs || []).some(m => m && (m.dir === 'out' ||
+          (m.dir === 'in' && /Ассистент Авито ответил/i.test(String(m.text || ''))))));
+        if (l.fellBack && l.stage === 'new' && !answered) {
           const k = 'srvntf_fell_' + sid + '_' + l.id + '_' + dayKey;
           if (await kvGet(k)) continue;
           await kvSet(k, '1');
