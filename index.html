@@ -7085,6 +7085,33 @@ function openIssueModal(id){
         }
         return;
       }
+      const auxIss=appleBoxAuxParse(v);
+      if(auxIss){
+        input.value='';
+        if(auxIss.type==='eid'){
+          toast('Это EID (микросхема eSIM) — сканируйте IMEI или код модели «…/A»','info');
+        } else if(auxIss.type==='jan-jp'){
+          it.region='J';
+          try{
+            const uJ=[...DATA.warehouse.tech, ...DATA.warehouse.tradein].find(x=>x.imei===it.imei);
+            if(uJ) uJ.region='J';
+          }catch(e){}
+          let tagJ=document.getElementById('scanRegion'+i);
+          if(!tagJ){
+            tagJ=document.createElement('div');
+            tagJ.id='scanRegion'+i; tagJ.className='tsub';
+            const rowJ=document.getElementById('scanRow'+i);
+            if(rowJ) rowJ.appendChild(tagJ);
+          }
+          tagJ.innerHTML='Регион: <b>'+appleRegionLabel('J', it.name)+'</b> (по японскому JAN)';
+          toast('Японская коробка (JAN): '+appleRegionLabel('J', it.name),'success');
+          try{ beep('ok'); }catch(e){}
+          try{ if(typeof lsSave==='function') lsSave(); }catch(e){}
+        } else {
+          toast('Это штрихкод упаковки (EAN/UPC) — сканируйте IMEI или код модели «…/A»','info');
+        }
+        return;
+      }
       if(v===''){ statusEl.className='wait'; statusEl.innerHTML=ic('alert')+' Не отсканировано'; scanState[i].matched=null; }
       else if(v===it.imei){ statusEl.className='ok'; statusEl.innerHTML=ic('check')+' Совпадает'; scanState[i].matched=true; try{beep('ok');}catch(e){} }
       else {
@@ -8351,6 +8378,20 @@ function appleRegionLabel(code, modelName){
   return info.flag+' '+info.region+(sim?' · '+sim:'');
 }
 function appleRegionFlag(code){ const i=APPLE_REGIONS[code]; return i? i.flag : ''; }
+/* Прочие штрихи на коробке, которые не юнит и не код модели:
+   EID — номер микросхемы eSIM (32 цифры), для учёта не нужен;
+   JAN — японский товарный штрих (13 цифр, префиксы Apple Japan 4549995 /
+   4547597) — сам по себе выдаёт японскую коробку → регион 🇯🇵;
+   EAN/UPC — штрихкод упаковки (12–13 цифр), региона не содержит. */
+function appleBoxAuxParse(v){
+  const s=String(v||'').trim();
+  if(/^\d{30,34}$/.test(s)) return {type:'eid'};
+  if(/^\d{12,13}$/.test(s)){
+    if(/^(4549995|4547597)/.test(s)) return {type:'jan-jp', code:'J'};
+    return {type:'ean'};
+  }
+  return null;
+}
 /* Регион позиции заказа: из позиции или из привязанного юнита склада */
 function appleRegionOfItem(it){
   try{
@@ -8419,6 +8460,21 @@ function openInventoryModal(c){
         try{ beep('ok'); }catch(e){}
       } else {
         toast('Код региона «'+rc.code+'/A» не распознан — если это новый регион, сообщите разработчику','info');
+      }
+      return;
+    }
+    /* EID / JAN / EAN — это не юнит: подсказываем, а японский JAN даёт регион */
+    const aux=appleBoxAuxParse(clean);
+    if(aux){
+      const el2=document.getElementById('invImei'); if(el2){ el2.value=''; el2.focus(); }
+      if(aux.type==='eid'){
+        toast('Это EID — номер микросхемы eSIM, для учёта не нужен. Сканируйте IMEI.','info');
+      } else if(aux.type==='jan-jp'){
+        INV.pendingRegion='J';
+        toast('Японская коробка (JAN): '+appleRegionLabel('J', INV.model)+' — привяжется к следующему отсканированному IMEI','success');
+        try{ beep('ok'); }catch(e){}
+      } else {
+        toast('Это штрихкод упаковки (EAN/UPC) — по нему регион не определить. Регион: код модели «…/A» (или наберите его с наклейки вручную). Учёт: IMEI.','info');
       }
       return;
     }
@@ -8611,7 +8667,12 @@ function renderWarehouse(c){
   }
   c.innerHTML=html;
 
-  c.querySelectorAll('[data-wh-cat]').forEach(el=>el.addEventListener('click',()=>openWarehouseCategoryDrill(el.dataset.whCat)));
+  /* 29.07-107 (решение владельца 05.08): карточка категории просто открывает
+     её вкладку — промежуточный экран «цепочка происхождения» убран как лишний */
+  c.querySelectorAll('[data-wh-cat]').forEach(el=>el.addEventListener('click',()=>{
+    STATE.whFilters.tab=el.dataset.whCat;
+    renderWarehouse(c);
+  }));
   c.querySelectorAll('[data-wt]').forEach(el=>el.addEventListener('click',()=>{STATE.whFilters.tab=el.dataset.wt; renderWarehouse(c);}));
   const search=document.getElementById('whSearch');
   search.addEventListener('input', ()=>{STATE.whFilters.q=search.value; renderWarehouse(c); document.getElementById('whSearch').focus();});
@@ -20926,7 +20987,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-106';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-108';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
