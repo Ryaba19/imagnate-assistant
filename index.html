@@ -8392,6 +8392,19 @@ function appleBoxAuxParse(v){
   }
   return null;
 }
+/* Выпадающий список регионов (для коробок, где штриха с кодом модели нет):
+   по одному пункту на страну, значение — код региона */
+function appleRegionOptionsHTML(selected){
+  const seen=new Set(); let h='<option value="">регион не указан</option>';
+  Object.keys(APPLE_REGIONS).forEach(code=>{
+    const info=APPLE_REGIONS[code];
+    const key=info.flag+info.region;
+    if(seen.has(key)) return;
+    seen.add(key);
+    h+='<option value="'+code+'"'+(selected===code?' selected':'')+'>'+info.flag+' '+info.region+'</option>';
+  });
+  return h;
+}
 /* Регион позиции заказа: из позиции или из привязанного юнита склада */
 function appleRegionOfItem(it){
   try{
@@ -8411,7 +8424,12 @@ function openInventoryModal(c){
   body+='<div class="field"><label>Модель</label><input class="input-mini" id="invModel" style="width:100%;" placeholder="Начните вводить название…" value="'+escAttr(INV.model)+'"></div>'+
     '<div id="invSuggest"></div>'+
     '<div class="field" style="margin-top:8px;"><label>Розничная цена, ₽</label><input class="input-mini" id="invPrice" type="number" style="width:100%;" value="'+(INV.price||'')+'"></div>'+
-    '<div class="toggle-row" style="margin:8px 0;"><div class="toggle-switch '+(INV.acc?'on':'')+'" id="invAccTgl"></div>Аксессуар — без IMEI, заводится количеством</div>';
+    '<div class="toggle-row" style="margin:8px 0;"><div class="toggle-switch '+(INV.acc?'on':'')+'" id="invAccTgl"></div>Аксессуар — без IMEI, заводится количеством</div>'+
+    (INV.acc?'':'<div class="field" style="margin-top:2px;"><label>Регион партии (если на коробке нет штриха с кодом модели)</label>'+
+      '<select class="select-mini" id="invRegion" style="width:100%;">'+appleRegionOptionsHTML(INV.batchRegion||'')+'</select>'+
+      '<div class="tsub" style="margin-top:3px;">'+(INV.batchRegion&&APPLE_REGIONS[INV.batchRegion]
+        ? 'Каждый отсканированный IMEI получит: <b>'+appleRegionLabel(INV.batchRegion, INV.model)+'</b>'
+        : 'Выберите один раз — все IMEI этой партии получат регион сами. Скан кода модели «…/A» или японского JAN тоже работает и важнее списка.')+'</div></div>');
   body+='<div id="invScanArea">'+(INV.acc
     ? '<div class="field"><label>Количество, шт</label><input class="input-mini" id="invQty" type="number" min="1" value="1" style="width:100%;"></div>'+
       '<button class="btn btn-primary" id="invAddAcc" style="margin-top:6px;">Добавить на склад</button>'
@@ -8444,6 +8462,13 @@ function openInventoryModal(c){
   mInp.addEventListener('input', ()=>{ INV.model=mInp.value.trim(); showSug(); });
   document.getElementById('invPrice').addEventListener('input', e=>{ INV.price=Math.round(parseFloat(e.target.value)||0); });
   document.getElementById('invAccTgl').addEventListener('click', ()=>{ INV.acc=!INV.acc; openInventoryModal(c); });
+  const invReg=document.getElementById('invRegion');
+  if(invReg) invReg.addEventListener('change', ()=>{
+    INV.batchRegion=invReg.value||null;
+    if(INV.batchRegion) toast('Регион партии: '+appleRegionLabel(INV.batchRegion, INV.model)+' — применится ко всем сканируемым IMEI','success');
+    else toast('Регион партии снят — юниты заводятся без региона','info');
+    openInventoryModal(c);
+  });
 
   const addUnit=(imei)=>{
     INV.model=(document.getElementById('invModel').value||'').trim();
@@ -8483,8 +8508,9 @@ function openInventoryModal(c){
       toast('Этот IMEI уже на складе: '+clean,'error'); try{beep('err');}catch(e){}
       return;
     }
-    DATA.warehouse.tech.push({imei:clean, model:INV.model, purchase:0, price:INV.price||invCatalogPrice(INV.model), status:'instock', location:loc, region:INV.pendingRegion||null});
-    if(INV.pendingRegion){ toast(appleRegionFlag(INV.pendingRegion)+' Регион привязан к '+clean,'info'); INV.pendingRegion=null; }
+    const unitRegion=INV.pendingRegion||INV.batchRegion||null;
+    DATA.warehouse.tech.push({imei:clean, model:INV.model, purchase:0, price:INV.price||invCatalogPrice(INV.model), status:'instock', location:loc, region:unitRegion});
+    if(unitRegion){ toast(appleRegionFlag(unitRegion)+' Регион привязан к '+clean,'info'); INV.pendingRegion=null; }
     INV.session.push({model:INV.model, imei:clean, purchase:0, price:INV.price, qty:1});
     try{ cloudPushNow(); }catch(e){}
     /* вписанная розница запоминается в карточке модели — «цена не указана» уходит */
@@ -9014,7 +9040,8 @@ function openWarehouseItemDrill(code){
       ((it.region && APPLE_REGIONS[it.region])
         ? '<b style="font-size:15px;">'+appleRegionLabel(it.region, it.model)+'</b>'
         : '<span class="tsub">не определён</span>')+
-      '<input class="input-mini" id="whDrillRegion" placeholder="скан кода модели (MYND3ZA/A)" style="width:210px;">'+
+      '<select class="select-mini" id="whDrillRegionSel" style="width:190px;">'+appleRegionOptionsHTML(it.region||'')+'</select>'+
+      '<input class="input-mini" id="whDrillRegion" placeholder="или скан/ввод кода модели" style="width:190px;">'+
     '</div></div>';
   /* ЦЕНА ПРОДАЖИ — редактируется прямо здесь и сохраняется сразу (03.08) */
   if(it.status!=='sold'){
@@ -9027,6 +9054,14 @@ function openWarehouseItemDrill(code){
   }
   renderDrill(it.model, 'Код: '+(it.imei||it.sku), body);
   setTimeout(()=>{
+    const rSel=document.getElementById('whDrillRegionSel');
+    if(rSel) rSel.addEventListener('change', ()=>{
+      it.region=rSel.value||null;
+      try{ if(typeof lsSave==='function') lsSave(); }catch(e){}
+      try{ cloudPushNow(); }catch(e){}
+      toast(it.region?('Регион сохранён: '+appleRegionLabel(it.region, it.model)):'Регион снят','success');
+      try{ openWarehouseItemDrill(it.imei||it.sku); }catch(e){}
+    });
     const rIn=document.getElementById('whDrillRegion');
     if(rIn) rIn.addEventListener('keydown', e=>{
       if(e.key!=='Enter') return;
@@ -20987,7 +21022,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-108';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-109';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
