@@ -129,6 +129,36 @@ async function stateSave(obj) {
   }
 }
 
+/* Тестовая заявка (создана /api/lead-test): телефон 7 900 000-00-00,
+   имя «ТЕСТ …», пометка в комментарии. Такие в систему не попадают. */
+function isTestLead(l) {
+  if (!l) return false;
+  const np = String(l.phone || '').replace(/\D/g, '');
+  if (np === '79000000000') return true;
+  if (/^ТЕСТ(\s|$)/.test(String(l.name || '').trim())) return true;
+  if (String(l.comment || '').indexOf('/api/lead-test') >= 0) return true;
+  return false;
+}
+async function purgeTestLeads() {
+  try {
+    if (pool) {
+      const r = await pool.query(
+        "DELETE FROM site_leads WHERE regexp_replace(phone, '\\D', '', 'g') = '79000000000'" +
+        " OR name LIKE 'ТЕСТ %' OR comment LIKE '%/api/lead-test%'");
+      if (r.rowCount) console.log('[уборка] тест-заявки удалены из БД: ' + r.rowCount);
+      return r.rowCount || 0;
+    }
+    const db = readDb();
+    const before = db.leads.length;
+    db.leads = db.leads.filter(l => !isTestLead(l));
+    if (db.leads.length !== before) {
+      writeDb(db);
+      console.log('[уборка] тест-заявки удалены из файла: ' + (before - db.leads.length));
+    }
+    return before - db.leads.length;
+  } catch (e) { console.error('purgeTestLeads:', e.message); return 0; }
+}
+
 async function dbAddLead(l) {
   const r = await pool.query(
     'INSERT INTO site_leads (name, phone, topic, item, comment, page, ip) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, created_at',
@@ -952,7 +982,7 @@ const server = http.createServer((req, res) => {
 
   /* ---- Страницы ---- */
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return sendFile(res, 'index.html');
-  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-65' });
+  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-67' });
 
   /* ---- Автонастройка нового компа: открыл систему с сервера — она сама
      получила адрес API и ключ. Включается переменной AUTO_SETUP=1. ---- */
@@ -1227,12 +1257,12 @@ const server = http.createServer((req, res) => {
     const since = parseInt(url.searchParams.get('since')) || 0;
     (async () => {
       try {
-        if (pool) return sendJson(res, 200, { leads: await dbGetLeads(since), db: 'postgres' });
+        if (pool) return sendJson(res, 200, { leads: (await dbGetLeads(since)).filter(l => !isTestLead(l)), db: 'postgres' });
       } catch (e) {
         console.error('Ошибка БД при чтении заявок, читаю файл:', e.message);
       }
       const db = readDb();
-      sendJson(res, 200, { leads: db.leads.filter(l => l.id > since), db: 'file' });
+      sendJson(res, 200, { leads: db.leads.filter(l => l.id > since && !isTestLead(l)), db: 'file' });
     })();
     return;
   }
@@ -1312,6 +1342,9 @@ const server = http.createServer((req, res) => {
   /* ---- Тестовая заявка одной ссылкой (по токену): полный боевой путь ---- */
   if (req.method === 'GET' && url.pathname === '/api/lead-test') {
     if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    if (process.env.ALLOW_TEST_LEADS !== '1') {
+      return sendJson(res, 200, { ok: false, error: 'Тестовые заявки отключены: они засоряли рабочую базу. Для разовой проверки добавьте ALLOW_TEST_LEADS=1 в Environment (и уберите после).' });
+    }
     const topic = ['buy', 'tradein', 'repair', 'question'].includes(url.searchParams.get('topic')) ? url.searchParams.get('topic') : 'buy';
     const stamp = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
     const lead = {
@@ -1337,6 +1370,85 @@ const server = http.createServer((req, res) => {
       } catch (e) { sendJson(res, 500, { error: e.message }); }
     })();
     return;
+  }
+
+  /* ---- Вебхук от Strapi: сайт сам сообщает о новом заказе/ремонте (29.07-67).
+     Настройка в админке сайта: Settings -> Webhooks -> Create new webhook:
+       URL:     https://<этот сервер>/api/strapi-hook
+       Header:  Authorization: Bearer <STORE_TOKEN>
+       Events:  Entry -> Create (можно также Update)
+     Телом вебхука не пользуемся — он лишь толчок: сторож заказов сам сверит
+     курсор с сайтом и отправит уведомления. Дубликаты исключены (курсор).
+     Бонус: входящий вебхук БУДИТ спящий бесплатный Render. ---- */
+  if (req.method === 'POST' && url.pathname === '/api/strapi-hook') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return readBody(req, async b => {
+      try {
+        console.log('[вебхук strapi]', (b && b.event) || '?', (b && b.model) || '');
+      } catch (e) {}
+      sendJson(res, 200, { ok: true });
+      /* небольшая пауза — Strapi успевает дозаписать связи заказа */
+      setTimeout(() => { orderWatchTick().catch(e => console.log('вебхук-сторож:', e.message)); }, 2000);
+    });
+  }
+
+  /* ---- История облачной базы: список снимков со сводкой (по токену) ---- */
+  if (req.method === 'GET' && url.pathname === '/api/state-history') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    (async () => {
+      try {
+        if (!pool) return sendJson(res, 200, { ok: true, items: [], hint: 'История снимков доступна только с PostgreSQL' });
+        const one = parseInt(url.searchParams.get('id')) || 0;
+        if (one) {
+          const r = await pool.query('SELECT id, saved_at_ms, state FROM erp_state_history WHERE id=$1', [one]);
+          if (!r.rows.length) return sendJson(res, 404, { error: 'Снимок не найден' });
+          return sendJson(res, 200, { ok: true, id: one, savedAtMs: Number(r.rows[0].saved_at_ms), state: r.rows[0].state });
+        }
+        const r = await pool.query(
+          "SELECT id, saved_at_ms, created_at, pg_column_size(state) AS size," +
+          " CASE WHEN jsonb_typeof(state->'stores'->'store_lunnaya'->'orders')='array'" +
+          "   THEN jsonb_array_length(state->'stores'->'store_lunnaya'->'orders') END AS orders," +
+          " CASE WHEN jsonb_typeof(state->'stores'->'store_lunnaya'->'warehouse'->'tech')='array'" +
+          "   THEN jsonb_array_length(state->'stores'->'store_lunnaya'->'warehouse'->'tech') END AS units" +
+          " FROM erp_state_history ORDER BY id DESC LIMIT 30");
+        sendJson(res, 200, { ok: true, items: r.rows.map(row => ({
+          id: row.id, savedAtMs: Number(row.saved_at_ms), createdAt: row.created_at,
+          sizeKb: Math.round((row.size || 0) / 1024),
+          orders: row.orders == null ? null : Number(row.orders),
+          units: row.units == null ? null : Number(row.units),
+        })) });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    })();
+    return;
+  }
+
+  /* ---- Откат облачной базы к снимку истории (по токену) ---- */
+  if (req.method === 'POST' && url.pathname === '/api/state-restore') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return readBody(req, async b => {
+      try {
+        if (!pool) return sendJson(res, 400, { error: 'История снимков доступна только с PostgreSQL' });
+        const id = parseInt(b.id) || 0;
+        if (!id) return sendJson(res, 400, { error: 'Нужен id снимка' });
+        const r = await pool.query('SELECT saved_at_ms, state FROM erp_state_history WHERE id=$1', [id]);
+        if (!r.rows.length) return sendJson(res, 404, { error: 'Снимок не найден' });
+        /* страховка: текущее состояние — в историю, чтобы откат можно было откатить */
+        const cur = await pool.query('SELECT saved_at_ms, state FROM erp_state WHERE id=1');
+        if (cur.rows.length) {
+          await pool.query('INSERT INTO erp_state_history (saved_at_ms, state) VALUES ($1,$2)',
+            [cur.rows[0].saved_at_ms, cur.rows[0].state]);
+        }
+        const now = Date.now();
+        const st = r.rows[0].state || {};
+        try { st.savedAtMs = now; } catch (e) {}   /* чтобы все компы приняли как свежий */
+        await pool.query(
+          'INSERT INTO erp_state (id, saved_at_ms, saved_by, state) VALUES (1,$1,$2,$3) ' +
+          'ON CONFLICT (id) DO UPDATE SET saved_at_ms=$1, saved_by=$2, state=$3, updated_at=now()',
+          [now, 'восстановление из истории #' + id, st]);
+        console.log('[облако] восстановлен снимок истории #' + id);
+        sendJson(res, 200, { ok: true, id, savedAtMs: now });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    });
   }
 
   /* ---- Облачная база ERP: отдать снимок (по токену) ---- */
@@ -1684,6 +1796,8 @@ async function serverSideChecks() {
 dbInit()
   .catch(e => { console.error('БД недоступна (' + e.message + ') — работаю в файловом режиме'); pool = null; })
   .then(() => server.listen(PORT, () => {
+    setTimeout(() => { purgeTestLeads().catch(() => {}); }, 8000);
+    setInterval(() => { purgeTestLeads().catch(() => {}); }, 24 * 3600 * 1000);
     setTimeout(() => { registerWebhooks().catch(e => console.error('вебхуки:', e.message)); }, 5000);
     setTimeout(() => { serverSideChecks(); }, 20000);
     setInterval(() => { serverSideChecks(); }, 5 * 60 * 1000);
