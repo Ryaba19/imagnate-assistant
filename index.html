@@ -3367,6 +3367,8 @@ function renderEmployeeDashboard(c){
   }
   html+='</div>';
 
+  /* Рейтинг менеджеров — сотрудник видит своё место, без чужих денег */
+  if(me && /менеджер|продавец/i.test(String(me.role||''))){ try{ html+=empRatingHTML(); }catch(e){} }
   /* Уведомления */
   const notifs=notifForCurrentRole().slice(0,5);
   html+='<div class="section"><div class="section-title" style="margin-bottom:12px;">Уведомления</div><div class="card">';
@@ -4797,6 +4799,7 @@ function priceLockBadge(o){
 ============================================================ */
 const STATUS_LABELS={
   new:              ['Новый',           'b-new'],
+  in_progress:      ['В работе',       'b-progress'],
   deferred:         ['В ожидании',     'b-grey'],
   preorder:         ['Предзаказ',       'b-progress'],
   awaiting_stock:   ['Ждём товар',      'b-progress'],
@@ -4805,7 +4808,7 @@ const STATUS_LABELS={
   done:             ['Выдан',           'b-done'],
   cancel:           ['Отменён',         'b-cancel'],
 };
-const ORDER_TABS=['new','deferred','awaiting_stock','ready','delivering','done','cancel','preorder','all'];
+const ORDER_TABS=['new','in_progress','deferred','awaiting_stock','ready','delivering','done','cancel','preorder','all'];
 
 /* Можно ли пускать заказ в оборот (заказывать товар)?
    Только если цена зафиксирована или оплачена. */
@@ -5041,11 +5044,20 @@ function renderOrders(c){
 
   let html='<div class="toolbar">';
   html+='<div class="chip-tabs" id="orderTabs">'+
-    ORDER_TABS.map(s=>{
-      const lbl=s==='all'?'Все':STATUS_LABELS[s][0];
-      const n=cnt(s);
-      return '<div class="chip-tab '+(STATE.ordersFilter===s?'active':'')+'" data-f="'+s+'">'+lbl+(n?' ('+n+')':'')+'</div>';
-    }).join('')+
+    (function(){
+      const CORE=['all','new','in_progress','awaiting_stock','ready','done'];
+      let chips='', hidden=0;
+      ORDER_TABS.forEach(s=>{
+        const n=cnt(s);
+        const show=CORE.includes(s)||n>0||STATE.ordersFilter===s||STATE.ordersMoreOpen;
+        if(!show){ hidden++; return; }
+        const lbl=s==='all'?'Все':STATUS_LABELS[s][0];
+        chips+='<div class="chip-tab '+(STATE.ordersFilter===s?'active':'')+'" data-f="'+s+'">'+lbl+(n?' ('+n+')':'')+'</div>';
+      });
+      if(STATE.ordersMoreOpen) chips+='<div class="chip-tab" data-ordersmore="0" style="opacity:.7;">Свернуть \u25b4</div>';
+      else if(hidden>0) chips+='<div class="chip-tab" data-ordersmore="1" style="opacity:.7;">Ещё ('+hidden+') \u25be</div>';
+      return chips;
+    })()+
   '</div><div class="topbar-spacer"></div>'+
   (isBossRole()?'<button class="btn btn-sm" id="mailSettingsBtn" title="Настройки клиентских рассылок: подтверждение заказа и оценка после выдачи">✉ Рассылки</button>':'')+
   (isBossRole()?'<button class="btn btn-sm" id="reviewsBtn" title="Оценки клиентов по звёздам из писем: кто доволен, кто нет, ответить клиенту">⭐ Оценки</button>':'')+
@@ -5165,6 +5177,7 @@ function renderOrders(c){
 
   const rerender=()=>renderOrders(c);
   c.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('click',()=>{STATE.ordersFilter=el.dataset.f; rerender();}));
+  c.querySelectorAll('[data-ordersmore]').forEach(el=>el.addEventListener('click',()=>{STATE.ordersMoreOpen=el.dataset.ordersmore==='1'; rerender();}));
   c.querySelectorAll('[data-open]').forEach(el=>el.addEventListener('click',()=>openOrderModal(parseInt(el.dataset.open), c)));
   c.querySelectorAll('[data-confirm-order]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation(); openConfirmOrderModal(parseInt(el.dataset.confirmOrder), c);}));
   c.querySelectorAll('[data-confirm-price]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation(); openPriceConfirmModal(parseInt(el.dataset.confirmPrice), c);}));
@@ -11159,6 +11172,11 @@ async function channelHistoryMerge(l){
       addedH++;
     });
     if(addedH){
+      /* в истории нашёлся наш ответ клиенту — заявка уже не «новая» */
+      if(l.stage==='new' && l.msgs.some(x=>x&&x.dir==='out')){
+        l.stage='working'; l.workingSince=l.workingSince||(DATA.today+' '+nowTime()); l.fellBack=false;
+        (l.notes=l.notes||[]).unshift({date:DATA.today, text:'В истории найден ответ клиенту — заявка взята в работу'});
+      }
       l.msgs.sort((a,b)=>(a.tsMs||0)-(b.tsMs||0));
       try{ fullSave(); }catch(e){}
       if(STATE.page==='crm'){ try{ refreshCrm(document.getElementById('pageContent')); }catch(e){} }
@@ -13766,9 +13784,72 @@ function renderCourierAnalytics(c, me){
   });
 }
 
+/* ══════════ ВЫРАБОТКА / РЕЙТИНГ МЕНЕДЖЕРОВ (07.08) ══════════
+   Полную (деньги, прибыль) видят ТОЛЬКО владелец и директора; сотрудники —
+   рейтинг «место + очки», без чужих сумм. Данные — из журнала продаж. */
+function empSalesStats(){
+  const now=(typeof todayDate==='function'?todayDate():new Date());
+  const mm=now.getMonth(), yy=now.getFullYear();
+  const inMonth=d=>{ const p=String(d||'').split('.'); return p.length===3 && (+p[1]-1)===mm && (+p[2])===yy; };
+  const isMgr=e=>/менеджер|продавец/i.test(String(e.role||''));
+  const mgrNames=new Set((DATA.employees||[]).filter(e=>!e.support && isMgr(e)).map(e=>e.name));
+  const map={};
+  (DATA.salesLog||[]).forEach(s=>{
+    if(!s || !inMonth(s.date)) return;
+    const who=s.by||'—';
+    if(!mgrNames.has(who)) return;
+    const m=map[who]||(map[who]={name:who, count:0, sum:0, margin:0});
+    m.count++; m.sum+=(+s.sum||0); m.margin+=(+s.margin||0);
+  });
+  const arr=Object.values(map);
+  arr.forEach(m=>{ m.avg=m.count?Math.round(m.sum/m.count):0; });
+  arr.sort((a,b)=> (b.count-a.count) || (b.sum-a.sum));
+  return arr;
+}
+function empOutputFullHTML(){
+  const arr=empSalesStats();
+  const now=(typeof todayDate==='function'?todayDate():new Date());
+  const monthName=(MONTH_NAMES[now.getMonth()]||'')+' '+now.getFullYear();
+  if(!arr.length) return '<div class="section"><div class="section-title" style="margin-bottom:10px;">Выработка сотрудников · '+monthName+'</div><div class="card"><div class="empty"><b>Продаж за месяц пока нет</b></div></div></div>';
+  const tot=arr.reduce((a,m)=>{a.count+=m.count;a.sum+=m.sum;a.margin+=m.margin;return a;},{count:0,sum:0,margin:0});
+  let html='<div class="section"><div class="section-title" style="margin-bottom:6px;">Выработка сотрудников · '+monthName+'</div>'+
+    '<div class="tsub" style="margin-bottom:10px;">Видят только владелец и директора.</div>'+
+    '<div class="table-wrap"><table><thead><tr><th>#</th><th>Сотрудник</th><th>Продаж</th><th>Выручка</th><th>Средний чек</th><th>Прибыль</th></tr></thead><tbody>';
+  arr.forEach((m,i)=>{
+    html+='<tr><td class="mono">'+(i+1)+'</td><td class="tname">'+escHtml(m.name)+'</td>'+
+      '<td class="mono">'+m.count+'</td><td class="mono">'+rub(m.sum)+'</td>'+
+      '<td class="mono">'+rub(m.avg)+'</td><td class="mono">'+rub(m.margin)+'</td></tr>';
+  });
+  html+='<tr style="font-weight:700;border-top:2px solid var(--glass-border);"><td></td><td>Итого</td>'+
+    '<td class="mono">'+tot.count+'</td><td class="mono">'+rub(tot.sum)+'</td>'+
+    '<td class="mono">'+(tot.count?rub(Math.round(tot.sum/tot.count)):'—')+'</td><td class="mono">'+rub(tot.margin)+'</td></tr>';
+  html+='</tbody></table></div></div>';
+  return html;
+}
+function empRatingHTML(){
+  const arr=empSalesStats();
+  const now=(typeof todayDate==='function'?todayDate():new Date());
+  const monthName=(MONTH_NAMES[now.getMonth()]||'')+' '+now.getFullYear();
+  const me=(typeof currentEmployee==='function'?currentEmployee():null);
+  const meName=me?me.name:'';
+  if(!arr.length) return '<div class="section"><div class="section-title" style="margin-bottom:10px;">Рейтинг менеджеров · '+monthName+'</div><div class="card"><div class="empty"><b>Продаж за месяц пока нет</b></div></div></div>';
+  const place=i=>i===0?'🥇':i===1?'🥈':i===2?'🥉':String(i+1);
+  let html='<div class="section"><div class="section-title" style="margin-bottom:6px;">Рейтинг менеджеров · '+monthName+'</div>'+
+    '<div class="tsub" style="margin-bottom:10px;">Место по числу продаж за месяц.</div>'+
+    '<div class="table-wrap"><table><thead><tr><th>Место</th><th>Менеджер</th><th>Очки</th></tr></thead><tbody>';
+  arr.forEach((m,i)=>{
+    const mine=(m.name===meName);
+    html+='<tr'+(mine?' style="background:rgba(94,139,255,.12);font-weight:700;"':'')+'>'+
+      '<td class="mono">'+place(i)+'</td><td class="tname">'+escHtml(m.name)+(mine?' <span class="tsub">· вы</span>':'')+'</td>'+
+      '<td class="mono">'+m.count+'</td></tr>';
+  });
+  html+='</tbody></table></div></div>';
+  return html;
+}
 function renderAnalytics(c){
   if(STATE.role==='courier'){ const me=currentEmployee(); if(me){ renderCourierAnalytics(c, me); return; } }
   let html='';
+  try{ html += isBossRole()? empOutputFullHTML() : empRatingHTML(); }catch(e){}
 
   /* Сравнение точек — только для владельца.
      Здесь ему место: это аналитический инструмент, а не рабочий экран. */
@@ -16695,18 +16776,18 @@ async function dbTestConnection(){
 function siteStatusToErp(rawSt){
   const st=String(rawSt||'').toLowerCase().trim();
   if(!st) return 'new';
-  if(st==='done' || /complete|vypoln|выполн|finish|success|выдан/.test(st)) return 'done';
+  if(st==='done' || /complete|vypoln|выполн|finish|success|выдан|отработ|otrabot/.test(st)) return 'done';
   if(/cancel|otmen|отмен|otkaz|отказ|reject|возврат|return/.test(st)) return 'cancel';
   if(/ready|готов/.test(st)) return 'ready';
   if(/courier|курьер|deliver|доставк|shipped|отправл|в пути/.test(st)) return 'delivering';
   if(/preorder|предзаказ|поиск|ищем|сборщик/.test(st)) return 'preorder';
   if(/wait|ожидан|awaiting|stock|постав|поступ|заявк|товар/.test(st)) return 'awaiting_stock';
-  if(/progress|work|работ|confirm|подтвержд|принят|обработк/.test(st)) return 'awaiting_stock';
+  if(/progress|work|работ|confirm|подтвержд|принят|обработк/.test(st)) return 'in_progress';
   return 'new';
 }
 /* Порядок этапов: сайт двигает заказ по ERP только ВПЕРЁД. Если сотрудник в ERP
    уже увёл заказ дальше (товар пришёл, отсканирован, у курьера) — сайт не откатит. */
-const SITE_STATUS_RANK={new:0, deferred:1, preorder:1, awaiting_stock:2, ready:3, delivering:4};
+const SITE_STATUS_RANK={new:0, in_progress:1, deferred:1, preorder:1, awaiting_stock:2, ready:3, delivering:4};
 /* Цена с сайта может прийти строкой: «21 980», «21 980 ₽», «21980,00».
    parseFloat такую режет до первого пробела — отсюда «часы за 21 ₽». */
 function parsePriceNum(v){
@@ -16733,7 +16814,7 @@ function mapZakazToOrder(z, oid, forHistory){
   const ageDays=z.createdAt? Math.floor((Date.now()-new Date(z.createdAt).getTime())/86400000) : 0;
   /* статус сайта живёт в order_status: done=Выполнен, in_progress=В работе, new=Новый */
   const st=String(z.order_status||'').toLowerCase();
-  const isDone = z.completed===true || st==='done' || /complete|vypoln|выполн|finish|success/.test(st);
+  const isDone = z.completed===true || st==='done' || /complete|vypoln|выполн|finish|success|отработ|otrabot/.test(st);
   const isCancel = /cancel|otmen|отмен|reject|return|возврат/.test(st);
   let status='new', archivedFlag=false, cancelReason=null;
   if(isDone){ status='done'; archivedFlag=!!forHistory; }
@@ -16966,7 +17047,7 @@ function applySiteOrderStatus(o, rawSt, stamp, dStore){
   const from=o.status;
   const W=(dStore&&dStore.warehouse)||DATA.warehouse;
   const whOf=(imei)=>[...W.tech, ...W.tradein].find(x=>x.imei===imei);
-  if(st==='done' || /complete|vypoln|выполн/.test(st)){
+  if(st==='done' || /complete|vypoln|выполн|отработ|otrabot/.test(st)){
     (o.items||[]).forEach(it=>{
       if(it.imei && it.imei!=='—' && it.imei!=='нет в наличии'){
         const wh=whOf(it.imei);
@@ -21856,7 +21937,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-124 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-128 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -22217,12 +22298,34 @@ function crmEnsureCustomer(l, viaLabel){
   return cust;
 }
 
+/* заявка, где есть хоть один наш исходящий ответ — уже отвечена, не «новая» */
+function leadAnswered(l){ return !!(l && Array.isArray(l.msgs) && l.msgs.some(x=>x && x.dir==='out')); }
+/* нормализатор: чиним застрявшие «новые» с ответами (после подтяжки истории,
+   слияния с облаком, ответа с другого устройства). Идемпотентно. */
+function crmNormalizeAnswered(){
+  let fixed=0;
+  try{
+    Object.values(STORE_DATA).forEach(d=>{
+      ((d&&d.leads)||[]).forEach(l=>{
+        if(l && l.stage==='new' && leadAnswered(l)){
+          l.stage='working'; l.workingSince=l.workingSince||(DATA.today+' '+nowTime()); l.fellBack=false;
+          (l.notes=l.notes||[]).unshift({date:DATA.today, text:'Заявка отвечена ранее — переведена из «Новых» в работу'});
+          fixed++;
+        }
+      });
+    });
+  }catch(e){}
+  if(fixed){ try{ fullSave(); }catch(e){} }
+  return fixed;
+}
+setTimeout(()=>{ try{ crmNormalizeAnswered(); }catch(e){} }, 3500);
+setInterval(()=>{ try{ crmNormalizeAnswered(); }catch(e){} }, 60000);
 function crmFreeNewCount(){
-  return (DATA.leads||[]).filter(l=>l.stage==='new' && !l.owner && !isArchived(l)).length;
+  return (DATA.leads||[]).filter(l=>l.stage==='new' && !l.owner && !isArchived(l) && !leadAnswered(l)).length;
 }
 
 function crmHasFreeNew(){
-  return (DATA.leads||[]).some(l=>l.stage==='new' && !l.owner && !isArchived(l));
+  return (DATA.leads||[]).some(l=>l.stage==='new' && !l.owner && !isArchived(l) && !leadAnswered(l));
 }
 
 function crmHasUnseenNew(){
