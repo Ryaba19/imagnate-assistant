@@ -111,6 +111,53 @@ async function stateLoad() {
   }
   try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch (e) { return null; }
 }
+/* СЛИЯНИЕ-ХРАНИТЕЛЬ (07.08): union записей. primary побеждает при конфликте
+   ключей, записи secondary, которых нет в primary, ДОБАВЛЯЮТСЯ (не теряются). */
+function mergeUnion(primary, secondary) {
+  try {
+    if (!primary || !primary.stores) return secondary || primary;
+    if (!secondary || !secondary.stores) return primary;
+    Object.keys(secondary.stores).forEach(function (sid) {
+      var P = primary.stores[sid], S = secondary.stores[sid];
+      if (!S) return;
+      if (!P) { primary.stores[sid] = S; return; }
+      var uni = function (kb, keyf) {
+        var arrS = S[kb];
+        if (!Array.isArray(arrS) || !arrS.length) return;
+        if (!Array.isArray(P[kb])) P[kb] = [];
+        var seen = new Set(P[kb].map(function (x) { try { return keyf(x); } catch (e) { return null; } }).filter(Boolean));
+        arrS.forEach(function (x) { var k = null; try { k = keyf(x); } catch (e) {} if (k && !seen.has(k)) { P[kb].push(x); seen.add(k); } });
+      };
+      uni('orders', function (o) { return o && String(o.externalId || ('oid_' + o.id)); });
+      uni('customers', function (c) { var p = String((((c || {}).phones) || [])[0] || '').replace(/\D/g, ''); return p.length >= 10 ? ('ph_' + p) : null; });
+      uni('purchaseRequests', function (r) { return r && ('pr_' + r.id); });
+      uni('service', function (t) { return t && String(t.externalId || ('srv_' + t.id)); });
+      uni('leads', function (l) { return l && String(l.chatKey || l.externalId || ('ld_' + l.id)); });
+      uni('cashChecks', function (x) { return x && (x.date + '|' + x.time + '|' + String(x.by || '')); });
+      uni('salesLog', function (s) { return s && (s.date + '|' + s.time + '|' + String(s.orderId) + '|' + s.sum); });
+      uni('cashOps', function (op) { return op && (op.date + '|' + String(op.time || '') + '|' + String(op.type || '') + '|' + op.amount); });
+      if (S.warehouse) {
+        if (!P.warehouse) P.warehouse = {};
+        ['tech', 'tradein'].forEach(function (tab) {
+          var arrS = S.warehouse[tab];
+          if (!Array.isArray(arrS) || !arrS.length) return;
+          if (!Array.isArray(P.warehouse[tab])) P.warehouse[tab] = [];
+          var seen = new Set(P.warehouse[tab].map(function (u) { return u && String(u.imei); }).filter(Boolean));
+          arrS.forEach(function (u) { if (u && u.imei && !seen.has(String(u.imei))) { P.warehouse[tab].push(u); seen.add(String(u.imei)); } });
+        });
+        ['accessories', 'parts'].forEach(function (tab) {
+          var arrS = S.warehouse[tab];
+          if (!Array.isArray(arrS) || !arrS.length) return;
+          if (!Array.isArray(P.warehouse[tab])) P.warehouse[tab] = [];
+          var seen = new Set(P.warehouse[tab].map(function (u) { return u && String(u.sku || u.model); }).filter(Boolean));
+          arrS.forEach(function (u) { var k = u && String(u.sku || u.model); if (k && !seen.has(k)) { P.warehouse[tab].push(u); seen.add(k); } });
+        });
+      }
+    });
+    return primary;
+  } catch (e) { return primary || secondary; }
+}
+
 async function stateSave(obj) {
   if (pool) {
     await pool.query(
@@ -914,6 +961,30 @@ function ruStamp(iso) {
   } catch (e) { return String(iso || '').slice(0, 16); }
 }
 let _watchBusy = false;
+/* Атомарная отметка «уже отправляли» (29.07-70): при деплое Render короткое
+   время живут ДВА экземпляра сервера — оба видели новый заказ и слали дубль.
+   INSERT ... ON CONFLICT DO NOTHING в общей Postgres пускает только первого. */
+async function kvTryOnce(k) {
+  try {
+    if (pool) {
+      const r = await pool.query('INSERT INTO channel_kv (k, v) VALUES ($1, $2) ON CONFLICT (k) DO NOTHING', [k, String(Date.now())]);
+      return r.rowCount > 0;
+    }
+    const db = readDb();
+    db.kv = db.kv || {};
+    if (db.kv[k]) return false;
+    db.kv[k] = String(Date.now());
+    writeDb(db);
+    return true;
+  } catch (e) { return true; }   /* при сбое лучше отправить, чем промолчать */
+}
+async function purgeWatchLocks() {
+  try {
+    if (!pool) return;
+    const r = await pool.query("DELETE FROM channel_kv WHERE k LIKE 'watch_sent_%' AND v ~ '^[0-9]+$' AND (v)::bigint < $1", [Date.now() - 14 * 86400000]);
+    if (r.rowCount) console.log('[уборка] старых отметок сторожа: ' + r.rowCount);
+  } catch (e) {}
+}
 async function orderWatchTick() {
   if (_watchBusy) return;
   if (!process.env.STRAPI_API_TOKEN || !TG_TOKEN || !TG_CHATS.length) return;
@@ -923,7 +994,10 @@ async function orderWatchTick() {
     const extra = staff ? [staff] : [];
     /* --- заказы --- */
     try {
-      const j = await strapiGet('/api/zakazies?sort[0]=id:desc&pagination[pageSize]=10&populate=*');
+      /* 29.07-71: status=draft — в Strapi v5 перепубликация (смена статуса)
+         создаёт НОВЫЙ id опубликованной копии, и сторож считал её новым
+         заказом. У черновика id стабильный. */
+      const j = await strapiGet('/api/zakazies?status=draft&sort[0]=id:desc&pagination[pageSize]=10&populate=*');
       const rows = (j && j.data) || [];
       const norm = rows.map(x => Object.assign({ id: x.id }, x.attributes || x));
       if (norm.length) {
@@ -933,6 +1007,7 @@ async function orderWatchTick() {
         else if (maxId > seen) {
           const fresh = norm.filter(x => x.id > seen).sort((a, b) => a.id - b.id).slice(0, 10);
           for (const z of fresh) {
+            if (!(await kvTryOnce('watch_sent_z_' + (z.documentId || z.id)))) continue;   /* дубль экземпляра или перепубликации */
             const items = (z.items || []).map(it => String(it.name || 'Товар') + (it.count > 1 ? ' × ' + it.count : '')).join('\n· ');
             const sum = String(z.summary || '').replace(/\s/g, '');
             await tgSend('Поступил новый заказ ✅\n' +
@@ -949,7 +1024,7 @@ async function orderWatchTick() {
     } catch (e) { console.log('[сторож заказов] ' + e.message); }
     /* --- ремонты --- */
     try {
-      const j = await strapiGet('/api/remonts?sort[0]=id:desc&pagination[pageSize]=10');
+      const j = await strapiGet('/api/remonts?status=draft&sort[0]=id:desc&pagination[pageSize]=10');
       const rows = (j && j.data) || [];
       const norm = rows.map(x => Object.assign({ id: x.id }, x.attributes || x));
       if (norm.length) {
@@ -959,6 +1034,7 @@ async function orderWatchTick() {
         else if (maxId > seen) {
           const fresh = norm.filter(x => x.id > seen).sort((a, b) => a.id - b.id).slice(0, 10);
           for (const t of fresh) {
+            if (!(await kvTryOnce('watch_sent_r_' + (t.documentId || t.id)))) continue;   /* дубль экземпляра или перепубликации */
             await tgSend('Поступила новая заявка на ремонт ✅\n' +
               'Заявка сайта: №' + t.id +
               (t.name ? '\nКлиент: ' + t.name : '') + (t.phone ? '\nТелефон: ' + t.phone : '') +
@@ -970,6 +1046,38 @@ async function orderWatchTick() {
         }
       }
     } catch (e) { console.log('[сторож ремонтов] ' + e.message); }
+    /* --- заявки-формы сайта (29.07-72): раньше их сторожила только открытая
+       вкладка ERP — ночью уведомления молчали. Теперь сервер, 24/7. --- */
+    try {
+      let leads = [];
+      if (pool) {
+        const r = await pool.query('SELECT id, name, phone, topic, item, comment, created_at FROM site_leads ORDER BY id DESC LIMIT 10');
+        leads = r.rows;
+      } else {
+        leads = readDb().leads.slice(-10).reverse();
+      }
+      leads = leads.filter(l => !isTestLead(l));
+      if (leads.length) {
+        const maxId = Math.max(...leads.map(l => l.id));
+        const seen = parseInt(await kvGet('watch_lead_seen'));
+        if (!seen) { await kvSet('watch_lead_seen', maxId); }
+        else if (maxId > seen) {
+          const fresh = leads.filter(l => l.id > seen).sort((a, b) => a.id - b.id).slice(0, 10);
+          const topics = { buy: 'Покупка', tradein: 'Trade-in', repair: 'Ремонт', question: 'Вопрос' };
+          for (const l of fresh) {
+            if (!(await kvTryOnce('watch_sent_l_' + l.id))) continue;
+            await tgSend('📝 Новая заявка с сайта ✅\n' +
+              'Тема: ' + (topics[l.topic] || l.topic || 'Не указана') + '\n' +
+              'Клиент: ' + (l.name || 'Без имени') + (l.phone ? '\nТелефон: ' + l.phone : '') +
+              (l.item ? '\nИнтересует: ' + l.item : '') +
+              (l.comment ? '\nКомментарий: ' + String(l.comment).slice(0, 200) : '') +
+              (l.created_at ? '\nОформлена: ' + ruStamp(l.created_at) : ''), extra);
+          }
+          await kvSet('watch_lead_seen', maxId);
+          console.log('[сторож заявок] отправлено уведомлений: ' + fresh.length);
+        }
+      }
+    } catch (e) { console.log('[сторож заявок] ' + e.message); }
   } finally { _watchBusy = false; }
 }
 setInterval(() => { orderWatchTick().catch(e => console.log('orderWatch:', e.message)); }, 60000);
@@ -982,7 +1090,7 @@ const server = http.createServer((req, res) => {
 
   /* ---- Страницы ---- */
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return sendFile(res, 'index.html');
-  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-68' });
+  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-72' });
 
   /* ---- Автонастройка нового компа: открыл систему с сервера — она сама
      получила адрес API и ключ. Включается переменной AUTO_SETUP=1. ---- */
@@ -1392,6 +1500,38 @@ const server = http.createServer((req, res) => {
     });
   }
 
+  /* ---- ПОЛНЫЙ БЭКАП (29.07-69): текущая база + история снимков + заявки,
+     одним JSON-файлом. Скачивается кнопкой из ERP (Управление → Облачная база).
+     Пока свой сервер не поднят — это страховка от потери всего. ---- */
+  if (req.method === 'GET' && url.pathname === '/api/backup') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    (async () => {
+      try {
+        const out = { kind: 'imagnate-erp-backup', version: '29.07-72', generatedAt: new Date().toISOString() };
+        out.current = await stateLoad();
+        if (pool) {
+          const h = await pool.query('SELECT id, saved_at_ms, state, created_at FROM erp_state_history ORDER BY id DESC LIMIT 20');
+          out.history = h.rows.map(r => ({ id: r.id, savedAtMs: Number(r.saved_at_ms), createdAt: r.created_at, state: r.state }));
+          const l = await pool.query('SELECT id, name, phone, topic, item, comment, page, created_at FROM site_leads ORDER BY id DESC LIMIT 500');
+          out.leads = l.rows;
+        } else {
+          out.history = [];
+          try { out.leads = readDb().leads.slice(-500); } catch (e) { out.leads = []; }
+        }
+        const body = JSON.stringify(out);
+        const stamp = new Date().toISOString().slice(0, 10);
+        res.writeHead(200, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Content-Disposition': 'attachment; filename="imagnate-backup-' + stamp + '.json"',
+          'Access-Control-Allow-Origin': '*'
+        });
+        res.end(body);
+        console.log('[бэкап] выдан полный дамп (' + Math.round(body.length / 1024) + ' КБ)');
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    })();
+    return;
+  }
+
   /* ---- История облачной базы: список снимков со сводкой (по токену) ---- */
   if (req.method === 'GET' && url.pathname === '/api/state-history') {
     if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
@@ -1471,11 +1611,29 @@ const server = http.createServer((req, res) => {
       if (!b.state || !b.savedAtMs) return sendJson(res, 400, { error: 'Нужны state и savedAtMs' });
       try {
         const cur = await stateLoad();
-        if (cur && cur.savedAtMs > b.savedAtMs + 2000) {
-          return sendJson(res, 409, { error: 'На сервере данные новее', serverSavedAtMs: cur.savedAtMs });
+        const curState = cur && cur.state;
+        const curDemo = !!(curState && curState._demoBorn);
+        const incDemo = !!(b.state && b.state._demoBorn);
+        /* демо-снимок НИКОГДА не перезаписывает реальную базу */
+        if (incDemo && curState && !curDemo) {
+          console.warn('[облачная база] отклонён демо-снимок поверх реальной базы');
+          return sendJson(res, 200, { ok: true, ignored: 'demo-over-real', savedAtMs: cur.savedAtMs });
         }
-        await stateSave({ savedAtMs: b.savedAtMs, savedBy: String(b.savedBy || '').slice(0, 80), state: b.state });
-        sendJson(res, 200, { ok: true, savedAtMs: b.savedAtMs });
+        /* снимок с чужим паспортом базы не затирает нашу */
+        const sBase = curState && curState._baseId, iBase = b.state && b.state._baseId;
+        if (curState && !curDemo && sBase && iBase && sBase !== iBase) {
+          console.warn('[облачная база] отклонён снимок с чужим паспортом базы');
+          return sendJson(res, 200, { ok: true, ignored: 'foreign-base', savedAtMs: cur.savedAtMs });
+        }
+        /* СЛИЯНИЕ-ХРАНИТЕЛЬ: сервер не теряет записи. Побеждает более свежий
+           снимок при конфликте, но недостающие записи из другого — сохраняются. */
+        let toSave = b.state, outMs = b.savedAtMs;
+        if (curState) {
+          if ((b.savedAtMs || 0) >= (cur.savedAtMs || 0)) { toSave = mergeUnion(b.state, curState); outMs = b.savedAtMs; }
+          else { toSave = mergeUnion(curState, b.state); outMs = cur.savedAtMs; }
+        }
+        await stateSave({ savedAtMs: outMs, savedBy: String(b.savedBy || '').slice(0, 80), state: toSave });
+        sendJson(res, 200, { ok: true, savedAtMs: outMs, merged: true });
       } catch (e) {
         console.error('[облачная база] ошибка:', e.message);
         sendJson(res, 500, { error: e.message });
@@ -1797,11 +1955,43 @@ async function serverSideChecks() {
   } catch (e) { console.error('[серверные проверки]', e.message); }
 }
 
+/* ЕЖЕДНЕВНЫЙ ДАМП НА ПОЧТУ (29.07-69): раз в сутки полная база уходит
+   вложением на OWNER_EMAIL — даже если Render и Postgres пропадут,
+   вчерашняя копия всегда лежит в почте. Работает при настроенном SMTP. */
+async function dailyBackupMail() {
+  try {
+    const to = process.env.OWNER_EMAIL || 'ryabukha03@mail.ru';
+    if (!to) return;
+    const t = mailTransport();
+    if (!t) return;                                     /* SMTP ещё не настроен */
+    const slot = Math.floor(Date.now() / (8 * 3600 * 1000)); /* 8-часовой слот */
+    const dayKey = new Date().toISOString().slice(0, 13); /* для имени файла */
+    if (await kvGet('backup_mailed_' + slot)) return; /* в этом 8-час. окне уже отправляли */
+    const cur = await stateLoad();
+    if (!cur || !cur.state) return;
+    const out = { kind: 'imagnate-erp-backup', generatedAt: new Date().toISOString(), current: cur };
+    const body = JSON.stringify(out);
+    await t.sendMail({
+      from: process.env.MAIL_FROM || process.env.SMTP_USER,
+      to,
+      subject: 'iMagnate ERP — резервная копия базы (' + dayKey + ')',
+      text: 'Автоматическая резервная копия облачной базы Store Control.\n' +
+        'Размер: ' + Math.round(body.length / 1024) + ' КБ. Восстановление: ERP → Управление → Облачная база → «Восстановить из файла».',
+      attachments: [{ filename: 'imagnate-backup-' + dayKey + '.json', content: body }]
+    });
+    await kvSet('backup_mailed_' + slot, '1');
+    console.log('[бэкап] дневной дамп отправлен на ' + to + ' (' + Math.round(body.length / 1024) + ' КБ)');
+  } catch (e) { console.error('[бэкап] почтовый дамп:', e.message); }
+}
+
 dbInit()
   .catch(e => { console.error('БД недоступна (' + e.message + ') — работаю в файловом режиме'); pool = null; })
   .then(() => server.listen(PORT, () => {
+    setTimeout(() => { dailyBackupMail(); }, 60000);
+    setInterval(() => { dailyBackupMail(); }, 3600000);
     setTimeout(() => { purgeTestLeads().catch(() => {}); }, 8000);
     setInterval(() => { purgeTestLeads().catch(() => {}); }, 24 * 3600 * 1000);
+    setInterval(() => { purgeWatchLocks(); }, 24 * 3600 * 1000);
     setTimeout(() => { registerWebhooks().catch(e => console.error('вебхуки:', e.message)); }, 5000);
     setTimeout(() => { serverSideChecks(); }, 20000);
     setInterval(() => { serverSideChecks(); }, 5 * 60 * 1000);
