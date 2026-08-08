@@ -5107,6 +5107,7 @@ function renderOrders(c){
   (isBossRole()?'<button class="btn btn-sm" id="mailSettingsBtn" title="Настройки клиентских рассылок: подтверждение заказа и оценка после выдачи">✉ Рассылки</button>':'')+
   (isBossRole()?'<button class="btn btn-sm" id="reviewsBtn" title="Оценки клиентов по звёздам из писем: кто доволен, кто нет, ответить клиенту">⭐ Оценки</button>':'')+
   (isBossRole()?'<button class="btn btn-sm" id="cancelReasonsBtn" title="Почему клиенты отказываются: причины всех отменённых заказов">🚫 Причины отказов</button>':'')+
+  '<button class="btn btn-sm" id="siteSweepBtn" title="Принудительно сверить статусы всех активных заказов и ремонтов с сайтом — с честным ответом, если сайт недоступен">⟳ Сверить с сайтом</button>'+
   ((isBossRole()||STATE.role==='senior')?'<button class="btn btn-sm" id="ordersArchiveBtn" title="Архив выданных заказов — только владелец и управляющий">'+ic('box')+' Архив'+(DATA.orders.some(o=>o.archived)?' ('+DATA.orders.filter(o=>o.archived).length+')':'')+'</button>':'')+
   ((isBossRole()||STATE.role==='admin')?'<button class="btn btn-sm" id="orderSettingsBtn" title="Настройки заказов">'+ic('gear')+'</button>':'')+
   ((!getStoreExcludedPages().includes('service') && (isBossRole()||STATE.role==='senior'||STATE.role==='seller'))?'<button class="btn" id="newRepairBtn">🔧 Принять в ремонт</button>':'')+
@@ -5247,6 +5248,14 @@ function renderOrders(c){
   if(archBtn) archBtn.addEventListener('click', ()=>{ STATE.ordersView='archive'; renderOrders(c); });
   const crb2=document.getElementById('cancelReasonsBtn');
   if(crb2) crb2.addEventListener('click', ()=>openCancelReasonsModal());
+  const ssb=document.getElementById('siteSweepBtn');
+  if(ssb) ssb.addEventListener('click', ()=>{
+    ssb.disabled=true; ssb.textContent='⟳ Сверяю…';
+    Promise.resolve(strapiStatusFullSweep(true)).finally(()=>{
+      ssb.disabled=false; ssb.textContent='⟳ Сверить с сайтом';
+      try{ renderOrders(document.getElementById('pageContent')); }catch(e){}
+    });
+  });
   const mailBtn=document.getElementById('mailSettingsBtn');
   if(mailBtn) mailBtn.addEventListener('click', openMailSettingsModal);
   const rvBtn=document.getElementById('reviewsBtn');
@@ -11320,6 +11329,24 @@ function importChannelMessages(list){
       /* старое сообщение (архив/догон) — не повод создавать заявку:
          переписка хранится на сервере и подтянется, если клиент напишет снова */
       if(m.tsMs && m.tsMs < Date.now()-7*86400000) return;   /* видим все диалоги за неделю */
+      /* ЗАЯВКИ-ЗОМБИ (фикс 08.08): по этому чату заявка уже закрывалась.
+         Старые сообщения не воскрешают её и не плодят дубль. Действительно
+         новое сообщение (свежее всей известной переписки) переоткрывает
+         ту же карточку — история остаётся в одном месте. */
+      const closedPrev=target.leads.filter(x=>x.chatKey===ck && ['won','lost'].includes(x.stage))
+        .sort((a,b)=>(b.id||0)-(a.id||0))[0];
+      if(closedPrev){
+        const lastKnown=Math.max(0, ...((closedPrev.msgs||[]).map(x=>x.tsMs||0)));
+        if(!(m.tsMs && m.tsMs>lastKnown+1000)) return;   /* не новее известного — зомби, мимо */
+        if(closedPrev.stage==='lost'){
+          closedPrev.stage='working'; closedPrev.archived=false;
+          closedPrev.workingSince=DATA.today+' '+nowTime();
+          (closedPrev.notes=closedPrev.notes||[]).unshift({date:DATA.today, text:'Клиент написал снова — заявка переоткрыта (была отменена)'});
+          l=closedPrev;
+        }
+        /* stage won: клиент вернулся после покупки — новая заявка ниже, но только для действительно нового сообщения */
+      }
+      if(!l){
       const lid=(target.leads.length?Math.max(...target.leads.map(x=>x.id||0)):7300)+1;
       l={id:lid, channel:m.channel, externalId:m.key, chatKey:ck, chatId:String(m.chatId), sourceUrl:'', source:'sync',
         name:(m.name||'').trim()||('Клиент '+((CHANNELS[m.channel]||{}).label||m.channel)),
@@ -11329,6 +11356,7 @@ function importChannelMessages(list){
       target.leads.unshift(l);
       added++;
       channelHistoryMerge(l);   /* подтянуть в диалог всю прошлую переписку этого чата из архива на сервере */
+      }
     }
     const mid=(l.msgs.length?Math.max(...l.msgs.map(x=>x.id||0)):0)+1;
     const d=m.tsMs?new Date(m.tsMs):new Date();
@@ -17502,11 +17530,11 @@ function applySiteRepairStatus(t, rawSt){
    Ловит: изменения, сделанные пока ERP была закрыта, и заказы, которые
    уже двигали в ERP (быстрая проверка по updatedAt их раньше пропускала). */
 let _sweepBusy=false;
-async function strapiStatusFullSweep(){
+async function strapiStatusFullSweep(manual){
   if(_sweepBusy) return;
   _sweepBusy=true;
   try{
-    if(!apiToken()) return;
+    if(!apiToken()){ if(manual) toast('Сайт не подключён: нет токена (шестерёнка «Заказов»)','error'); return; }
     const H=chHomeStore();
     let changed=0;
     const act=(H.orders||[]).filter(o=>/^strapi_/.test(String(o.externalId||'')) && !['done','cancel'].includes(o.status));
@@ -17533,8 +17561,16 @@ async function strapiStatusFullSweep(){
       toast('Сайт: статусы обновлены — '+changed,'info');
       if(['orders','service'].includes(STATE.page)) renderPage();
       try{ fullSave(); }catch(e){}
+    } else if(manual){
+      toast('Сверка с сайтом прошла: все статусы уже актуальны','success');
     }
-  }catch(e){}
+    window._siteSweepErr=null;
+  }catch(e){
+    /* ФИКС 08.08: ошибку сверки больше не глотаем — она видна */
+    window._siteSweepErr=String(e && e.message ? e.message : e);
+    console.warn('[сверка с сайтом]', window._siteSweepErr);
+    if(manual) toast('Сверка с сайтом НЕ УДАЛАСЬ: '+window._siteSweepErr+'. Проверьте подключение/токен в шестерёнке «Заказов».','error');
+  }
   finally{ _sweepBusy=false; }
 }
 
@@ -22315,7 +22351,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-152 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-153 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
