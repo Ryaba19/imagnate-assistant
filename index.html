@@ -5107,6 +5107,7 @@ function renderOrders(c){
   (isBossRole()?'<button class="btn btn-sm" id="mailSettingsBtn" title="Настройки клиентских рассылок: подтверждение заказа и оценка после выдачи">✉ Рассылки</button>':'')+
   (isBossRole()?'<button class="btn btn-sm" id="reviewsBtn" title="Оценки клиентов по звёздам из писем: кто доволен, кто нет, ответить клиенту">⭐ Оценки</button>':'')+
   (isBossRole()?'<button class="btn btn-sm" id="cancelReasonsBtn" title="Почему клиенты отказываются: причины всех отменённых заказов">🚫 Причины отказов</button>':'')+
+  '<button class="btn btn-sm btn-primary" id="siteRefreshBtn" title="Затянуть с сайта всё прямо сейчас: новые заказы, ремонты, статусы — не дожидаясь автоматики">⬇ Обновить с сайта</button>'+
   '<button class="btn btn-sm" id="siteSweepBtn" title="Принудительно сверить статусы всех активных заказов и ремонтов с сайтом — с честным ответом, если сайт недоступен">⟳ Сверить с сайтом</button>'+
   ((isBossRole()||STATE.role==='senior')?'<button class="btn btn-sm" id="ordersArchiveBtn" title="Архив выданных заказов — только владелец и управляющий">'+ic('box')+' Архив'+(DATA.orders.some(o=>o.archived)?' ('+DATA.orders.filter(o=>o.archived).length+')':'')+'</button>':'')+
   ((isBossRole()||STATE.role==='admin')?'<button class="btn btn-sm" id="orderSettingsBtn" title="Настройки заказов">'+ic('gear')+'</button>':'')+
@@ -5248,6 +5249,28 @@ function renderOrders(c){
   if(archBtn) archBtn.addEventListener('click', ()=>{ STATE.ordersView='archive'; renderOrders(c); });
   const crb2=document.getElementById('cancelReasonsBtn');
   if(crb2) crb2.addEventListener('click', ()=>openCancelReasonsModal());
+  const srb=document.getElementById('siteRefreshBtn');
+  if(srb) srb.addEventListener('click', async ()=>{
+    if(!apiToken()){ toast('Сайт не подключён: нет токена (шестерёнка «Заказов»)','error'); return; }
+    if(!window._importGateOpen){ toast('Компьютер ещё не подключён к облачной базе — импорт заперт (защита от параллельных баз)','error'); return; }
+    srb.disabled=true; srb.textContent='⬇ Обновляю…';
+    const H=chHomeStore();
+    const o0=(H.orders||[]).length, s0=(H.service||[]).length;
+    try{
+      try{ await strapiOrdersSync(true); }catch(e){}
+      try{ await strapiBackfill14d(); }catch(e){}
+      try{ await strapiRepairsSync(true); }catch(e){}
+      try{ await strapiStatusFullSweep(); }catch(e){}
+      const dO=(H.orders||[]).length-o0, dS=(H.service||[]).length-s0;
+      try{ fullSave(); }catch(e){}
+      try{ cloudPushNow(); }catch(e){}
+      toast('Обновлено с сайта: новых заказов — '+dO+', ремонтов — '+dS+((dO+dS)===0?' (всё уже затянуто)':''), 'success');
+    }catch(e){
+      toast('Обновление не удалось: '+(e&&e.message||e),'error');
+    }
+    srb.disabled=false; srb.textContent='⬇ Обновить с сайта';
+    try{ renderOrders(document.getElementById('pageContent')); }catch(e){}
+  });
   const ssb=document.getElementById('siteSweepBtn');
   if(ssb) ssb.addEventListener('click', ()=>{
     ssb.disabled=true; ssb.textContent='⟳ Сверяю…';
@@ -22400,7 +22423,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-160 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-162 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -24869,15 +24892,15 @@ setInterval(async()=>{
       try{ erpBaseIdAdopt(best); }catch(e){}   /* запоминаем паспорт принятой базы */
       try{ if(cloudMeta) sessionStorage.setItem('erp_pull_info', JSON.stringify(cloudMeta)); }catch(e){}
       try{ localStorage.setItem(LS_FULL_KEY, JSON.stringify(best)); }catch(e){}
-      window._skipAutosave=true;
-      if(veilTimer) clearTimeout(veilTimer);
-      const bm=document.getElementById('bootVeilMsg');
-      if(bm) bm.textContent='Свежие данные из '+bestSrc+' — применяю…';
-      /* остаёмся ПОД шторкой до перезагрузки — моргания не видно */
-      setTimeout(()=>location.reload(), 250);
-      return;
+      /* ФИКС 08.08: снимок применяется НА ЛЕТУ, без перезагрузки — иначе при
+         двух работающих компах (облако всегда чуть свежее) страница крутилась
+         в вечных перезагрузках, а шлюз импорта не открывался никогда. */
+      try{ fullLoad(); updateStoreSelector(); }catch(e){}
+      try{ if(typeof renderSidebar==='function') renderSidebar(); }catch(e){}
+      try{ if(typeof renderPage==='function') renderPage(); }catch(e){}
+      console.log('Свежий снимок из '+bestSrc+' применён на лету — без перезагрузки');
     }
-    console.warn('Обновление снимка пропущено (защита от цикла) — применится при следующем открытии');
+    else console.warn('Обновление снимка пропущено (защита от цикла) — применится при следующем открытии');
   } else {
     /* наша копия самая свежая (или единственная) — разослать её в оба хранилища */
     try{ const p=buildFullPayload(); localSyncPush(p); cloudSyncPush(p); }catch(e){}
@@ -24886,8 +24909,10 @@ setInterval(async()=>{
   /* ВОРОТА ИМПОРТА (29.07-103): тянуть данные с сайта можно только когда решён
      вопрос с облачной базой. Демо-комп без облака НИКОГДА не строит свою
      параллельную базу — раньше именно это плодило «тестовые данные». */
-  window._importGateOpen = !best && ( window._demoBorn ? cloudEmptyConfirmed : (cloudDecided || !creds) );
-  if(!best && !window._importGateOpen){
+  /* ФИКС 08.08: наличие свежего снимка больше НЕ закрывает шлюз — снимок уже
+     применён на лету выше. Шлюз зависит только от решённости вопроса с облаком. */
+  window._importGateOpen = ( window._demoBorn ? cloudEmptyConfirmed : (cloudDecided || !creds) );
+  if(!window._importGateOpen){
     console.warn('Импорт с сайта отключён: компьютер не связан с облачной базой (демо-режим или облако недоступно)');
   }
   try{ updateDemoBadge(); }catch(e){}
