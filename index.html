@@ -6692,8 +6692,9 @@ function pickerPanelHTML(){
     [...DATA.warehouse.tech, ...DATA.warehouse.tradein].forEach(it=>{
       if(q && !modelMatches(it.model, q) && !(q.length>=4 && String(it.imei||'').includes(q))) return;   /* «айфон» находит iPhone; поиск и по IMEI */
       const isBu=DATA.warehouse.tradein.includes(it);
-      const g=groups[it.model]||(groups[it.model]={model:it.model, price:it.price, free:0, firstImei:null, bu:isBu, batteryPct:it.batteryPct||null});
-      if(it.status==='free'||it.status==='instock'){ g.free++; if(!g.firstImei) g.firstImei=it.imei; }
+      const g=groups[it.model]||(groups[it.model]={model:it.model, price:it.price, free:0, firstImei:null, bu:isBu, batteryPct:it.batteryPct||null, regions:[]});
+      if(it.status==='free'||it.status==='instock'){ g.free++; if(!g.firstImei) g.firstImei=it.imei;
+        if(it.region && g.regions.indexOf(it.region)<0) g.regions.push(it.region); }
       g.price=it.price||g.price;
     });
     Object.values(groups).forEach(g=>{ g.free=Math.max(0, g.free-(inCartByName[g.model]||0)); });
@@ -6706,9 +6707,10 @@ function pickerPanelHTML(){
         ? '<span class="badge b-done" style="font-size:10.5px;">В наличии · '+g.free+' шт</span>'
         : '<span class="badge b-cancel" style="font-size:10.5px;">Закончился</span>';
       const buMark=g.bu?' <span class="badge" style="font-size:10.5px;background:rgba(245,158,11,.15);color:#f59e0b;">б/у'+(g.batteryPct?(' · АКБ '+g.batteryPct+'%'):'')+'</span>':'';
+      const regMark=(g.regions&&g.regions.length)?(' <span title="'+escAttr(g.regions.map(r=>appleRegionLabel(r, g.model)).join(' / '))+'">'+g.regions.map(r=>appleRegionFlag(r)).join('')+'</span>'):'';
       return '<div class="hist-row" style="cursor:pointer;'+(inStock?'':'opacity:.75;')+'" '+
         (inStock?'data-add-stock="'+g.firstImei+'"':'data-add-soldout="'+escAttr(g.model)+'|'+g.price+'"')+'>'+
-        '<div><div class="h-main">'+escHtml(g.model)+'</div><div class="h-sub">'+badge+buMark+(inStock?'':' <span class="tsub">· клик — в заказ через Закуп</span>')+'</div></div>'+
+        '<div><div class="h-main">'+escHtml(g.model)+regMark+'</div><div class="h-sub">'+badge+buMark+(inStock?'':' <span class="tsub">· клик — в заказ через Закуп</span>')+'</div></div>'+
         '<div class="h-val mono">'+rub(g.price)+'</div></div>';
     }).join('') : '<div class="empty"><b>Ничего не найдено</b></div>';
     h+='</div>';
@@ -9696,6 +9698,13 @@ function openInventoryModal(c){
   body+='<div class="field"><label>Модель</label><input class="input-mini" id="invModel" style="width:100%;" placeholder="Начните вводить название…" value="'+escAttr(INV.model)+'"></div>'+
     '<div id="invSuggest"></div>'+
     '<div class="field" style="margin-top:8px;"><label>Розничная цена, ₽</label><input class="input-mini" id="invPrice" type="number" style="width:100%;" value="'+(INV.price||'')+'"></div>'+
+    '<div class="field" style="margin-top:8px;"><label>Код модели с коробки — регион и SIM</label>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+        '<input class="input-mini" id="invPartNo" style="flex:1;min-width:180px;" placeholder="Скан/ввод: например MYND3ZA/A" value="'+escAttr(INV.partNo||'')+'">'+
+        '<select class="select-mini" id="invRegionSel" style="width:220px;">'+appleRegionOptionsHTML(INV.region||'')+'</select>'+
+      '</div>'+
+      '<div id="invRegionInfo" style="margin-top:5px;font-size:13px;">'+(INV.region?appleRegionLabel(INV.region, INV.model):'<span class="tsub">Пикните код с коробки → затем её IMEI. Каждая единица — со своим флагом</span>')+'</div>'+
+    '</div>'+
     '<div class="toggle-row" style="margin:8px 0;"><div class="toggle-switch '+(INV.acc?'on':'')+'" id="invAccTgl"></div>Аксессуар — без IMEI, заводится количеством</div>';
   body+='<div id="invScanArea">'+(INV.acc
     ? '<div class="field"><label>Количество, шт</label><input class="input-mini" id="invQty" type="number" min="1" value="1" style="width:100%;"></div>'+
@@ -9705,7 +9714,7 @@ function openInventoryModal(c){
   const cnt=INV.session.reduce((s,x)=>s+(x.qty||1),0);
   body+='<div class="drill-divider"></div><div class="drill-block-label">Заведено за сессию: '+cnt+' шт</div>'+
     (INV.session.length?'<div style="max-height:180px;overflow:auto;">'+INV.session.slice(-12).reverse().map(x=>
-      '<div class="hist-row"><div><div class="h-main">'+escHtml(x.model)+(x.qty>1?' × '+x.qty:'')+'</div><div class="h-sub mono">'+(x.imei||'без IMEI')+' · розница '+rub(x.price)+'</div></div></div>').join('')+'</div>'
+      '<div class="hist-row"><div><div class="h-main">'+(x.region?appleRegionFlag(x.region)+' ':'')+escHtml(x.model)+(x.qty>1?' × '+x.qty:'')+'</div><div class="h-sub mono">'+(x.imei||'без IMEI')+' · розница '+rub(x.price)+(x.region?' · '+appleRegionLabel(x.region, x.model):'')+'</div></div></div>').join('')+'</div>'
     :'<div class="tsub">Пока пусто</div>');
   openModal('📦 Инвентаризация — '+escHtml(DATA.storeName||''), 'Первичный завод склада', body, [{label:'Готово', cls:'btn-primary', action:()=>{ closeModal(); renderWarehouse(c); }}]);
 
@@ -9726,6 +9735,18 @@ function openInventoryModal(c){
     }));
   };
   mInp.addEventListener('input', ()=>{ INV.model=mInp.value.trim(); showSug(); });
+  /* РЕГИОН С КОРОБКИ (182) */
+  const pnInp=document.getElementById('invPartNo');
+  const regSel=document.getElementById('invRegionSel');
+  const regInfo=document.getElementById('invRegionInfo');
+  const showReg=()=>{ if(regInfo) regInfo.innerHTML=INV.region?('<b>'+appleRegionLabel(INV.region, INV.model)+'</b> — для СЛЕДУЮЩЕЙ единицы: пикните IMEI, и регион сбросится для новой коробки'):'<span class="tsub">Пикните код с коробки → затем её IMEI. Каждая единица — со своим флагом</span>'; };
+  if(pnInp) pnInp.addEventListener('input', ()=>{
+    INV.partNo=pnInp.value.trim();
+    const rc=appleModelCodeParse(INV.partNo);
+    if(rc && rc.info){ INV.region=rc.code; if(regSel) regSel.value=rc.code; showReg(); try{beep('ok');}catch(e){} }
+    else if(rc){ if(regInfo) regInfo.innerHTML='<span style="color:var(--warning);">Код прочитан, но регион «'+rc.code+'» таблице не известен — выберите страну справа</span>'; }
+  });
+  if(regSel) regSel.addEventListener('change', ()=>{ INV.region=regSel.value||null; showReg(); });
   document.getElementById('invPrice').addEventListener('input', e=>{ INV.price=Math.round(parseFloat(e.target.value)||0); });
   document.getElementById('invAccTgl').addEventListener('click', ()=>{ INV.acc=!INV.acc; openInventoryModal(c); });
 
@@ -9739,7 +9760,17 @@ function openInventoryModal(c){
     const rc=appleModelCodeParse(clean);
     if(rc){
       const el=document.getElementById('invImei'); if(el){ el.value=''; el.focus(); }
-      toast('Это код модели с коробки, не IMEI — единица не добавлена. Сканируйте IMEI.','info');
+      if(rc.info){
+        /* РЕГИОН С КОРОБКИ (182): скан кода модели закрепляет регион для следующих единиц */
+        INV.partNo=clean; INV.region=rc.code;
+        const pn=document.getElementById('invPartNo'); if(pn) pn.value=clean;
+        const rs2=document.getElementById('invRegionSel'); if(rs2) rs2.value=rc.code;
+        const ri=document.getElementById('invRegionInfo'); if(ri) ri.innerHTML='<b>'+appleRegionLabel(rc.code, INV.model)+'</b> — для СЛЕДУЮЩЕЙ единицы: пикните IMEI, и регион сбросится для новой коробки';
+        toast('Регион этой коробки: '+appleRegionLabel(rc.code, INV.model)+'. Сканируйте её IMEI — флаг закрепится за этой единицей.','success');
+        try{beep('ok');}catch(e){}
+      } else {
+        toast('Код модели прочитан, но регион «'+rc.code+'» таблице не известен — выберите страну в списке.','info');
+      }
       return;
     }
     const aux=appleBoxAuxParse(clean);
@@ -9777,8 +9808,16 @@ function openInventoryModal(c){
         window._tacWarnFor=null;   /* повторный скан того же кода — подтверждение */
       }
     }
-    DATA.warehouse.tech.push({imei:clean, model:INV.model, purchase:0, price:INV.price||invCatalogPrice(INV.model), status:'instock', location:loc});
-    INV.session.push({model:INV.model, imei:clean, purchase:0, price:INV.price, qty:1});
+    let unitReg=INV.region||null;
+    if(!unitReg && /^\d{15}$/.test(clean)){
+      /* самообучение: такой TAC уже встречался с регионом — подставляем */
+      try{ const kr=Object.keys(whTacStats(clean.slice(0,8)).regions); if(kr.length===1) unitReg=kr[0]; }catch(e){}
+    }
+    DATA.warehouse.tech.push({imei:clean, model:INV.model, purchase:0, price:INV.price||invCatalogPrice(INV.model), status:'instock', location:loc, region:unitReg, partNo:INV.partNo||null});
+    INV.session.push({model:INV.model, imei:clean, purchase:0, price:INV.price, qty:1, region:unitReg});
+    /* ПО-ЕДИНИЧНО (183): регион живёт ровно одну единицу — следующая коробка
+       пикается своим кодом (первая 🇯🇵, следующая 🇰🇷 — под одной карточкой) */
+    INV.region=null; INV.partNo='';
     try{ cloudPushNow(); }catch(e){}
     /* вписанная розница запоминается в карточке модели — «цена не указана» уходит */
     if(INV.price){ const card=(DATA.siteCatalog||[]).find(p=>(p.name||'')===INV.model); if(card && card.price!==INV.price) card.price=INV.price; }
@@ -9905,6 +9944,9 @@ function renderWarehouse(c){
         const below=rule && avail<rule.minQty;
         const opened=STATE.whExpanded.has(m);
         const soldCnt=units.filter(u=>u.status==='sold').length;
+        const regCnt={};
+        units.forEach(u=>{ if(u.status!=='sold'&&u.region) regCnt[u.region]=(regCnt[u.region]||0)+1; });
+        const regSum=Object.keys(regCnt).map(k=>appleRegionFlag(k)+(regCnt[k]>1?'×'+regCnt[k]:'')).join(' ');
         html+='<div class="card" style="margin-bottom:10px;'+(below?'border-color:var(--negative);':'')+'">'+
           '<div class="clickable" data-whgroup="'+escAttr(m)+'" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;cursor:pointer;">'+
             '<div><div class="tname" style="font-size:14px;">'+escHtml(m)+'</div>'+
@@ -9915,14 +9957,15 @@ function renderWarehouse(c){
               return 'Цена <b>'+(mn===mx?rub(mn):rub(mn)+'–'+rub(mx))+'</b> · ';
             })()+'Остаток <b>'+total+'</b> · Резерв <span style="color:var(--warning);">'+res+'</span> · Доступно <span style="color:'+(avail>0?'var(--positive)':'var(--negative)')+';">'+avail+'</span>'+
             (rule?' · норма ≥'+rule.minQty+(below?' <span style="color:var(--negative);">— НЕДОБОР</span>':' ✓'):'')+
-            (soldCnt?' · продано '+soldCnt:'')+'</div></div>'+
+            (soldCnt?' · продано '+soldCnt:'')+
+            (regSum?' · '+regSum:'')+'</div></div>'+
             '<div>'+ic('chevR')+'</div>'+
           '</div>';
         if(opened){
           html+='<div class="table-wrap" style="margin-top:10px;"><table><thead><tr><th>IMEI</th>'+(role.seePurchase?'<th>Закупка</th>':'')+'<th>Цена</th><th>Статус</th><th>Место</th></tr></thead><tbody>'+
             units.map(it=>{
               const st=WH_STATUS[it.status];
-              return '<tr class="clickable" data-whitem="'+it.imei+'"><td class="mono">'+it.imei+'</td>'+
+              return '<tr class="clickable" data-whitem="'+it.imei+'"><td class="mono">'+(it.region?'<span title="'+escAttr(appleRegionLabel(it.region, it.model))+'">'+appleRegionFlag(it.region)+'</span> ':'')+it.imei+'</td>'+
                 (role.seePurchase?'<td class="mono">'+rub(it.purchase)+'</td>':'')+
                 '<td class="mono">'+(it.price?rub(it.price):'—')+'</td>'+
                 '<td><span class="badge '+st[1]+'">'+st[0]+'</span></td><td>'+it.location+'</td></tr>';
@@ -10496,6 +10539,14 @@ function openWarehouseItemDrill(code){
     {icon:'warehouse', title:'Склад', sub:it.location},
     {icon:'box', title: it.status==='sold'?'Продан клиенту':'На складе', sub: it.status==='sold'?'Завершает путь устройства':'Ожидает продажи или резерва'},
   ]);
+  /* РЕГИОН (182): показываем флаг/SIM; для старых коробок — выбор вручную */
+  if(it.imei && (DATA.warehouse.tech.includes(it)||DATA.warehouse.tradein.includes(it))){
+    body+='<div class="card" style="margin-top:12px;"><div class="kpi-label">Регион (сторона производителя)</div>'+
+      '<div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap;">'+
+        '<select class="select-mini" id="whDrillRegion" style="width:230px;">'+appleRegionOptionsHTML(it.region||'')+'</select>'+
+        '<span id="whDrillRegionInfo" style="font-size:13px;">'+(it.region?appleRegionLabel(it.region, it.model):'<span class="tsub">не указан</span>')+'</span>'+
+      '</div>'+(it.partNo?'<div class="tsub" style="margin-top:5px;">Код с коробки: '+escHtml(it.partNo)+'</div>':'')+'</div>';
+  }
   /* ЦЕНА ПРОДАЖИ — редактируется прямо здесь и сохраняется сразу (03.08) */
   if(it.status!=='sold'){
     body+='<div class="card" style="margin-top:12px;"><div class="kpi-label">Цена продажи</div>'+
@@ -10505,8 +10556,17 @@ function openWarehouseItemDrill(code){
         (!it.price?'<span class="tsub" style="color:var(--warning);">цена не задана — товар нельзя продать по каталогу</span>':'')+
       '</div></div>';
   }
-  renderDrill(it.model, 'Код: '+(it.imei||it.sku), body);
+  renderDrill((it.region?appleRegionFlag(it.region)+' ':'')+it.model, 'Код: '+(it.imei||it.sku), body);
   setTimeout(()=>{
+    const rsel=document.getElementById('whDrillRegion');
+    if(rsel) rsel.addEventListener('change', ()=>{
+      it.region=rsel.value||null;
+      const inf=document.getElementById('whDrillRegionInfo');
+      if(inf) inf.innerHTML=it.region?appleRegionLabel(it.region, it.model):'<span class="tsub">не указан</span>';
+      try{ if(typeof lsSave==='function') lsSave(); }catch(e){}
+      try{ cloudPushNow(); }catch(e){}
+      toast(it.region?('Регион сохранён: '+appleRegionLabel(it.region, it.model)):'Регион снят','success');
+    });
     const btn=document.getElementById('whDrillPriceSave');
     if(!btn) return;
     btn.addEventListener('click', ()=>{
@@ -22900,7 +22960,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-181 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-183 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
