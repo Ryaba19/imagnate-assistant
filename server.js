@@ -1631,6 +1631,8 @@ const server = http.createServer((req, res) => {
         Object.keys(st.stores || {}).forEach(function (sid) {
           const d = st.stores[sid]; if (!d) return;
           CLEAR.forEach(function (k) { if (Array.isArray(d[k])) d[k] = []; });
+          /* флаги разовых догрузок — сбросить, чтобы пустая база наполнилась заново */
+          delete d._backfill46; delete d._siteStatusCheckedAt; delete d._fullHistoryDone; delete d._ignoreSweep1;
           d.warehouse = { tech: [], tradein: [], accessories: [], parts: [] };
           if (d.assets) {
             (d.assets.cashByStore || []).forEach(function (x) { x.amount = 0; });
