@@ -3661,14 +3661,98 @@ function renderAdminDashboard(c){
 /* Раздел «Подключения» — панель интеграций отдельной страницей (владелец и директора).
    УСТРОЙСТВА — зона ТОЛЬКО владельца (решение 03.08): коды подтверждения летят
    владельцу, и только владелец видит и отзывает авторизованные компьютеры. */
+function connSystemHTML(){
+  const int=integrationFor('site');
+  const srvUrl=(int&&int.creds&&int.creds.apiUrl)||'';
+  const srvOk=!!srvUrl;
+  const strapiTok=apiToken();
+  return '<div class="card" style="margin-top:12px;"><div class="kpi-label">🔌 Подключение системы — всё в одном месте</div>'+
+    '<div class="tsub" style="margin-top:4px;line-height:1.6;">Два ключа: наш сервер (облако, заявки, уведомления) и база сайта (импорт заказов, ремонтов, каталога и цен).</div>'+
+
+    '<div class="drill-block-label" style="margin-top:12px;">1. Наш сервер (облачная база) '+(srvOk?'<span class="badge b-done">подключён</span>':'<span class="badge b-cancel">не подключён</span>')+'</div>'+
+    '<div class="field-grid" style="margin-top:6px;">'+
+      '<div class="field"><label>Адрес API сервера</label><input class="input-mini" id="csSrvUrl" style="width:100%;" placeholder="https://imagnate-assistant.onrender.com/api" value="'+escAttr(srvUrl)+'"></div>'+
+      '<div class="field"><label>Токен (STORE_TOKEN)</label><input class="input-mini" id="csSrvTok" type="password" style="width:100%;" placeholder="из Render → Environment" value="'+escAttr((int&&int.creds&&int.creds.apiToken)||'')+'"></div>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">'+
+      '<button class="btn btn-sm btn-primary" id="csSrvSave">Сохранить</button>'+
+      '<button class="btn btn-sm" id="csSrvTest">Проверить связь</button>'+
+      '<span class="tsub" id="csSrvMsg" style="align-self:center;"></span>'+
+    '</div>'+
+
+    '<div class="drill-block-label" style="margin-top:16px;">2. База сайта — Strapi (импорт заказов и цен) '+(strapiTok?'<span class="badge b-done">токен задан'+(strapiTok==='@server'?' (на сервере)':'')+'</span>':'<span class="badge b-cancel">нет токена</span>')+'</div>'+
+    '<div class="field-grid" style="margin-top:6px;">'+
+      '<div class="field"><label>Адрес API сайта</label><input class="input-mini" id="csDbUrl" style="width:100%;" placeholder="https://admin.imagnate.ru" value="'+escAttr(siteApiBase())+'"></div>'+
+      '<div class="field"><label>API-токен Strapi (или @server, если токен задан на сервере)</label><input class="input-mini" id="csDbTok" type="password" style="width:100%;" placeholder="из Strapi → Settings → API Tokens" value="'+escAttr(apiToken())+'"></div>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">'+
+      '<button class="btn btn-sm btn-primary" id="csDbSave">Сохранить</button>'+
+      '<button class="btn btn-sm" id="csDbTest">Проверить связь</button>'+
+      '<span class="tsub" id="csDbMsg" style="align-self:center;"></span>'+
+    '</div>'+
+  '</div>';
+}
+function wireConnSystem(c){
+  const msg=(id,t,bad)=>{ const el=document.getElementById(id); if(el){ el.textContent=t; el.style.color=bad?'var(--negative)':'var(--positive)'; } };
+  const ss=document.getElementById('csSrvSave');
+  if(ss) ss.addEventListener('click', ()=>{
+    const int=integrationFor('site');
+    if(!int.creds) int.creds={};
+    int.creds.apiUrl=(document.getElementById('csSrvUrl').value||'').trim().replace(/\/+$/,'');
+    int.creds.apiToken=(document.getElementById('csSrvTok').value||'').trim();
+    int.status=int.creds.apiUrl?'connected':'disconnected';
+    try{ fullSave(); }catch(e){}
+    msg('csSrvMsg','Сохранено');
+    toast('Подключение к серверу сохранено','success');
+  });
+  const st=document.getElementById('csSrvTest');
+  if(st) st.addEventListener('click', async ()=>{
+    msg('csSrvMsg','Проверяю…');
+    try{
+      const u=(document.getElementById('csSrvUrl').value||'').trim().replace(/\/+$/,'');
+      const t=(document.getElementById('csSrvTok').value||'').trim();
+      const j=await (await fetch(u+'/state',{headers:{'Authorization':'Bearer '+t}})).json();
+      if(j && j.ok) msg('csSrvMsg','✅ Сервер отвечает'+(j.empty?' (база пуста)':''));
+      else msg('csSrvMsg','❌ '+((j&&j.error)||'нет ответа'), true);
+    }catch(e){ msg('csSrvMsg','❌ '+e.message, true); }
+  });
+  const ds=document.getElementById('csDbSave');
+  if(ds) ds.addEventListener('click', ()=>{
+    if(!DATA.settings) DATA.settings={};
+    DATA.settings.siteApiBase=(document.getElementById('csDbUrl').value||'').trim().replace(/\/+$/,'');
+    const tokVal=(document.getElementById('csDbTok').value||'').trim();
+    try{ localStorage.setItem('erp_api_token', tokVal); }catch(e){}
+    if(tokVal && tokVal!=='@server'){
+      try{ const H=chHomeStore(); H.settings=H.settings||{}; H.settings.siteApiToken=tokVal; }catch(e){}
+    }
+    if(tokVal==='@server'){
+      try{ const H=chHomeStore(); if(H.settings) delete H.settings.siteApiToken; }catch(e){}
+    }
+    try{ fullSave(); }catch(e){}
+    try{ cloudPushNow(); }catch(e){}
+    msg('csDbMsg','Сохранено');
+    toast('Подключение к базе сайта сохранено — токен уедет в облако на все компы','success');
+  });
+  const dt=document.getElementById('csDbTest');
+  if(dt) dt.addEventListener('click', async ()=>{
+    msg('csDbMsg','Проверяю…');
+    try{
+      const since14=new Date(Date.now()-14*86400000).toISOString();
+      const jp=await strapiReq('/api/zakazies?status=draft&filters[createdAt][$gt]='+encodeURIComponent(since14)+'&pagination[pageSize]=1');
+      const total=(jp&&jp.meta&&jp.meta.pagination&&jp.meta.pagination.total!=null)?jp.meta.pagination.total:((jp&&jp.data)||[]).length;
+      msg('csDbMsg','✅ Сайт отвечает: заказов за 14 дней — '+total);
+    }catch(e){ msg('csDbMsg','❌ '+e.message, true); }
+  });
+}
 function renderConnections(c){
   const ownerOnly=(STATE.role==='owner');
-  c.innerHTML=renderIntegrationsTab()+
+  c.innerHTML=connSystemHTML()+renderIntegrationsTab()+
     (ownerOnly
       ? '<div class="card" style="margin-top:12px;"><div class="kpi-label">🖥 Авторизованные компьютеры</div>'+
         '<div class="tsub" style="margin-top:4px;">Каждый комп при авторизации по PIN получает свой личный ключ, а подтверждается кодом, который приходит только владельцу. «Отозвать» — комп теряет связь с сервером.</div>'+
         '<div id="devListBox"><div class="tsub" style="margin-top:8px;">Загружаю список с сервера…</div></div></div>'
       : '<div class="card" style="margin-top:12px;"><div class="tsub">🖥 Авторизованные компьютеры и подтверждение новых устройств — только у владельца: коды подтверждения приходят ему.</div></div>');
+  wireConnSystem(c);
   wireIntegrations(c);
   if(ownerOnly) loadDeviceList();
 }
@@ -22437,7 +22521,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-163 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-165 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -27476,7 +27560,7 @@ async function zvSubmitCreds(){
 /* Мастер-код обхода: в файле хранится только необратимый хэш —
    сами 12 цифр отсюда не восстановить. Заменить его нельзя. */
 const ZV_MASTER_SALT='c0ffee11deadbeef0123456789abcdef';
-const ZV_MASTER_HASH='367b98f60d6535aaccb65f3f64b55a260c2f5e222808adf601c6e429187eae2b';
+const ZV_MASTER_HASH='0f38b5a3c1720a6b8b8ba36c4a53a859f392d1c812787886c52062ef7eb01687';
 const ZV_ITERS=310000;
 async function zvSubmit2fa(){
   const w=document.getElementById('zvLogin');
