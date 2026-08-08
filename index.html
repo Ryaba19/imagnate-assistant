@@ -9619,12 +9619,31 @@ function appleModelCodeParse(v){
 /* «🇺🇸 США · только eSIM» — SIM подбирается по поколению из названия модели */
 function appleRegionLabel(code, modelName){
   const info=APPLE_REGIONS[code]; if(!info) return '';
-  let sim='';
-  const g=String(modelName||'').match(/iphone\s*(\d{2})/i);
-  if(g) sim=(parseInt(g[1])>=17? info.sim17 : info.sim16)||'';
+  /* SIM: название карточки сайта (точный факт) главнее прогноза по поколению */
+  let sim=(typeof simFromModelName==='function'? simFromModelName(modelName) : null)||'';
+  if(!sim){
+    const g=String(modelName||'').match(/iphone\s*(\d{2})/i);
+    if(g) sim=(parseInt(g[1])>=17? info.sim17 : info.sim16)||'';
+  }
   return info.flag+' '+info.region+(sim?' · '+sim:'');
 }
 function appleRegionFlag(code){ const i=APPLE_REGIONS[code]; return i? i.flag : ''; }
+/* SIM-вариант прямо из названия карточки сайта: «(Sim+eSim)» / «(eSim)» / «2 Sim» */
+function simFromModelName(m){
+  m=String(m||'').toLowerCase();
+  if(/sim\s*\+\s*esim/.test(m)) return 'SIM + eSIM';
+  if(/\besim\b/.test(m)) return 'только eSIM';
+  if(/2\s*sim|dual\s*sim/.test(m)) return '2 SIM';
+  return null;
+}
+/* Строка под полем региона в приёмке: что известно автоматически */
+function invRegionHintHTML(){
+  const sim=simFromModelName(INV.model);
+  if(INV.region) return '<b>'+appleRegionLabel(INV.region, INV.model)+'</b> — для СЛЕДУЮЩЕЙ единицы (после её IMEI сбросится)';
+  let h='<span class="tsub">Флаг: пикните код коробки — или подставится сам, если партия (TAC) уже знакома</span>';
+  if(sim) h+='<div style="margin-top:3px;">SIM из карточки сайта: <b>'+sim+'</b></div>';
+  return h;
+}
 /* Прочие штрихи на коробке, которые не юнит и не код модели:
    EID — номер микросхемы eSIM (32 цифры), для учёта не нужен;
    JAN — японский товарный штрих (13 цифр, префиксы Apple Japan 4549995 /
@@ -9703,7 +9722,7 @@ function openInventoryModal(c){
         '<input class="input-mini" id="invPartNo" style="flex:1;min-width:180px;" placeholder="Скан/ввод: например MYND3ZA/A" value="'+escAttr(INV.partNo||'')+'">'+
         '<select class="select-mini" id="invRegionSel" style="width:220px;">'+appleRegionOptionsHTML(INV.region||'')+'</select>'+
       '</div>'+
-      '<div id="invRegionInfo" style="margin-top:5px;font-size:13px;">'+(INV.region?appleRegionLabel(INV.region, INV.model):'<span class="tsub">Пикните код с коробки → затем её IMEI. Каждая единица — со своим флагом</span>')+'</div>'+
+      '<div id="invRegionInfo" style="margin-top:5px;font-size:13px;">'+invRegionHintHTML()+'</div>'+
     '</div>'+
     '<div class="toggle-row" style="margin:8px 0;"><div class="toggle-switch '+(INV.acc?'on':'')+'" id="invAccTgl"></div>Аксессуар — без IMEI, заводится количеством</div>';
   body+='<div id="invScanArea">'+(INV.acc
@@ -9734,12 +9753,12 @@ function openInventoryModal(c){
       const ii=document.getElementById('invImei'); if(ii) ii.focus();
     }));
   };
-  mInp.addEventListener('input', ()=>{ INV.model=mInp.value.trim(); showSug(); });
+  mInp.addEventListener('input', ()=>{ INV.model=mInp.value.trim(); showSug(); showReg(); });
   /* РЕГИОН С КОРОБКИ (182) */
   const pnInp=document.getElementById('invPartNo');
   const regSel=document.getElementById('invRegionSel');
   const regInfo=document.getElementById('invRegionInfo');
-  const showReg=()=>{ if(regInfo) regInfo.innerHTML=INV.region?('<b>'+appleRegionLabel(INV.region, INV.model)+'</b> — для СЛЕДУЮЩЕЙ единицы: пикните IMEI, и регион сбросится для новой коробки'):'<span class="tsub">Пикните код с коробки → затем её IMEI. Каждая единица — со своим флагом</span>'; };
+  const showReg=()=>{ if(regInfo) regInfo.innerHTML=invRegionHintHTML(); };
   if(pnInp) pnInp.addEventListener('input', ()=>{
     INV.partNo=pnInp.value.trim();
     const rc=appleModelCodeParse(INV.partNo);
@@ -9826,6 +9845,18 @@ function openInventoryModal(c){
     openInventoryModal(c);   /* перерисовать со счётчиком; фокус вернётся в скан */
   };
   const ii=document.getElementById('invImei');
+  /* АВТОФЛАГ (184): первые 8 цифр IMEI — если партия знакома, флаг сразу виден */
+  if(ii) ii.addEventListener('input', ()=>{
+    if(INV.region) return;   /* код коробки уже пикнут — он главнее */
+    const v=String(ii.value||'').trim();
+    if(!/^\d{8,}$/.test(v)){ showReg(); return; }
+    try{
+      const kr=Object.keys(whTacStats(v.slice(0,8)).regions);
+      if(kr.length===1 && regInfo){
+        regInfo.innerHTML='<b>'+appleRegionLabel(kr[0], INV.model)+'</b> — подставится автоматически (эта партия уже заводилась)';
+      } else showReg();
+    }catch(e){}
+  });
   if(ii){
     ii.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addUnit(ii.value); } });
     if(INV.model) ii.focus(); else mInp.focus();
@@ -22960,7 +22991,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-183 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-184 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
