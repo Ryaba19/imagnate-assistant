@@ -8667,6 +8667,47 @@ function servicePartArrived(p){
     pushNotif(t.master||'Мастер', 'Запчасть для ремонта №'+t.id+' («'+p.item+'») поступила на склад.');
   }catch(e){}
 }
+/* КОРРЕКТИРОВКА ЗАЯВКИ (08.08): устройство/клиент/стоимость/срок правятся
+   в любой момент до выдачи; каждое изменение — записью в историю. */
+function openServiceEditModal(id, c){
+  const t=DATA.service.find(x=>x.id===id); if(!t) return;
+  const curCost=(t.cost!=null? t.cost : ((t.costLabor||0)+(t.costParts||0)))||0;
+  const body='<div class="field-grid">'+
+    '<div class="field"><label>Клиент (ФИО)</label><input class="input-mini" id="seClient" style="width:100%;" value="'+escAttr(t.client||'')+'"></div>'+
+    '<div class="field"><label>Телефон</label><input class="input-mini" id="sePhone" style="width:100%;" value="'+escAttr(t.phone||'')+'"></div>'+
+  '</div>'+
+  '<div class="field" style="margin-top:8px;"><label>Устройство / модель</label><input class="input-mini" id="seDevice" style="width:100%;" autocomplete="off" value="'+escAttr(t.device||'')+'"></div>'+
+  '<div id="seDevSug"></div>'+
+  '<div class="field-grid" style="margin-top:8px;">'+
+    '<div class="field"><label>Стоимость ремонта, ₽ (итого)</label><input class="input-mini" id="seCost" type="number" style="width:100%;" value="'+curCost+'"></div>'+
+    '<div class="field"><label>Ориентировочный срок</label><input class="input-mini" id="seEstDays" style="width:100%;" value="'+escAttr(t.estDays||'')+'" placeholder="1–3 дня"></div>'+
+  '</div>';
+  openModal('✏ Корректировка — ремонт №'+t.id, '', body, [
+    {label:'Сохранить', cls:'btn-primary', action:()=>{
+      const changes=[];
+      const nc=(document.getElementById('seClient').value||'').trim();
+      const np=(document.getElementById('sePhone').value||'').trim();
+      const nd=(document.getElementById('seDevice').value||'').trim();
+      const nv=Math.round(parseFloat(document.getElementById('seCost').value)||0);
+      const ne=(document.getElementById('seEstDays').value||'').trim();
+      if(!nd){ toast('Устройство не может быть пустым','error'); return; }
+      if(nc && nc!==t.client){ changes.push('клиент: «'+t.client+'» → «'+nc+'»'); t.client=nc; }
+      if(np && np!==t.phone){ changes.push('телефон: '+t.phone+' → '+np); t.phone=np; }
+      if(nd!==t.device){ changes.push('устройство: «'+t.device+'» → «'+nd+'»'); t.device=nd; }
+      if(nv!==curCost){ changes.push('стоимость: '+rub(curCost)+' → '+rub(nv)); t.cost=nv; t.costLabor=Math.max(0, nv-(t.costParts||0)); }
+      if(ne!==(t.estDays||'')){ changes.push('срок: «'+(t.estDays||'—')+'» → «'+(ne||'—')+'»'); t.estDays=ne; }
+      if(!changes.length){ closeModal(); return; }
+      (t.history=t.history||[]).push({date:DATA.today+' '+nowTime(), text:'✏ Корректировка ('+(typeof currentEmployeeName==='function'?currentEmployeeName():'')+'): '+changes.join('; ')});
+      try{ if(typeof lsSave==='function') lsSave(); }catch(e){}
+      try{ cloudPushNow(); }catch(e){}
+      closeModal();
+      try{ openServiceModal(t.id, c); }catch(e){}
+      toast('Заявка №'+t.id+' скорректирована: '+changes.length+' изм.','success');
+    }},
+    {label:'Отмена', cls:'', action:()=>{ closeModal(); try{ openServiceModal(t.id, c); }catch(e){} }}
+  ]);
+  setTimeout(()=>{ try{ attachCatalogSuggest(document.getElementById('seDevice'), document.getElementById('seDevSug'), {withPrice:false}); }catch(e){} }, 60);
+}
 function openServicePayModal(id, c){
   const t=DATA.service.find(x=>x.id===id); if(!t) return;
   /* НЕШТАТ-ФИКС 08.08: выданный ремонт нельзя оплатить второй раз */
@@ -9118,7 +9159,8 @@ function openServiceModal(id, c){
 
   body+='<div class="drill-divider"></div><div class="drill-block-label">Бланк заказа</div>';
   body+='<div class="tsub" style="margin-bottom:8px;">Форма заполнена электронно. Сформируйте печатный бланк для подписи клиентом.</div>';
-  body+='<div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-sm btn-primary" id="svcPrintBlank">'+ic('docs')+' Сформировать бланк заказа</button><button class="btn btn-sm" id="svcHandoutBtn">'+ic('docs')+' Акт выдачи</button><button class="btn btn-sm" id="svcDueEdit">✎ Срок готовности</button></div>';
+  body+='<div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-sm btn-primary" id="svcPrintBlank">'+ic('docs')+' Сформировать бланк заказа</button><button class="btn btn-sm" id="svcHandoutBtn">'+ic('docs')+' Акт выдачи</button><button class="btn btn-sm" id="svcDueEdit">✎ Срок готовности</button>'+
+    (!['done','archive'].includes(t.status)?'<button class="btn btn-sm" id="svcEditBtn">✏ Корректировать</button>':'')+'</div>';
 
   openModal('Ремонт №'+t.id+' · '+t.device, '<span class="badge '+st[1]+'">'+st[0]+'</span>', body);
 
@@ -9129,6 +9171,7 @@ function openServiceModal(id, c){
   // Печатный бланк заказа
   document.getElementById('svcPrintBlank').addEventListener('click', ()=>openServiceBlank(t.id));
   { const hb=document.getElementById('svcHandoutBtn'); if(hb) hb.addEventListener('click', ()=>openServiceHandout(t.id)); }
+  { const eb=document.getElementById('svcEditBtn'); if(eb) eb.addEventListener('click', ()=>openServiceEditModal(t.id, c)); }
   document.querySelectorAll('[data-svc-rework]').forEach(el=>el.addEventListener('click', ()=>{
     const pid=parseInt(el.dataset.svcRework); const p=DATA.service.find(x=>x.id===pid); if(!p) return;
     t.warrantyReworkOf=pid; t.costLabor=0; t.costParts=0; t.cost=0;
@@ -22683,7 +22726,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-174 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-175 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
