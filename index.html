@@ -1074,7 +1074,6 @@ body.light .ld-vip{color:#8a6100;}
       <div class="topbar-icon-btn" id="searchBtn" title="Поиск по всему: телефон, имя, IMEI, № заказа (Ctrl+K)" style="display:flex;align-items:center;justify-content:center;font-size:15px;">🔍</div>
       <div class="topbar-icon-btn" id="tourBtn" title="Как работать с системой — короткий тур" style="display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;">?</div>
       <div id="demoBadge" style="display:none;align-items:center;gap:6px;padding:4px 10px;border-radius:8px;background:rgba(245,158,11,.15);color:#f59e0b;font-size:12px;font-weight:800;white-space:nowrap;cursor:help;"></div>
-      <div id="cloudBadge" style="display:none;align-items:center;gap:5px;padding:4px 9px;border-radius:8px;font-size:11.5px;font-weight:800;white-space:nowrap;cursor:help;"></div>
       <div class="topbar-spacer"></div>
       <div class="topbar-icon-btn" id="themeBtn" title="Светлая / тёмная тема"></div>
       <div class="topbar-icon-btn" id="bellBtn"><span class="dot-badge"></span></div>
@@ -4997,7 +4996,6 @@ function openStaleReviewModal(c){
     const o=findOrder(id);
     if(!o) return;
     setOrderStatus(o,'cancel');
-    o.cancelReason='Клиент не забрал заказ (разбор незакрытых)';
     (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'note', comment:'Разбор незакрытых: клиент не забрал — заказ отменён'});
     try{ releaseOrderItems(o); }catch(e){}
     toast('Заказ №'+id+' отменён', 'info');
@@ -5063,7 +5061,6 @@ function renderOrders(c){
   '</div><div class="topbar-spacer"></div>'+
   (isBossRole()?'<button class="btn btn-sm" id="mailSettingsBtn" title="Настройки клиентских рассылок: подтверждение заказа и оценка после выдачи">✉ Рассылки</button>':'')+
   (isBossRole()?'<button class="btn btn-sm" id="reviewsBtn" title="Оценки клиентов по звёздам из писем: кто доволен, кто нет, ответить клиенту">⭐ Оценки</button>':'')+
-  (isBossRole()?'<button class="btn btn-sm" id="cancelReasonsBtn" title="Почему клиенты отказываются: причины всех отменённых заказов">🚫 Причины отказов</button>':'')+
   ((isBossRole()||STATE.role==='senior')?'<button class="btn btn-sm" id="ordersArchiveBtn" title="Архив выданных заказов — только владелец и управляющий">'+ic('box')+' Архив'+(DATA.orders.some(o=>o.archived)?' ('+DATA.orders.filter(o=>o.archived).length+')':'')+'</button>':'')+
   ((isBossRole()||STATE.role==='admin')?'<button class="btn btn-sm" id="orderSettingsBtn" title="Настройки заказов">'+ic('gear')+'</button>':'')+
   ((!getStoreExcludedPages().includes('service') && (isBossRole()||STATE.role==='senior'||STATE.role==='seller'))?'<button class="btn" id="newRepairBtn">🔧 Принять в ремонт</button>':'')+
@@ -5202,8 +5199,6 @@ function renderOrders(c){
   if(setBtn) setBtn.addEventListener('click', openOrderSettingsModal);
   const archBtn=document.getElementById('ordersArchiveBtn');
   if(archBtn) archBtn.addEventListener('click', ()=>{ STATE.ordersView='archive'; renderOrders(c); });
-  const crb2=document.getElementById('cancelReasonsBtn');
-  if(crb2) crb2.addEventListener('click', ()=>openCancelReasonsModal());
   const mailBtn=document.getElementById('mailSettingsBtn');
   if(mailBtn) mailBtn.addEventListener('click', openMailSettingsModal);
   const rvBtn=document.getElementById('reviewsBtn');
@@ -6633,7 +6628,6 @@ function openConfirmOrderModal(id, c){
     }},
     {label:'Клиент отказался', cls:'btn-danger', action:()=>{
       setOrderStatus(o,'cancel');
-      o.cancelReason='Клиент отказался при согласовании';
       o.callLog.unshift({date:DATA.today, time:nowTime(), action:'call', comment:'Клиент отказался от заказа'});
       releaseOrderItems(o);
       closeModal(); renderOrders(c||document.getElementById('pageContent'));
@@ -6775,7 +6769,6 @@ function openPriceConfirmModal(id, c){
     }}]),
     {label:(inStore?'Клиент передумал':'Клиент отказался'), cls:'btn-danger', action:()=>{
       setOrderStatus(o,'cancel');
-      o.cancelReason=inStore?'Клиент передумал на месте':'Клиент отказался при согласовании цены';
       o.callLog.unshift({date:DATA.today, time:nowTime(), action:'call', comment:inStore?'Клиент передумал на месте — заказ отменён':'Клиент отказался от заказа при согласовании цены'});
       releaseOrderItems(o);
       closeModal(); renderOrders(c||document.getElementById('pageContent'));
@@ -6879,7 +6872,6 @@ function openChaseModal(id, c){
     }});
     actions.push({label:'Отменить заказ', cls:'btn-danger', action:()=>{
       setOrderStatus(o,'cancel');
-      o.cancelReason='Клиент не откликнулся после письма';
       o.callLog.unshift({date:DATA.today, time:nowTime(), action:'note', comment:'Заказ отменён: клиент не откликнулся после письма'});
       releaseOrderItems(o);
       closeModal(); renderOrders(c||document.getElementById('pageContent'));
@@ -6998,7 +6990,7 @@ function openOrderRejectModal(id, c){
     '</div>'+
     '<div class="field" style="margin-top:8px;"><label>Причина отказа</label>'+
       '<select class="select-mini" id="orjReason" style="width:100%;">'+ORDER_REJECT_REASONS.map(r=>'<option value="'+r+'">'+r+'</option>').join('')+'</select></div>'+
-    '<div class="field"><label>Комментарий — что произошло <span style="color:var(--negative);">*</span></label>'+
+    '<div class="field"><label>Комментарий — что произошло</label>'+
       '<textarea class="textarea-mini" id="orjComment" rows="3" style="width:100%;font-family:inherit;" placeholder="Например: при осмотре не понравился цвет; предлагали аналог — отказался"></textarea>'+
       '<div class="tsub" style="margin-top:3px;">Комментарии копятся и помогают понять, почему клиенты отказываются.</div></div>'+
     '<div class="tsub" style="margin-top:6px;">Что произойдёт: заказ уйдёт в «Отменён», привязанный товар вернётся в наличие, ненужные заявки закупа отменятся, письмо-оценка не отправится.</div>';
@@ -7006,7 +6998,6 @@ function openOrderRejectModal(id, c){
     {label:'Подтвердить отказ', cls:'btn-danger', action:()=>{
       const reason=document.getElementById('orjReason').value;
       const comment=document.getElementById('orjComment').value.trim();
-      if(!comment){ toast('Комментарий обязателен: отказ — это всегда содержательная причина','error'); return; }
       /* привязанные юниты — обратно в наличие */
       (o.items||[]).forEach(it=>{
         if(it.imei && it.imei!=='—'){
@@ -7036,23 +7027,6 @@ function openOrderRejectModal(id, c){
     }},
     {label:'Назад', cls:'', action:()=>{ closeModal(); openOrderModal(o.id, c); }}
   ]);
-}
-
-/* ПРИЧИНЫ ОТКАЗОВ (канон владельца, слияние 08.08): каждая отмена — с причиной;
-   руководство видит сводку по категориям и последние случаи. */
-function openCancelReasonsModal(){
-  const list=(DATA.orders||[]).filter(o=>o.status==='cancel');
-  if(!list.length){ openModal('🚫 Причины отказов','','<div class="empty"><b>Отменённых заказов нет</b></div>',[{label:'Закрыть', cls:'', action:closeModal}]); return; }
-  const cat=r=>String(r||'Без причины (старый заказ)').split(':')[0].split(' · ')[0].trim();
-  const counts={};
-  list.forEach(o=>{ const k=cat(o.cancelReason); counts[k]=(counts[k]||0)+1; });
-  let body='<div class="card" style="margin-bottom:12px;"><div class="kpi-label">По категориям · всего '+list.length+'</div>'+
-    Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([k,n])=>
-      '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span class="tsub">'+escHtml(k)+'</span><span class="mono tname">'+n+'</span></div>').join('')+'</div>';
-  body+='<div class="table-wrap"><table><thead><tr><th>№</th><th>Клиент</th><th>Когда</th><th>Причина</th></tr></thead><tbody>'+
-    list.slice(0,40).map(o=>'<tr><td class="mono">'+o.id+'</td><td>'+escHtml(o.name||'—')+'</td><td class="tsub">'+escHtml(String(o.closedAt||o.date||'—').split(' ')[0])+'</td>'+
-      '<td class="tsub">'+escHtml(o.cancelReason||'—')+'</td></tr>').join('')+'</tbody></table></div>';
-  openModal('🚫 Причины отказов', 'Каждая отмена — с причиной (канон)', body, [{label:'Закрыть', cls:'', action:closeModal}]);
 }
 
 /* ПОДАРОК К ЗАКАЗУ (05.08): стекло за отзыв, компенсация за ожидание, акция.
@@ -7803,23 +7777,7 @@ function openIssueModal(id){
             it.imei=v; whUnit.status='reserved';
             statusEl.className='ok'; statusEl.innerHTML=ic('check')+(wasEmpty?' Код привязан к заказу':' Совпадает (модель та же — код перепривязан)'); scanState[i].matched=true; try{beep('ok');}catch(e){}
           } else {
-            /* ПОЧЕМУ не подходит — говорим точно (случай двух Дайсонов 08.08):
-               сотрудник должен видеть причину, а не гадать и отдавать «любую». */
-            let why='Код не найден на складе — эта коробка не заведена в систему';
-            if(whUnit){
-              if(!whNameEq(whUnit.model, it.name)) why='Это другая модель: «'+whUnit.model+'» — нужна «'+it.name+'»';
-              else if(whUnit.status==='sold') why='Эта единица уже ПРОДАНА'+(whUnit.soldAt?' ('+whUnit.soldAt+')':'')+' — вернитесь к остаткам';
-              else if(whUnit.status==='reserved'){
-                let holderOrd=null;
-                try{ holderOrd=(DATA.orders||[]).find(oo=>oo.id!==o.id && !['done','cancel'].includes(oo.status) && (oo.items||[]).some(x=>x.imei===v)); }catch(e){}
-                why=holderOrd
-                  ? '⛔ Эта коробка закреплена за заказом №'+holderOrd.id+' ('+(holderOrd.name||'другой клиент')+') — возьмите другую коробку этой модели'
-                  : '⛔ Эта коробка зарезервирована под другой заказ — возьмите другую коробку этой модели';
-              }
-              else if(holder>=0) why='Этот код уже отсканирован в другой позиции этого заказа';
-            }
-            statusEl.className='bad'; statusEl.innerHTML=ic('x')+' Нельзя выдать'; scanState[i].matched=false; try{beep('err');}catch(e){}
-            toast(why,'error');
+            statusEl.className='bad'; statusEl.innerHTML=ic('x')+' Не совпадает'; scanState[i].matched=false; try{beep('err');}catch(e){}
           }
         }
       }
@@ -7972,28 +7930,6 @@ function ensureMoneyData(){
   if(!DATA.salesLog) DATA.salesLog=[];               // журнал продаж
 }
 function isCashPayment(o){ return (o.payment||'').toLowerCase().includes('нал'); }
-/* КОМИССИИ ЭКВАЙРИНГА (канон владельца, слияние 08.08): банк удерживает ИЗ
-   суммы оплаты — клиент платит цену, магазину падает меньше. Это НЕ наценка
-   клиенту. Карта −2%, QR −0,4% по умолчанию; проценты — настройка магазина
-   (панель управления). Наличные — без удержаний. */
-function acqPct(pay){
-  const st=DATA.settings||{};
-  if(/карт/i.test(pay||'')) return (st.acqCardPct!=null?st.acqCardPct:2);
-  if(/qr/i.test(pay||''))  return (st.acqQrPct!=null?st.acqQrPct:0.4);
-  return 0;
-}
-function acqApply(sum, pay, srcLabel){
-  const pct=acqPct(pay);
-  const fee=Math.round(sum*pct/100);
-  if(fee>0){
-    try{
-      DATA.financeOps.unshift({date:DATA.today, type:'Комиссия эквайринга', amount:fee,
-        comment:srcLabel+' · '+pay+' −'+pct+'% (удержано банком из '+rub(sum)+')',
-        who:(typeof currentEmployeeName==='function'?currentEmployeeName():'')});
-    }catch(e){}
-  }
-  return sum-fee;
-}
 function courierWallet(courierId){ ensureMoneyData(); return DATA.courierWallets[courierId]||0; }
 function courierCreditTotal(courierId){ ensureMoneyData(); return DATA.courierCredits.filter(x=>x.courierId===courierId && !x.paidOut).reduce((s,x)=>s+x.amount,0); }
 
@@ -8082,13 +8018,13 @@ function recordSale(o, via, cashOverride, skipMoney){
     if(isCashPayment(o)){
       DATA.courierWallets[o.courierId]=(DATA.courierWallets[o.courierId]||0)+sum;   // нал у курьера — до сдачи в магазин
     } else {
-      DATA.assets.cashless+=acqApply(sum, o.payment||'Карта', 'Заказ №'+o.id+' (курьер)');
+      DATA.assets.cashless+=sum;
     }
   } else if(via==='reconcile'){
     DATA.assets.cashByStore[0].amount+=(cashOverride!=null?cashOverride:sum);       // фактически принятое от сдельного курьера
   } else {
     if(isCashPayment(o)) DATA.assets.cashByStore[0].amount+=sum;
-    else DATA.assets.cashless+=acqApply(sum, o.payment||'Карта', 'Заказ №'+o.id);
+    else DATA.assets.cashless+=sum;
   }
   /* Начисление курьеру за доставку — автоматически в ЗП */
   if((via==='courier'||via==='reconcile') && o.courierId){
@@ -9503,8 +9439,7 @@ function renderWarehouse(c){
           '<td><span class="badge '+st[1]+'">'+st[0]+'</span>'+((typeof isStale!=='undefined'&&isStale)?'<div class="tsub" style="color:var(--negative);font-weight:600;">⚠ не закрыт</div>':'')+'</td>'+
           '<td>'+it.location+'</td>'+
           (isBu?('<td>'+(it.status==='instock'?'<button class="btn btn-sm btn-primary" data-sellbu="'+it.imei+'">Продать</button>':'')+'</td>')
-            :(isAcc?('<td style="white-space:nowrap;">'+((it.qty||0)>0?'<button class="btn btn-sm btn-primary" data-sellacc="'+escAttr(it.sku||it.model)+'">Продать</button>':'')+
-              (((it.qty||0)>0 && (isBossRole()||STATE.role==='senior'))?' <button class="btn btn-sm" data-serialize="'+escAttr(it.sku||it.model)+'" title="Перевести в поштучный учёт по серийникам — выдача станет только по скану">🔢 Единичный учёт</button>':'')+'</td>'):''))+
+            :(isAcc?('<td>'+((it.qty||0)>0?'<button class="btn btn-sm btn-primary" data-sellacc="'+escAttr(it.sku||it.model)+'">Продать</button>':'')+'</td>'):''))+
         '</tr>';
       });
       html+='</tbody></table></div>';
@@ -9593,7 +9528,6 @@ function renderWarehouse(c){
   if(tiBtn) tiBtn.addEventListener('click', ()=>openTradeinAcceptModal(c));
   c.querySelectorAll('[data-sellbu]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation(); openSellBuModal(el.dataset.sellbu, c);}));
   c.querySelectorAll('[data-sellacc]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation(); openSellAccModal(el.dataset.sellacc, c);}));
-  c.querySelectorAll('[data-serialize]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation(); openSerializeAccModal(el.dataset.serialize, c);}));
 }
 
 /* ============================================================
@@ -9799,7 +9733,7 @@ function openSellAccModal(code, c){
     const sum=Math.round(price*n);
     it.qty-=n;
     const cost=Math.round((it.purchase||0)*n);
-    if(pay==='Наличные'){ try{ cashBoxRef().amount+=sum; }catch(e){} } else DATA.assets.cashless+=acqApply(sum, pay, 'Аксессуар '+it.model);
+    if(pay==='Наличные'){ try{ cashBoxRef().amount+=sum; }catch(e){} } else DATA.assets.cashless+=sum;
     DATA.salesLog.unshift({orderId:'акс: '+it.model, date:DATA.today, time:nowTime(), sum:sum, cost:cost, margin:sum-cost, payment:pay, via:'acc_store', by:currentEmployeeName()});
     DATA.financeOps.unshift({date:DATA.today, type:'Продажа аксессуара', amount:sum, comment:it.model+' × '+n+' · '+pay, who:currentEmployeeName()});
     if(DATA.finance){ DATA.finance.turnover.total+=sum; DATA.finance.revenue.total+=(sum-cost); }
@@ -9870,7 +9804,7 @@ function openSellBuModal(imei, c){
     const pay=document.getElementById('buPay').value;
     it.status='sold'; it.soldAt=DATA.today; it.soldPrice=price; it.soldComment=comment;
     it.soldTo={name:((document.getElementById('buBuyerName')||{}).value||'').trim(), phone:((document.getElementById('buBuyerPhone')||{}).value||'').trim()};
-    if(pay==='Наличные') DATA.assets.cashByStore[0].amount+=price; else DATA.assets.cashless+=acqApply(price, pay, 'Б/у '+it.model);
+    if(pay==='Наличные') DATA.assets.cashByStore[0].amount+=price; else DATA.assets.cashless+=price;
     DATA.salesLog.unshift({orderId:'б/у '+it.imei, date:DATA.today, time:nowTime(), sum:price, cost:it.purchase, margin:price-it.purchase, payment:pay, via:'bu_store', by:currentEmployeeName()});
     /* Мотивация трейд-ина: 12% маржи принявшему + 12% продавшему (настраиваемо) */
     ensureTradeinData();
@@ -9890,59 +9824,6 @@ function openSellBuModal(imei, c){
     try{ openBuSaleAct(it.imei); }catch(e){}
     toast('Продано за '+rub(price)+' ('+pay+'). Гарантия б/у — 3 мес. с '+DATA.today, 'success');
   }}]);
-}
-
-/* ЕДИНИЧНЫЙ УЧЁТ (случай двух Дайсонов 08.08): у дорогой техники без IMEI
-   (фены, приставки, часы) на коробке есть серийный номер. Сканируем серийники —
-   позиция переезжает из «Аксессуаров» в «Технику» поштучно. Дальше каждая
-   коробка уникальна: выдача только сканом, чужой резерв не отдать. */
-function openSerializeAccModal(key, c){
-  const it=(DATA.warehouse.accessories||[]).find(x=>(x.sku||x.model)===key);
-  if(!it || (it.qty||0)<=0){ toast('Позиция не найдена или остаток нулевой','error'); return; }
-  const n=it.qty;
-  let body='<div class="tsub" style="line-height:1.6;margin-bottom:10px;">У «'+escHtml(it.model)+'» остаток <b>'+n+' шт.</b> '+
-    'Отсканируйте серийный номер с коробки КАЖDОЙ единицы — позиция переедет в «Технику» поштучно. '+
-    'После этого две одинаковые коробки перестанут быть неразличимыми: выдача — только сканом, чужую не отдать.</div>';
-  for(let i=0;i<n;i++){
-    body+='<div class="field"><label>Серийный № коробки '+(i+1)+' из '+n+'</label>'+
-      '<input class="input-mini mono" data-ser-inp="'+i+'" style="width:100%;" placeholder="Скан или ввод серийника с коробки"></div>';
-  }
-  body+='<div class="tsub" style="margin-top:6px;">Сканер работает как клавиатура: наведите на код — поле заполнится само. Cерийники должны быть разными.</div>';
-  openModal('🔢 Единичный учёт — '+it.model, n+' шт. → поштучно в «Технику»', body, [
-    {label:'Перевести в единичный учёт', cls:'btn-primary', action:()=>{
-      const vals=[];
-      for(let i=0;i<n;i++){
-        const v=((document.querySelector('[data-ser-inp="'+i+'"]')||{}).value||'').trim();
-        if(!v){ toast('Заполните серийник коробки '+(i+1)+' из '+n,'error'); return; }
-        if(vals.includes(v)){ toast('Серийник «'+v+'» указан дважды — коробки должны отличаться','error'); return; }
-        if(typeof findUnit==='function' && findUnit(v)){ toast('Серийник «'+v+'» уже есть на складе','error'); return; }
-        vals.push(v);
-      }
-      vals.forEach(v=>{
-        DATA.warehouse.tech.push({imei:v, model:it.model, purchase:(it.purchase||0), price:(it.price||0)||null,
-          status:'instock', location:it.location||((typeof getCurrentStore==='function' && getCurrentStore().shortName)||'Магазин'),
-          serializedFrom:'accessories', serializedAt:DATA.today, serializedBy:(typeof currentEmployeeName==='function'?currentEmployeeName():'')});
-      });
-      it.qty=0; it.status='out';
-      (DATA.financeOps=DATA.financeOps||[]).unshift({date:DATA.today, type:'Единичный учёт', amount:0,
-        comment:'«'+it.model+'» переведён в поштучный учёт: '+n+' шт., серийники '+vals.join(', '),
-        who:(typeof currentEmployeeName==='function'?currentEmployeeName():'')});
-      try{ if(typeof lsSave==='function') lsSave(); }catch(e){}
-      try{ cloudPushNow(); }catch(e){}
-      closeModal();
-      try{ STATE.whFilters.tab='tech'; renderWarehouse(c||document.getElementById('pageContent')); }catch(e){}
-      try{ beep('ok'); }catch(e){}
-      toast('«'+it.model+'»: '+n+' шт. теперь в «Технике» поштучно. Выдача — только по скану серийника.','success');
-    }},
-    {label:'Отмена', cls:'', action:closeModal}
-  ]);
-  setTimeout(()=>{
-    const inps=[...document.querySelectorAll('[data-ser-inp]')];
-    inps.forEach((inp,i)=>inp.addEventListener('keydown', e=>{
-      if(e.key==='Enter'){ e.preventDefault(); if(inps[i+1]) inps[i+1].focus(); }
-    }));
-    if(inps[0]) inps[0].focus();
-  }, 60);
 }
 
 function openWarehouseItemDrill(code){
@@ -15317,42 +15198,6 @@ function controlPanelHTML(){
   }
   html+='</div>';
 
-  /* --- Деньги: эквайринг и мотивация (канон владельца, слияние 08.08) --- */
-  if(isBossRole()){
-    const st=DATA.settings||{};
-    const tr=DATA.tradeinRates||{buy:12, sell:12};
-    html+='<div class="section"><div class="section-head"><div class="section-title">💳 Деньги: комиссии и мотивация</div></div>'+
-      '<div class="card" style="margin-bottom:10px;"><div class="kpi-label">Комиссии эквайринга</div>'+
-      '<div class="tsub" style="margin-top:4px;line-height:1.6;">Банк удерживает комиссию ИЗ суммы оплаты: клиент платит цену, магазину падает меньше. Это не наценка клиенту. Пример: картой 100 000 → магазину 98 000.</div>'+
-      '<div style="display:flex;gap:14px;margin-top:10px;flex-wrap:wrap;align-items:center;">'+
-        '<span class="tsub">Карта, %:</span><input class="input-mini" id="acqCardInp" type="number" step="0.1" min="0" max="15" value="'+(st.acqCardPct!=null?st.acqCardPct:2)+'" style="width:90px;">'+
-        '<span class="tsub">QR, %:</span><input class="input-mini" id="acqQrInp" type="number" step="0.1" min="0" max="15" value="'+(st.acqQrPct!=null?st.acqQrPct:0.4)+'" style="width:90px;">'+
-        '<button class="btn btn-sm btn-primary" id="acqSaveBtn">Сохранить</button>'+
-      '</div></div>'+
-      '<div class="card"><div class="kpi-label">Мотивация трейд-ина</div>'+
-      '<div class="tsub" style="margin-top:4px;line-height:1.6;">Процент от маржи б/у после реализации: выкупившему и продавшему. Один человек сделал оба действия — получает оба бонуса.</div>'+
-      '<div style="display:flex;gap:14px;margin-top:10px;flex-wrap:wrap;align-items:center;">'+
-        '<span class="tsub">За выкуп, %:</span><input class="input-mini" id="tiBuyInp" type="number" step="1" min="0" max="50" value="'+tr.buy+'" style="width:90px;">'+
-        '<span class="tsub">За продажу, %:</span><input class="input-mini" id="tiSellInp" type="number" step="1" min="0" max="50" value="'+tr.sell+'" style="width:90px;">'+
-        '<button class="btn btn-sm btn-primary" id="tiRatesSaveBtn">Сохранить</button>'+
-      '</div></div></div>';
-  }
-
-  /* --- 5. Боевой запуск базы (только владелец): очистить демо и запереть облако на боевую базу --- */
-  if(isBossRole()){
-    html+='<div class="section"><div class="section-head"><div class="section-title">🚀 Боевой запуск базы</div></div>'+
-      '<div class="placeholder-card" style="border-style:dashed;border-color:rgba(255,90,90,.4);background:rgba(255,90,90,.05);">'+
-      '<span class="badge b-cancel">Только владелец · необратимо</span>'+
-      '<b>Перевести систему в боевой режим</b>'+
-      '<p>Делается ОДИН раз — в день реальной приёмки. Сервер сам, авторитетно, очищает все демо-данные (заказы, склад, кассы, клиентов, сервис, заявки) и намертво запирает облако на паспорт этой базы: демо-снимки и снимки с чужим паспортом больше не принимаются ни с какого компьютера. После запуска система перезагрузится на чистую боевую базу, и всё, что вы внесёте дальше, будет храниться в БД и переживать смену версий.</p>'+
-      '<p style="color:var(--negative);margin:0;"><b>Отменить нельзя.</b> Убедитесь, что демо-примеры вам больше не нужны.</p>'+
-      '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;">'+
-        '<button class="btn btn-sm btn-danger" id="prodStartBtn">🚀 Боевой запуск</button>'+
-        '<button class="btn btn-sm" id="prodStatusBtn">Проверить статус</button>'+
-        '<span class="tsub" id="prodStatusLbl" style="opacity:.75;"></span>'+
-      '</div></div></div>';
-  }
-
   return html;
 }
 
@@ -15392,46 +15237,6 @@ function demoDetox(){
   });
   try{ fullSave(); }catch(e){}
   return n;
-}
-/* Д4: БОЕВОЙ ЗАПУСК. Локальная очистка не проходит в облако (хранитель сливает
-   записи и демо возвращается), поэтому очистку делает сервер авторитетно
-   (/state-wipe), затем запирает облако на паспорт этой базы (/state-production),
-   а клиент перезагружается на чистую боевую базу. */
-function productionStartDialog(){
-  if(!isBossRole()){ toast('Только владелец','error'); return; }
-  const c=erpServerCreds();
-  if(!c){ toast('Нет связи с сервером — подключите систему (шестерёнка Заказов)','error'); return; }
-  openModal('Боевой запуск базы','Необратимо',
-    '<div class="tsub" style="line-height:1.7;">Сервер очистит ВСЕ демо-данные и запрёт облако на боевую базу. '+
-    'Демо-заказы, склад, кассы, клиенты, сервис и заявки удалятся на сервере и на этом компьютере — <b>отменить нельзя</b>.<br><br>'+
-    'Чтобы подтвердить, введите слово <b>БОЕВОЙ</b>:'+
-    '<input class="input" id="prodConfirmInp" placeholder="БОЕВОЙ" autocomplete="off" style="margin-top:8px;text-transform:uppercase;">'+
-    '<div id="prodConfirmErr" style="color:var(--negative);margin-top:6px;min-height:16px;"></div></div>',
-    [{label:'🚀 Запустить боевой режим', cls:'btn-danger', action:()=>{
-      const v=((document.getElementById('prodConfirmInp')||{}).value||'').trim().toUpperCase();
-      if(v!=='БОЕВОЙ'){ const e=document.getElementById('prodConfirmErr'); if(e) e.textContent='Введите слово БОЕВОЙ, чтобы подтвердить.'; return; }
-      productionStart();
-    }},
-    {label:'Отмена', cls:'', action:closeModal}]);
-}
-async function productionStart(){
-  const c=erpServerCreds();
-  if(!c){ toast('Нет связи с сервером','error'); return; }
-  closeModal();
-  openModal('Боевой запуск…','','<div class="tsub">Очищаю демо на сервере и запираю базу…</div>',[]);
-  try{
-    const h={'Content-Type':'application/json','Authorization':'Bearer '+c.token};
-    const w=await fetch(c.api+'/state-wipe',{method:'POST',headers:h,body:'{}'}).then(r=>r.json());
-    if(!w || w.ok!==true) throw new Error((w&&w.error)||'сервер не подтвердил очистку');
-    const p=await fetch(c.api+'/state-production',{method:'POST',headers:h,body:'{}'}).then(r=>r.json());
-    if(!p || p.ok!==true) throw new Error((p&&p.error)||'сервер не подтвердил боевой режим');
-    window._skipAutosave=true;
-    try{ localStorage.removeItem(LS_FULL_KEY); localStorage.removeItem('erp_base_id'); }catch(e){}
-    location.reload();
-  }catch(e){
-    closeModal();
-    toast('Боевой запуск не удался: '+(e && e.message ? e.message : e),'error');
-  }
 }
 /* ПОЛНЫЙ БЭКАП В ФАЙЛ (05.08): сервер отдаёт базу + историю снимков +
    заявки одним JSON. Если сервер недоступен — скачивается локальный снимок
@@ -15641,34 +15446,6 @@ function wireControlPanel(c){
         renderManage(c);
       }},
       {label:'Отмена', cls:'', action:closeModal}]);
-  });
-  const acqSave=document.getElementById('acqSaveBtn');
-  if(acqSave) acqSave.addEventListener('click', ()=>{
-    if(!DATA.settings) DATA.settings={};
-    DATA.settings.acqCardPct=Math.max(0, Math.min(15, parseFloat(document.getElementById('acqCardInp').value)||0));
-    DATA.settings.acqQrPct=Math.max(0, Math.min(15, parseFloat(document.getElementById('acqQrInp').value)||0));
-    if(typeof lsSave==='function') lsSave();
-    toast('Комиссии эквайринга: карта −'+DATA.settings.acqCardPct+'%, QR −'+DATA.settings.acqQrPct+'%','success');
-  });
-  const tiSave=document.getElementById('tiRatesSaveBtn');
-  if(tiSave) tiSave.addEventListener('click', ()=>{
-    if(typeof ensureTradeinData==='function') ensureTradeinData();
-    DATA.tradeinRates.buy=Math.max(0, Math.min(50, parseFloat(document.getElementById('tiBuyInp').value)||0));
-    DATA.tradeinRates.sell=Math.max(0, Math.min(50, parseFloat(document.getElementById('tiSellInp').value)||0));
-    if(typeof lsSave==='function') lsSave();
-    toast('Мотивация трейд-ина: выкуп '+DATA.tradeinRates.buy+'%, продажа '+DATA.tradeinRates.sell+'%','success');
-  });
-  const psb=document.getElementById('prodStartBtn');
-  if(psb) psb.addEventListener('click', ()=>productionStartDialog());
-  const pstb=document.getElementById('prodStatusBtn');
-  if(pstb) pstb.addEventListener('click', ()=>{
-    const lbl=document.getElementById('prodStatusLbl');
-    const cc=erpServerCreds();
-    if(!cc){ if(lbl) lbl.textContent='нет связи с сервером'; return; }
-    if(lbl) lbl.textContent='проверяю…';
-    fetch(cc.api+'/state-production',{headers:{'Authorization':'Bearer '+cc.token}})
-      .then(r=>r.json()).then(j=>{ if(lbl) lbl.textContent=(j&&j.production)?('боевой режим ВКЛЮЧЁН · паспорт '+(j.baseId||'—')):'боевой режим выключен (демо-данные принимаются)'; })
-      .catch(()=>{ if(lbl) lbl.textContent='ошибка связи'; });
   });
   c.querySelectorAll('[data-emp-del]').forEach(el=>el.addEventListener('click',()=>{
     if(!isBossRole()){ toast('Только владелец','error'); return; }
@@ -22260,7 +22037,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-144 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-141 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -23636,13 +23413,11 @@ function postOrderMoney(o, byLabel){
     DATA.cashOps.unshift(op); applyCashOp(op);
     o.cashPosted='cash';
     toast('Наличные по заказу №'+o.id+' ('+rub(sum)+') зачислены в кассу','success');
-  } else if(/карт|qr/i.test(pay)){
+  } else if(/карт/i.test(pay)){
     if(!DATA.assets) DATA.assets={};
-    const net=acqApply(Math.round(sum), pay, 'Заказ №'+o.id);
-    DATA.assets.cashless=(DATA.assets.cashless||0)+net;
-    o.cashPosted=/qr/i.test(pay)?'qr':'card';
-    const fee=Math.round(sum)-net;
-    toast('Оплата ('+pay+') по заказу №'+o.id+': '+rub(sum)+(fee>0?', в безнал за вычетом комиссии банка: '+rub(net):' учтена в безнале'),'success');
+    DATA.assets.cashless=(DATA.assets.cashless||0)+Math.round(sum);
+    o.cashPosted='card';
+    toast('Оплата картой по заказу №'+o.id+' ('+rub(sum)+') учтена в безнале','success');
   }
   /* способ оплаты не указан — ничего не проводим, продавец внесёт вручную */
 }
@@ -24112,11 +23887,9 @@ function cloudSyncPush(payload, force){
       fetch(c.api+'/state',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.token},
         body:JSON.stringify({savedAtMs:payload.savedAtMs||Date.now(), savedBy:(ROLES[STATE.role]||{}).label||'', state:payload})})
         .then(r=>r.json())
-        .then(j=>{ if(j&&j.ok){ window._cloudSync.status='ok'; window._cloudSync.lastError=null;
-                     if((payload.savedAtMs||0) >= (window._cloudDirtyMs||0)) window._cloudDirty=false;   /* подтверждено облаком */
-                     try{ updateCloudBadge(); }catch(e){} }
-                   else { window._cloudSync.status='error'; window._cloudSync.lastError=(j&&j.error)||'?'; try{ updateCloudBadge(); }catch(e){} } })
-        .catch(e=>{ window._cloudSync.status='error'; window._cloudSync.lastError=String(e); try{ updateCloudBadge(); }catch(e2){} });
+        .then(j=>{ if(j&&j.ok){ window._cloudSync.status='ok'; window._cloudSync.lastError=null; }
+                   else { window._cloudSync.status='error'; window._cloudSync.lastError=(j&&j.error)||'?'; } })
+        .catch(e=>{ window._cloudSync.status='error'; window._cloudSync.lastError=String(e); });
     };
     if(window._cloudPullOk){ doPush(); return; }
     /* СТРАХОВКА: этот комп ещё ни разу не читал облако. Прежде чем отправлять
@@ -24185,18 +23958,11 @@ function buildFullPayload(){
 }
 /* Мгновенная отправка в облако после важного действия (скан, продажа, выдача):
    не ждём минутный цикл — другой комп не успеет затереть. */
-function cloudMarkDirty(ms){
-  /* НЕОТПРАВЛЕННЫЕ ИЗМЕНЕНИЯ: помечаем до подтверждения облака. Снимается
-     только когда сервер ответил ok на снимок не старее этой отметки. */
-  window._cloudDirty=true; window._cloudDirtyMs=ms||Date.now();
-  try{ updateCloudBadge(); }catch(e){}
-}
 function cloudPushNow(){
   try{
     if(window._skipAutosave) return;
     const payload=buildFullPayload();
     try{ localStorage.setItem(LS_FULL_KEY, JSON.stringify(payload)); }catch(e){}
-    cloudMarkDirty(payload.savedAtMs);
     cloudSyncPush(payload, true);
   }catch(e){}
 }
@@ -24204,7 +23970,6 @@ function fullSave(){
   if(window._skipAutosave) return;   /* при сбросе не даём пересохранить данные перед перезагрузкой */
   try{
     const payload=buildFullPayload();
-    cloudMarkDirty(payload.savedAtMs);
     localSyncPush(payload);   /* локальный сервер данных (если найден) — общие данные для всех устройств */
     cloudSyncPush(payload);   /* облачная копия на Render — связывает дом и магазин */
     try{
@@ -24281,53 +24046,6 @@ try{
 }catch(e){}
 setTimeout(updateDemoBadge, 500);
 setInterval(updateDemoBadge, 15000);
-/* ИНДИКАТОР ОБЛАКА (08.08): сотрудник ВИДИТ, ушли ли его данные в облако.
-   Зелёный — всё подтверждено сервером; жёлтый — отправляется; красный — не
-   уходит (нет связи). Плюс автоповтор и предупреждение при закрытии вкладки. */
-function updateCloudBadge(){
-  try{
-    const el=document.getElementById('cloudBadge'); if(!el) return;
-    const c=erpServerCreds();
-    const off=!c || window._demoBorn || window._skipAutosave || (DATA && DATA.settings && DATA.settings.cloudSyncEnabled===false);
-    if(off){ el.style.display='none'; return; }
-    el.style.display='inline-flex';
-    if(window._cloudSync.status==='error'){
-      el.style.background='rgba(239,68,68,.15)'; el.style.color='#ef4444';
-      el.textContent='☁ ⚠ не в облаке';
-      el.title='Данные сохранены на этом компьютере, но НЕ дошли до облака: '+(window._cloudSync.lastError||'нет связи')+'. Система повторяет отправку сама. Не закрывайте вкладку и проверьте интернет.';
-    } else if(window._cloudDirty){
-      el.style.background='rgba(245,158,11,.12)'; el.style.color='#f59e0b';
-      el.textContent='☁ отправляю…';
-      el.title='Изменения сохранены на компьютере и отправляются в облако.';
-    } else {
-      el.style.background='rgba(34,197,94,.12)'; el.style.color='#22c55e';
-      el.textContent='☁ в облаке ✓';
-      el.title='Все изменения подтверждены облачной базой. Компьютер можно выключать.';
-    }
-  }catch(e){}
-}
-setTimeout(updateCloudBadge, 700);
-setInterval(updateCloudBadge, 5000);
-/* Автоповтор: если что-то не подтверждено облаком дольше 45 сек — шлём заново
-   принудительно (хранитель на сервере всё равно ничего не теряет при слиянии). */
-setInterval(()=>{
-  try{
-    if(!window._cloudDirty || window._skipAutosave || window._demoBorn) return;
-    if(!erpServerCreds()) return;
-    if(Date.now()-(window._cloudDirtyMs||0) < 45000) return;
-    cloudPushNow();
-  }catch(e){}
-}, 45000);
-window.addEventListener('beforeunload', function(e){
-  try{
-    if(window._skipAutosave || window._demoBorn) return;
-    if(window._cloudDirty && window._cloudSync.status==='error'){
-      e.preventDefault();
-      e.returnValue='Данные ещё не дошли до облака — если закрыть сейчас, они останутся только на этом компьютере.';
-      return e.returnValue;
-    }
-  }catch(err){}
-});
 setTimeout(()=>{
   try{
     const raw=sessionStorage.getItem('erp_pull_info');

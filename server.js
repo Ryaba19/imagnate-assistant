@@ -164,12 +164,6 @@ function mergeUnion(primary, secondary) {
   } catch (e) { return primary || secondary; }
 }
 
-/* Д3: паспорт боевой базы (когда база помечена боевой). */
-let _prodBase = undefined;
-async function prodBase() {
-  if (_prodBase === undefined) { try { const v = await kvGet('erp_production_base'); _prodBase = v || null; } catch (e) { _prodBase = null; } }
-  return _prodBase;
-}
 /* Д1: раскладка сущностей снимка в несбиваемый пораздельный реестр (upsert по ключу). */
 async function journalUpsert(state) {
   if (!pool || !state || !state.stores) return 0;
@@ -1587,59 +1581,6 @@ const server = http.createServer((req, res) => {
   }
 
   /* ---- История облачной базы: список снимков со сводкой (по токену) ---- */
-  /* ---- Д3: боевой режим (вкл/выкл/статус) ---- */
-  if (req.method === 'POST' && url.pathname === '/api/state-production') {
-    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
-    return readBody(req, async b => {
-      try {
-        if (b.off === true) { await kvSet('erp_production_base', ''); _prodBase = null; console.log('[боевой режим] выключен'); return sendJson(res, 200, { ok: true, production: false }); }
-        const cur = await stateLoad();
-        if (!cur || !cur.state) return sendJson(res, 400, { error: 'База пуста — сначала загрузите боевые данные' });
-        if (cur.state._demoBorn) return sendJson(res, 400, { error: 'Текущая база помечена как демо — боевой режим нельзя включить на демо-данных' });
-        const bid = cur.state._baseId;
-        if (!bid) return sendJson(res, 400, { error: 'У базы нет паспорта (_baseId) — сохраните базу актуальным клиентом и повторите' });
-        await kvSet('erp_production_base', String(bid)); _prodBase = String(bid);
-        console.log('[боевой режим] включён, паспорт базы: ' + bid);
-        sendJson(res, 200, { ok: true, production: true, baseId: bid });
-      } catch (e) { sendJson(res, 500, { error: e.message }); }
-    });
-  }
-  if (req.method === 'GET' && url.pathname === '/api/state-production') {
-    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
-    (async () => { try { const pb = await prodBase(); sendJson(res, 200, { ok: true, production: !!pb, baseId: pb || null }); } catch (e) { sendJson(res, 500, { error: e.message }); } })();
-    return;
-  }
-  /* ---- Д4: боевой запуск — авторитетная очистка демо-контента + сброс журнала ---- */
-  if (req.method === 'POST' && url.pathname === '/api/state-wipe') {
-    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
-    return readBody(req, async () => {
-      try {
-        const cur = await stateLoad();
-        if (!cur || !cur.state) return sendJson(res, 200, { ok: true, note: 'база пуста' });
-        const st = cur.state;
-        const CLEAR = ['orders','service','leads','customers','cashOps','salesLog','financeOps','purchaseRequests','shipments','tradeinBonuses','serviceHandoffs','expenseClaims','fines','explanations','shiftSwaps','timeOffRequests'];
-        Object.keys(st.stores || {}).forEach(function (sid) {
-          const d = st.stores[sid]; if (!d) return;
-          CLEAR.forEach(function (k) { if (Array.isArray(d[k])) d[k] = []; });
-          d.warehouse = { tech: [], tradein: [], accessories: [], parts: [] };
-          if (d.assets) {
-            (d.assets.cashByStore || []).forEach(function (x) { x.amount = 0; });
-            d.assets.cashless = 0; d.assets.cashlessPending = 0; d.assets.storeWarehouse = 0;
-            if (d.assets.collection) { d.assets.collection.cash = 0; d.assets.collection.goods = 0; }
-          }
-          if (d.finance) { try { d.finance.turnover.total = 0; d.finance.revenue.total = 0; } catch (e) {} }
-          d.siteLastZakazId = null; d.siteLastRemontId = null;
-        });
-        st._demoBorn = false;
-        if (!st._baseId) st._baseId = 'base_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
-        const now = Date.now();
-        await stateSave({ savedAtMs: now, savedBy: 'боевой запуск (очистка демо)', state: st });
-        if (pool) { try { await pool.query('DELETE FROM erp_journal'); } catch (e) {} }
-        console.log('[боевой запуск] контент очищен, журнал сброшен, паспорт: ' + st._baseId);
-        sendJson(res, 200, { ok: true, savedAtMs: now, baseId: st._baseId });
-      } catch (e) { sendJson(res, 500, { error: e.message }); }
-    });
-  }
   /* ---- Журнал сущностей: счётчики (проверка Д1) ---- */
   if (req.method === 'GET' && url.pathname === '/api/state-journal') {
     if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
@@ -1759,13 +1700,6 @@ const server = http.createServer((req, res) => {
         const curState = cur && cur.state;
         const curDemo = !!(curState && curState._demoBorn);
         const incDemo = !!(b.state && b.state._demoBorn);
-        /* Д3: боевой режим — глушим демо и чужой/без паспорта, даже если база пуста */
-        const pb = await prodBase();
-        if (pb) {
-          const iB = b.state && b.state._baseId;
-          if (incDemo) { console.warn('[боевой режим] отклонён демо-снимок'); return sendJson(res, 200, { ok: true, ignored: 'production-no-demo', savedAtMs: cur ? cur.savedAtMs : 0 }); }
-          if (!iB || iB !== pb) { console.warn('[боевой режим] отклонён снимок без/с чужим паспортом'); return sendJson(res, 200, { ok: true, ignored: 'production-foreign-base', savedAtMs: cur ? cur.savedAtMs : 0 }); }
-        }
         /* демо-снимок НИКОГДА не перезаписывает реальную базу */
         if (incDemo && curState && !curDemo) {
           console.warn('[облачная база] отклонён демо-снимок поверх реальной базы');
