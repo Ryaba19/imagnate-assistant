@@ -9616,9 +9616,39 @@ const APPLE_REGIONS={
 function appleModelCodeParse(v){
   const s=String(v||'').trim().toUpperCase().replace(/\s+/g,'');
   let m=s.match(/^[A-Z0-9]{5}([A-Z]{1,2})\/A$/);
-  if(!m) m=s.match(/^([A-Z]{1,2})\/A$/);
-  if(!m) return null;
-  return {code:m[1], info:APPLE_REGIONS[m[1]]||null};
+  if(m) return {code:m[1], info:APPLE_REGIONS[m[1]]||null, prefix:s.slice(0,5), full:s};
+  m=s.match(/^([A-Z]{1,2})\/A$/);
+  if(m) return {code:m[1], info:APPLE_REGIONS[m[1]]||null, prefix:null, full:s};
+  return null;
+}
+/* САМООБУЧЕНИЕ ПО АРТИКУЛУ (187): префикс кода коробки → модель из каталога.
+   Наполняется само при приёмке; живёт в облаке вместе с базой. */
+function partNoRemember(prefix, model){
+  if(!prefix || !model) return;
+  (DATA.partNoMap=DATA.partNoMap||{})[prefix]=model;
+}
+function partNoKnown(prefix){
+  return prefix? (DATA.partNoMap||{})[prefix]||null : null;
+}
+/* Применить знание кода в приёмке: модель пуста → подставить всё; выбрана
+   другая → тревога «не та коробка». Возвращает true, если модель подставлена. */
+function invApplyKnownPartNo(rc){
+  if(!rc || !rc.prefix) return false;
+  const known=partNoKnown(rc.prefix);
+  if(!known) return false;
+  if(!INV.model){
+    INV.model=known;
+    const mi=document.getElementById('invModel'); if(mi) mi.value=known;
+    INV.price=invCatalogPrice(known)||INV.price||0;
+    const pi=document.getElementById('invPrice'); if(pi && INV.price) pi.value=INV.price;
+    toast('Коробка узнана по коду: '+known+(INV.price?(' · '+rub(INV.price)):'')+'. Сканируйте IMEI.','success');
+    return true;
+  }
+  if(!whNameEq(INV.model, known)){
+    toast('⚠ Этот код коробки раньше был у «'+known+'», а выбрана «'+INV.model+'». Проверьте коробку!','error');
+    try{ beep('err'); }catch(e){}
+  }
+  return false;
 }
 /* «🇺🇸 США · только eSIM» — SIM подбирается по поколению из названия модели */
 /* SIM-вариант региона: карточка сайта → iPhone Air → поколение → ярусы таблицы */
@@ -9774,12 +9804,18 @@ function openInventoryModal(c){
   const regSel=document.getElementById('invRegionSel');
   const regInfo=document.getElementById('invRegionInfo');
   const showReg=()=>{ if(regInfo) regInfo.innerHTML=invRegionHintHTML(); };
-  if(pnInp) pnInp.addEventListener('input', ()=>{
-    INV.partNo=pnInp.value.trim();
-    const rc=appleModelCodeParse(INV.partNo);
-    if(rc && rc.info){ INV.region=rc.code; if(regSel) regSel.value=rc.code; showReg(); try{beep('ok');}catch(e){} }
-    else if(rc){ if(regInfo) regInfo.innerHTML='<span style="color:var(--warning);">Код прочитан, но регион «'+rc.code+'» таблице не известен — выберите страну справа</span>'; }
-  });
+  if(pnInp){
+    pnInp.addEventListener('input', ()=>{
+      INV.partNo=pnInp.value.trim();
+      const rc=appleModelCodeParse(INV.partNo);
+      if(rc && rc.info){ INV.region=rc.code; if(regSel) regSel.value=rc.code; invApplyKnownPartNo(rc); showReg(); try{beep('ok');}catch(e){} return; }
+      if(rc){ if(regInfo) regInfo.innerHTML='<span style="color:var(--warning);">Код прочитан, но регион «'+rc.code+'» таблице не известен — выберите страну справа</span>'; return; }
+      /* 187b: код вводят руками — первых 5 знаков знакомого кода достаточно, модель встаёт сразу */
+      const v=INV.partNo.toUpperCase().replace(/\s+/g,'');
+      if(/^[A-Z0-9]{5}$/.test(v) && partNoKnown(v)) invApplyKnownPartNo({prefix:v});
+    });
+    pnInp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); const im=document.getElementById('invImei'); if(im) im.focus(); } });
+  }
   if(regSel) regSel.addEventListener('change', ()=>{ INV.region=regSel.value||null; showReg(); });
   document.getElementById('invPrice').addEventListener('input', e=>{ INV.price=Math.round(parseFloat(e.target.value)||0); });
   document.getElementById('invAccTgl').addEventListener('click', ()=>{ INV.acc=!INV.acc; openInventoryModal(c); });
@@ -9788,10 +9824,11 @@ function openInventoryModal(c){
   const addUnit=(imei)=>{
     INV.model=(document.getElementById('invModel').value||'').trim();
     INV.price=Math.round(parseFloat(document.getElementById('invPrice').value)||0);
-    if(!INV.model){ toast('Сначала выберите модель','error'); return; }
     const clean=String(imei||'').trim();
-    /* чужие штрихи коробки — не юниты: код модели, EID, EAN/JAN не создают фантомов */
+    /* 187b: код коробки разбираем ДО требования модели — знакомый код сам
+       подставляет модель на пустой приёмке */
     const rc=appleModelCodeParse(clean);
+    if(!rc && !INV.model){ toast('Сначала выберите модель','error'); return; }
     if(rc){
       const el=document.getElementById('invImei'); if(el){ el.value=''; el.focus(); }
       if(rc.info){
@@ -9799,8 +9836,9 @@ function openInventoryModal(c){
         INV.partNo=clean; INV.region=rc.code;
         const pn=document.getElementById('invPartNo'); if(pn) pn.value=clean;
         const rs2=document.getElementById('invRegionSel'); if(rs2) rs2.value=rc.code;
+        const applied=invApplyKnownPartNo(rc);   /* 187: код узнаёт модель и память */
         const ri=document.getElementById('invRegionInfo'); if(ri) ri.innerHTML='<b>'+appleRegionLabel(rc.code, INV.model)+'</b> — для СЛЕДУЮЩЕЙ единицы: пикните IMEI, и регион сбросится для новой коробки';
-        toast('Регион этой коробки: '+appleRegionLabel(rc.code, INV.model)+'. Сканируйте её IMEI — флаг закрепится за этой единицей.','success');
+        if(!applied) toast('Регион этой коробки: '+appleRegionLabel(rc.code, INV.model)+'. Сканируйте её IMEI — флаг закрепится за этой единицей.','success');
         try{beep('ok');}catch(e){}
       } else {
         toast('Код модели прочитан, но регион «'+rc.code+'» таблице не известен — выберите страну в списке.','info');
@@ -9849,6 +9887,8 @@ function openInventoryModal(c){
     }
     DATA.warehouse.tech.push({imei:clean, model:INV.model, purchase:0, price:INV.price||invCatalogPrice(INV.model), status:'instock', location:loc, region:unitReg, partNo:INV.partNo||null});
     INV.session.push({model:INV.model, imei:clean, purchase:0, price:INV.price, qty:1, region:unitReg});
+    /* САМООБУЧЕНИЕ (187): связка «код коробки → модель» запоминается навсегда */
+    try{ const rcL=appleModelCodeParse(INV.partNo); if(rcL && rcL.prefix) partNoRemember(rcL.prefix, INV.model); }catch(e){}
     /* ПО-ЕДИНИЧНО (183): регион живёт ровно одну единицу — следующая коробка
        пикается своим кодом (первая 🇯🇵, следующая 🇰🇷 — под одной карточкой) */
     INV.region=null; INV.partNo='';
@@ -23006,7 +23046,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-186 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-187 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
