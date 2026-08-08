@@ -6583,7 +6583,8 @@ function pickerPanelHTML(){
   }
   if(OF.pickerMode==='custom'){
     return '<div class="card" style="margin-top:10px;"><p class="tsub" style="margin-top:0;">Позиции нет на складе — заказ создастся, а сюда автоматически сформируется заявка в разделе «Закуп».</p><div class="field-grid">'+
-      '<div class="field"><label>Название товара</label><input class="input-mini" id="ofCustomName" style="width:100%;" value="'+escAttr(OF.customName)+'"></div>'+
+      '<div class="field"><label>Название товара</label><input class="input-mini" id="ofCustomName" style="width:100%;" placeholder="Начните вводить — подскажем из каталога сайта" value="'+escAttr(OF.customName)+'"></div>'+
+      '<div id="ofCustomSug" style="grid-column:1/-1;"></div>'+
       '<div class="field"><label>Ориентировочная цена</label><input class="input-mini" id="ofCustomPrice" type="number" style="width:100%;" value="'+escAttr(OF.customPrice)+'"></div>'+
       '</div><button class="btn btn-primary btn-sm" id="ofAddCustom">'+ic('plus')+' Добавить — уйдёт в Закуп</button></div>';
   }
@@ -6605,6 +6606,8 @@ function orderFormBodyHTML(){
       '<option '+(OF.method==='Доставка'?'selected':'')+'>Доставка</option></select></div>'+
     '<div class="field"><label>Магазин</label><select class="select-mini" id="ofStore" style="width:100%;">'+
       STORES.map(s=>'<option '+(OF.store===s.shortName?'selected':'')+'>'+escHtml(s.shortName)+'</option>').join('')+'</select></div>'+
+    '<div class="field"><label>Оплата</label><select class="select-mini" id="ofPayment" style="width:100%;">'+
+      ['Наличные','Карта','QR-код','Рассрочка'].map(p=>'<option '+((OF.payment||'Наличные')===p?'selected':'')+'>'+p+'</option>').join('')+'</select></div>'+
   '</div>';
   if(OF.method==='Доставка'){
     h+='<div class="field" style="margin-bottom:10px;"><label>Курьер</label><input class="input-mini" id="ofCourier" style="width:100%;" placeholder="Например: Алексей К." value="'+escAttr(OF.courier)+'"></div>';
@@ -6674,6 +6677,29 @@ function wireOrderFormEvents(){
     const n=OF.items.filter(i2=>i2.name===model && i2.sourceType==='missing').length;
     toast('«'+model+'» под заказ: '+n+' шт — в Закуп уйдёт одна заявка на '+n+' шт','info');
   }));
+  /* подсказки из каталога сайта: клик — название + цена с сайта */
+  const ocn=root.querySelector('#ofCustomName');
+  if(ocn){
+    const sugBox=()=>root.querySelector('#ofCustomSug');
+    const showOfSug=()=>{
+      const box=sugBox(); if(!box) return;
+      const q=(ocn.value||'').toLowerCase().trim();
+      if(q.length<2){ box.innerHTML=''; return; }
+      const toks=q.split(/\s+/);
+      const hits=(DATA.siteCatalog||[]).filter(p=>{ const n=(p.name||'').toLowerCase(); return toks.every(t=>n.includes(t)); }).slice(0,8);
+      box.innerHTML=hits.map(p=>'<div class="hist-row" style="cursor:pointer;padding:7px 10px;" data-of-pick="'+escAttr(p.name)+'"><div class="h-main">'+escHtml(p.name)+'</div><div class="h-sub mono">'+(p.price!=null?rub(p.price):'цена не указана — впишите вручную')+'</div></div>').join('');
+      box.querySelectorAll('[data-of-pick]').forEach(el=>el.addEventListener('click',()=>{
+        OF.customName=el.dataset.ofPick;
+        ocn.value=OF.customName;
+        const pr=(DATA.siteCatalog||[]).find(p=>(p.name||'')===OF.customName);
+        const priceInp=root.querySelector('#ofCustomPrice');
+        if(pr && pr.price!=null && priceInp){ priceInp.value=Math.round(pr.price); OF.customPrice=String(Math.round(pr.price)); }
+        box.innerHTML='';
+        if(priceInp && !priceInp.value) priceInp.focus();
+      }));
+    };
+    ocn.addEventListener('input', showOfSug);
+  }
   const addCustomBtn=root.querySelector('#ofAddCustom');
   if(addCustomBtn) addCustomBtn.addEventListener('click', ()=>{
     const name=document.getElementById('ofCustomName').value.trim();
@@ -6702,7 +6728,7 @@ function createOrder(){
     delivery: OF.method==='Доставка' ? (OF.courier.trim()||'Курьер не назначен') : '—',
     clientComment:OF.comment.trim(), sellerComment:'',
     items:OF.items.map(it=>({name:it.name, imei:it.imei, price:it.price})),
-    discount:OF.discount.trim()||'—', promo:OF.promo.trim()||'—', payment:'—' /* способ выберут при согласовании цены */, status:'new',
+    discount:OF.discount.trim()||'—', promo:OF.promo.trim()||'—', payment:(OF.payment||'Наличные'), status:'new',
     statusHistory:[{from:null, to:'new', at:DATA.today+' '+nowTime(), by:currentEmployeeName()}], closedAt:null
   };
   /* Клиент физически в магазине: подтверждение звонком не нужно —
@@ -6895,7 +6921,9 @@ function openPriceConfirmModal(id, c){
     {label:(inStore?'Оформить':'Клиент подтвердил'), cls:'btn-primary', action:()=>{
       const agreed=Math.round(parseFloat(document.getElementById('agreedPriceInput').value));
       if(!agreed || agreed<=0){ toast('Укажите итоговую цену','error'); return; }
-      o.payment=document.getElementById('payCardBtn').classList.contains('active')?'Карта':'Наличные';
+      if(!/рассроч|qr/i.test(String(o.payment||''))){   /* рассрочка и QR выбраны при оформлении — не перетираем */
+        o.payment=document.getElementById('payCardBtn').classList.contains('active')?'Карта':'Наличные';
+      }
       confirmPriceLock(o, currentEmployeeName(), agreed);
       o.callLog[0].comment+=' Оплата: '+o.payment+'.';
       if(appliedPromo){ o.promo=appliedPromo.code; o.callLog[0].comment+=' Промокод: '+appliedPromo.code+' ('+promoValueLabel(appliedPromo)+').'; }
@@ -22537,7 +22565,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-170 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-171 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
