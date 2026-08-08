@@ -1109,7 +1109,7 @@ body.light .ld-vip{color:#8a6100;}
       <div class="hamburger" id="hamburger"></div>
       <div>
         <div class="page-title" id="pageTitle">Главная</div>
-        <div class="page-sub" id="pageSub">Store Control ERP</div>
+        <div class="page-sub" id="pageSub">ZENVOX</div>
       </div>
       <div class="store-selector" id="storeSelector" style="display:none;">
         <select class="select-mini" id="storeSelectorSelect" style="font-weight:600;min-width:180px;"></select>
@@ -2493,7 +2493,7 @@ function renderSidebar(){
   sidebar.innerHTML =
     '<div class="sidebar-brand">'+
       '<div class="brand-mark">SC</div>'+
-      '<div class="brand-text"><b>Store Control</b><span>ERP · сборка '+BUILD_TAG+'</span></div>'+
+      '<div class="brand-text"><b>ZENVOX</b><span>ERP · сборка '+BUILD_TAG+'</span></div>'+
     '</div>'+
     nav+
     '<div class="sidebar-foot">'+
@@ -2631,7 +2631,7 @@ function openMobileMoreSheet(){
             Object.keys(ROLES).filter(k=>k!=='admin').map(k=>'<option value="'+k+'" '+(k===STATE.role?'selected':'')+'>'+ROLES[k].label+'</option>').join('')+
           '</select>')+
       '<button class="btn btn-sm" id="msheetFeedback" style="width:100%;margin-top:8px;">💬 Обратная связь</button>'+
-      '<div class="tsub" style="margin-top:8px;text-align:center;">Store Control · сборка '+BUILD_TAG+'</div>'+
+      '<div class="tsub" style="margin-top:8px;text-align:center;">ZENVOX · сборка '+BUILD_TAG+'</div>'+
     '</div>'+
   '</div>';
   document.body.appendChild(ov);
@@ -2834,7 +2834,7 @@ function deviceAuthShow(saveCreds, base){
   ov.id='devAuth';
   ov.style.cssText='position:fixed;inset:0;z-index:99998;background:var(--bg-0,#0b0e14);display:flex;align-items:center;justify-content:center;padding:20px;';
   ov.innerHTML='<div style="max-width:360px;width:100%;text-align:center;">'+
-    '<div style="font-size:20px;font-weight:900;">Store Control</div>'+
+    '<div style="font-size:20px;font-weight:900;">ZENVOX</div>'+
     '<div class="tsub" style="margin:6px 0 16px;">Новый компьютер. Введите ваш PIN — система привяжет его и настроит всё сама.</div>'+
     '<input class="input-mini" id="devAuthPin" type="password" inputmode="numeric" maxlength="6" placeholder="PIN" style="width:100%;text-align:center;font-size:22px;letter-spacing:6px;">'+
     '<div id="devAuthMsg" class="tsub" style="min-height:18px;margin-top:6px;"></div>'+
@@ -2905,7 +2905,7 @@ function pinLockShow(){
   const tile=(id,name,sub)=>'<div class="card pin-tile" data-pin-user="'+id+'" style="cursor:pointer;padding:14px 16px;min-width:150px;text-align:center;">'+
     '<div style="font-weight:800;font-size:14px;">'+escHtml(name)+'</div><div class="tsub">'+escHtml(sub)+'</div></div>';
   ov.innerHTML='<div style="max-width:640px;width:100%;">'+
-    '<div style="text-align:center;margin-bottom:16px;"><div style="font-size:20px;font-weight:900;">Store Control</div><div class="tsub">Выберите себя и введите PIN · сборка '+BUILD_TAG+'</div></div>'+
+    '<div style="text-align:center;margin-bottom:16px;"><div style="font-size:20px;font-weight:900;">ZENVOX</div><div class="tsub">Выберите себя и введите PIN · сборка '+BUILD_TAG+'</div></div>'+
     '<div id="pinTiles" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">'+
       tile('owner','Владелец','полный доступ')+
       tile('admin','Админ','доступы · роли · обратная связь')+
@@ -7443,7 +7443,7 @@ function printCSS(){return '*{margin:0;padding:0;box-sizing:border-box;}'+
 '.thanks{background:#e85d26;color:#fff;text-align:center;padding:8px;border-radius:6px;margin-top:10px;font-size:11px;} .thanks b{font-size:13px;}'+
 '@media print{.noprint{display:none !important;} body{padding:10px 16px;}}';}
 function printBtn(){return '<button class="noprint" onclick="window.print()" style="position:fixed;top:12px;right:12px;padding:10px 20px;cursor:pointer;background:#e85d26;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;">Печать</button>';}
-function printHeader(title, orderId){return '<div class="hdr"><div><h1>'+title+'</h1><div class="sub">Store Control · техника · сервис · аксессуары</div></div><div class="right">№ заказа: <b>'+orderId+'</b><br>Store Control</div></div>';}
+function printHeader(title, orderId){return '<div class="hdr"><div><h1>'+title+'</h1><div class="sub">iMagnate · техника · сервис · аксессуары</div></div><div class="right">№ заказа: <b>'+orderId+'</b><br>iMagnate</div></div>';}
 
 /* БЛАНК ЗАКАЗА — по образцу iMagnate: данные клиента, таблица товаров
    с IMEI, итоги, гарантия, информация для покупателя, подписи */
@@ -7547,7 +7547,7 @@ function printWarrantyCard(id){
         '<div style="font-size:10px;margin-top:6px;">Дата: «____» _______________ 20____ г.</div></div>'+
     '</div>'+
 
-    '<div class="foot"><span>Store Control</span></div>'+
+    '<div class="foot"><span>iMagnate</span></div>'+
     '<div class="thanks"><b>БЛАГОДАРИМ ЗА ДОВЕРИЕ!</b><br>Мы всегда готовы помочь по вопросам гарантии, настройки и эксплуатации приобретённого товара.</div>'+
     '</body></html>');
   w.document.close();
@@ -7607,7 +7607,7 @@ function printUsedDeviceAct(id){
         '<div style="margin-top:8px;font-size:14px;font-weight:900;color:#e85d26;">ИТОГО К ОПЛАТЕ: '+sum.toLocaleString('ru-RU')+' ₽</div>'+
       '</div>'+
       '<div class="sec"><div class="st">6. Гарантия</div>'+
-        '<div style="font-size:12px;font-weight:700;">Гарантия Store Control — 30 дней с даты покупки.</div>'+
+        '<div style="font-size:12px;font-weight:700;">Гарантия iMagnate — 30 дней с даты покупки.</div>'+
         '<div style="font-size:10.5px;color:#666;margin-top:4px;">Подробные условия гарантии уточняйте у продавца.</div>'+
       '</div>'+
     '</div>'+
@@ -7623,7 +7623,7 @@ function printUsedDeviceAct(id){
         '<div style="font-size:10px;margin-top:6px;">Дата: «____» _______________ 20____ г.</div></div>'+
     '</div>'+
 
-    '<div class="foot"><span>Store Control</span></div>'+
+    '<div class="foot"><span>iMagnate</span></div>'+
     '<div class="thanks"><b>БЛАГОДАРИМ ЗА ДОВЕРИЕ!</b><br>Мы всегда готовы помочь по вопросам гарантии, настройки и эксплуатации приобретённого товара.</div>'+
     '</body></html>');
   w.document.close();
@@ -15549,7 +15549,7 @@ function cloudBackupRestoreFile(file){
     try{
       const j=JSON.parse(rd.result);
       const st=(j&&j.current&&j.current.state)||(j&&j.state)||((j&&j.stores)?j:null);
-      if(!(st && st.stores)){ toast('Файл не похож на бэкап Store Control','error'); return; }
+      if(!(st && st.stores)){ toast('Файл не похож на бэкап ZENVOX','error'); return; }
       const ordCnt=(((st.stores.store_lunnaya||{}).orders)||[]).length;
       openModal('📥 Восстановление из файла бэкапа','',
         '<div class="tsub" style="line-height:1.75;">Файл: <b>'+escHtml(file.name)+'</b><br>Заказов в главной точке: <b>'+ordCnt+'</b> · сохранён: '+escHtml(String(j.generatedAt||st.savedAt||'—'))+
@@ -22340,7 +22340,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-147 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-148 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -24686,8 +24686,8 @@ setInterval(async()=>{
       veil.id='bootVeil';
       veil.style.cssText='position:fixed;inset:0;z-index:100001;background:radial-gradient(1100px 700px at 50% -10%, #182142 0%, #0b0e14 60%);display:flex;align-items:center;justify-content:center;opacity:1;transition:opacity .35s;';
       veil.innerHTML='<div style="text-align:center;">'+
-        '<div style="width:58px;height:58px;margin:0 auto 14px;border-radius:17px;background:linear-gradient(135deg,#5e8bff,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:27px;font-weight:900;color:#fff;">S</div>'+
-        '<div style="font-weight:900;font-size:19px;color:#fff;">Store Control</div>'+
+        '<div style="width:58px;height:58px;margin:0 auto 14px;border-radius:17px;background:linear-gradient(135deg,#5e8bff,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:27px;font-weight:900;color:#fff;">Z</div>'+
+        '<div style="font-weight:900;font-size:19px;color:#fff;">ZENVOX</div>'+
         '<div style="color:#8b92a0;font-size:12.5px;margin-top:7px;" id="bootVeilMsg">Загружаю данные…</div>'+
         '<div style="width:160px;height:3px;margin:14px auto 0;border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden;"><div style="width:40%;height:100%;border-radius:2px;background:linear-gradient(90deg,#5e8bff,#8b5cf6);animation:bootSlide 1.1s ease-in-out infinite;"></div></div>'+
         '<style>@keyframes bootSlide{0%{transform:translateX(-100%);}100%{transform:translateX(400%);}}</style>'+
@@ -25205,8 +25205,8 @@ function pinLockShow(){
   ov.style.cssText='position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(1100px 700px at 50% -10%, #182142 0%, #0b0e14 60%);';
   ov.innerHTML='<div id="plCard" style="width:100%;max-width:380px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09);border-radius:22px;padding:32px 28px;backdrop-filter:blur(14px);box-shadow:0 24px 70px rgba(0,0,0,.55);">'+
     '<div style="text-align:center;margin-bottom:22px;">'+
-      '<div style="width:58px;height:58px;margin:0 auto 12px;border-radius:17px;background:linear-gradient(135deg,#5e8bff,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:27px;font-weight:900;color:#fff;">S</div>'+
-      '<div style="font-size:21px;font-weight:900;letter-spacing:.3px;">Store Control</div>'+
+      '<div style="width:58px;height:58px;margin:0 auto 12px;border-radius:17px;background:linear-gradient(135deg,#5e8bff,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:27px;font-weight:900;color:#fff;">Z</div>'+
+      '<div style="font-size:21px;font-weight:900;letter-spacing:.3px;">ZENVOX</div>'+
       '<div class="tsub" style="margin-top:3px;">Вход для сотрудников</div>'+
     '</div>'+
     '<div class="field" style="margin-bottom:12px;"><label>Логин</label><input class="input-mini" id="plLogin" autocomplete="off" autocapitalize="none" spellcheck="false" style="width:100%;padding:12px 14px;font-size:15px;border-radius:12px;" placeholder="ваш логин"></div>'+
