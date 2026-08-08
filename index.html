@@ -22537,7 +22537,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-168 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-170 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -24865,38 +24865,78 @@ function mergeSnapshots(base, mine){
   return base;
 }
 
-/* ФОНОВАЯ СВЕРКА С ОБЛАКОМ (29.07-57): неактивная вкладка раз в минуту
-   проверяет облако и сама подтягивает свежий снимок — копии на разных
-   компах и вкладках больше не расходятся. Активную работу не трогаем. */
-setInterval(async()=>{
+/* ЖИВАЯ СИНХРОНИЗАЦИЯ (29.07-57 → 08.08): раз в минуту (и сразу при возврате
+   фокуса) вкладка сверяется с облаком. Спящая — запоминает снимок и обновится
+   при возврате. АКТИВНАЯ — применяет чужие изменения НА ЛЕТУ, без перезагрузки,
+   но только когда безопасно: свои изменения подтверждены облаком, модал закрыт,
+   курсор не в поле ввода. Изменения со второго компа появляются сами. */
+let _livePullBusy=false;
+async function cloudLivePull(){
+  if(_livePullBusy) return;
+  _livePullBusy=true;
   try{
-    if(!document.hidden) return;                     /* работаешь — не дёргаем */
     if(document.querySelector('#modalOverlay.show')) return;
     const c=erpServerCreds(); if(!c) return;
     if(DATA && DATA.settings && DATA.settings.cloudSyncEnabled===false) return;
     const raw=localStorage.getItem(LS_FULL_KEY);
     const mineSnap=raw?(JSON.parse(raw)||{}):{};
     const mine=mineSnap.savedAtMs||0;
-    const j=await (await fetch(c.api+'/state',{headers:{'Authorization':'Bearer '+c.token}})).json();
-    if(j && j.ok && !j.empty){
-      const cid=(j.state && j.state._baseId)||null;
-      const mineId=(typeof erpBaseIdGet==='function'?erpBaseIdGet():null);
-      const foreign = window._demoBorn || (cid && (!mineId || cid!==mineId));
-      if((j.savedAtMs||0)>mine+2000 || foreign){
-        whStashLostUnits(j.state);
-        const applied=(mineSnap.stores && !mineSnap._demoBorn)? mergeSnapshots(j.state, mineSnap) : j.state;
-        try{ erpBaseIdAdopt(applied); }catch(e){}
-        try{ sessionStorage.setItem('erp_pull_info', JSON.stringify({by:j.savedBy||'', atMs:j.savedAtMs||0, merged:window._mergeAdded||0})); }catch(e){}
-        try{ localStorage.setItem(LS_FULL_KEY, JSON.stringify(applied)); }catch(e){}
-        /* ФИКС 08.08: НЕ перезагружаем спящую вкладку — браузер душит её таймеры,
-           и страница зависает тёмным экраном. Помечаем; перезагрузимся при
-           возврате пользователя на вкладку (см. обработчик видимости ниже). */
-        window._pendingCloudReload=true;
-        console.log(foreign?'Фоновая сверка: в облаке главная база — приму её при возврате на вкладку':'Фоновая сверка: в облаке свежее — обновлюсь при возврате на вкладку');
-      }
+    /* лёгкий опрос: только отметка времени (~100 байт). Полный снимок — лишь
+       когда облако реально свежее. Старый сервер (без meta) вернёт сразу полный
+       снимок — обрабатываем оба варианта. */
+    const m=await (await fetch(c.api+'/state?meta=1',{headers:{'Authorization':'Bearer '+c.token}})).json();
+    if(!(m && m.ok && !m.empty)) return;
+    const mineId0=(typeof erpBaseIdGet==='function'?erpBaseIdGet():null);
+    const metaForeign = window._demoBorn || (m.baseId && (!mineId0 || m.baseId!==mineId0));
+    if(!((m.savedAtMs||0)>mine+2000 || metaForeign)) return;   /* облако не свежее — вышли, потратив 100 байт */
+    const j=m.state ? m : await (await fetch(c.api+'/state',{headers:{'Authorization':'Bearer '+c.token}})).json();
+    if(!(j && j.ok && !j.empty)) return;
+    const cid=(j.state && j.state._baseId)||null;
+    const mineId=(typeof erpBaseIdGet==='function'?erpBaseIdGet():null);
+    const foreign = window._demoBorn || (cid && (!mineId || cid!==mineId));
+    if(!((j.savedAtMs||0)>mine+2000 || foreign)) return;
+    whStashLostUnits(j.state);
+    const applied=(mineSnap.stores && !mineSnap._demoBorn)? mergeSnapshots(j.state, mineSnap) : j.state;
+    try{ erpBaseIdAdopt(applied); }catch(e){}
+    try{ localStorage.setItem(LS_FULL_KEY, JSON.stringify(applied)); }catch(e){}
+    if(document.hidden){
+      /* спящая вкладка: перезагрузимся при возврате (браузер душит таймеры) */
+      try{ sessionStorage.setItem('erp_pull_info', JSON.stringify({by:j.savedBy||'', atMs:j.savedAtMs||0, merged:window._mergeAdded||0})); }catch(e){}
+      window._pendingCloudReload=true;
+      console.log('Фоновая сверка: в облаке свежее — обновлюсь при возврате на вкладку');
+      return;
     }
+    /* АКТИВНАЯ вкладка: применяем на лету, если это не выдернет работу из рук */
+    if(window._cloudDirty){ return; }   /* свои изменения ещё в полёте — не мешаем */
+    const ae=document.activeElement;
+    if(ae && /INPUT|TEXTAREA|SELECT/.test(ae.tagName||'')){ return; }   /* человек печатает */
+    const keep={page:STATE.page, ordersFilter:STATE.ordersFilter, crmView:STATE.crmView, crmTab:STATE.crmTab,
+                whTab:STATE.whFilters&&STATE.whFilters.tab, svcFilter:STATE.svcFilter, storeId:STATE.activeStoreId};
+    try{ fullLoad(); }catch(e){}
+    /* остаёмся там же, где работали — раздел не прыгает за другим компом */
+    try{
+      if(keep.storeId && STORE_DATA[keep.storeId]){ STATE.activeStoreId=keep.storeId; DATA=STORE_DATA[keep.storeId]; }
+      if(keep.page) STATE.page=keep.page;
+      if(keep.ordersFilter) STATE.ordersFilter=keep.ordersFilter;
+      if(keep.crmView) STATE.crmView=keep.crmView;
+      if(keep.crmTab) STATE.crmTab=keep.crmTab;
+      if(keep.whTab && STATE.whFilters) STATE.whFilters.tab=keep.whTab;
+      if(keep.svcFilter) STATE.svcFilter=keep.svcFilter;
+    }catch(e){}
+    try{ updateStoreSelector(); }catch(e){}
+    try{ if(typeof renderSidebar==='function') renderSidebar(); }catch(e){}
+    try{ if(typeof renderPage==='function') renderPage(); }catch(e){}
+    try{ toast('⟳ Обновлено: изменения с другого устройства'+(j.savedBy?(' ('+j.savedBy+')'):''),'info'); }catch(e){}
+    console.log('Живая сверка: применены изменения с другого устройства без перезагрузки');
   }catch(e){}
-}, 60000);
+  finally{ _livePullBusy=false; }
+}
+setInterval(cloudLivePull, 10000);   /* лёгкий опрос каждые 10 секунд */
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && !window._pendingCloudReload){
+    setTimeout(()=>{ try{ cloudLivePull(); }catch(e){} }, 800);   /* вернулся на вкладку — сразу свериться */
+  }
+});
 
 (async function initialStatePull(){
   /* ПЛАВНЫЙ СТАРТ (29.07-51): пока сверяем снимки (браузер / локальный сервер /

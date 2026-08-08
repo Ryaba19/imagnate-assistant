@@ -1753,6 +1753,16 @@ const server = http.createServer((req, res) => {
   /* ---- Облачная база ERP: отдать снимок (по токену) ---- */
   if (req.method === 'GET' && url.pathname === '/api/state') {
     if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    if (url.searchParams.get('meta')) {
+      /* лёгкий опрос для живой синхронизации: только отметка, без тела базы */
+      return (async () => {
+        try {
+          const cur = await stateLoad();
+          if (!cur) return sendJson(res, 200, { ok: true, empty: true });
+          sendJson(res, 200, { ok: true, empty: false, savedAtMs: cur.savedAtMs || 0, savedBy: cur.savedBy || '', baseId: (cur.state && cur.state._baseId) || null });
+        } catch (e) { sendJson(res, 500, { error: e.message }); }
+      })();
+    }
     (async () => {
       try {
         const cur = await stateLoad();
