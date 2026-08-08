@@ -1633,6 +1633,8 @@ const server = http.createServer((req, res) => {
           CLEAR.forEach(function (k) { if (Array.isArray(d[k])) d[k] = []; });
           /* флаги разовых догрузок — сбросить, чтобы пустая база наполнилась заново */
           delete d._backfill46; delete d._siteStatusCheckedAt; delete d._fullHistoryDone; delete d._ignoreSweep1;
+          /* каналы: словарь виденных и курсоры — тоже с нуля, чтобы воронка воссоздалась */
+          delete d.chSeen; d.chCursorMs = 0; d.siteLastLeadId = 0;
           d.warehouse = { tech: [], tradein: [], accessories: [], parts: [] };
           if (d.assets) {
             (d.assets.cashByStore || []).forEach(function (x) { x.amount = 0; });
