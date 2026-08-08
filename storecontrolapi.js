@@ -98,7 +98,13 @@ async function dbInit() {
     ' name TEXT, contact TEXT, item TEXT, text_ TEXT,' +
     ' ts_ms BIGINT, created_at TIMESTAMPTZ NOT NULL DEFAULT now())'
   );
-  console.log('PostgreSQL подключена — заявки в site_leads, облачная база ERP в erp_state, каналы в channel_msgs');
+  await pool.query(
+    'CREATE TABLE IF NOT EXISTS erp_journal (' +
+    ' store TEXT, entity TEXT, jkey TEXT, data JSONB,' +
+    ' updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),' +
+    ' PRIMARY KEY (store, entity, jkey))'
+  );
+  console.log('PostgreSQL подключена — заявки в site_leads, облачная база ERP в erp_state, журнал сущностей в erp_journal, каналы в channel_msgs');
 }
 
 /* Облачная копия базы ERP (файловый запасной режим, если нет PostgreSQL) */
@@ -158,6 +164,41 @@ function mergeUnion(primary, secondary) {
   } catch (e) { return primary || secondary; }
 }
 
+/* Д3: паспорт боевой базы (когда база помечена боевой). */
+let _prodBase = undefined;
+async function prodBase() {
+  if (_prodBase === undefined) { try { const v = await kvGet('erp_production_base'); _prodBase = v || null; } catch (e) { _prodBase = null; } }
+  return _prodBase;
+}
+/* Д1: раскладка сущностей снимка в несбиваемый пораздельный реестр (upsert по ключу). */
+async function journalUpsert(state) {
+  if (!pool || !state || !state.stores) return 0;
+  const norm = x => String(x == null ? '' : x).replace(/[^0-9]/g, '');
+  const rows = [];
+  for (const sid of Object.keys(state.stores)) {
+    const d = state.stores[sid] || {};
+    (d.orders || []).forEach(o => { if (o) rows.push([sid, 'order', String(o.externalId || ('oid_' + o.id)), o]); });
+    const wh = d.warehouse || {};
+    ['tech', 'tradein', 'accessories', 'parts'].forEach(tab => {
+      (wh[tab] || []).forEach(u => {
+        const k = (tab === 'tech' || tab === 'tradein') ? (u && u.imei && ('u_' + u.imei)) : (u && (u.sku || u.model) && ('sku_' + (u.sku || u.model)));
+        if (k) rows.push([sid, 'unit_' + tab, k, u]);
+      });
+    });
+    (d.cashOps || []).forEach(op => { if (op) rows.push([sid, 'cashop', 'c_' + (op.id != null ? op.id : (op.date + '_' + op.time + '_' + op.amount)), op]); });
+    (d.customers || []).forEach(cu => { const p = norm((cu && cu.phones && cu.phones[0]) || ''); if (p.length >= 10) rows.push([sid, 'customer', 'ph_' + p, cu]); });
+    (d.service || []).forEach(t => { if (t) rows.push([sid, 'repair', String(t.externalId || ('r_' + t.id)), t]); });
+  }
+  if (!rows.length) return 0;
+  for (let i = 0; i < rows.length; i += 200) {
+    const chunk = rows.slice(i, i + 200);
+    const vals = [], params = []; let p = 1;
+    chunk.forEach(r => { vals.push('($' + (p++) + ',$' + (p++) + ',$' + (p++) + ',$' + (p++) + ',now())'); params.push(r[0], r[1], r[2], JSON.stringify(r[3])); });
+    await pool.query('INSERT INTO erp_journal (store,entity,jkey,data,updated_at) VALUES ' + vals.join(',') +
+      ' ON CONFLICT (store,entity,jkey) DO UPDATE SET data=EXCLUDED.data, updated_at=now()', params);
+  }
+  return rows.length;
+}
 async function stateSave(obj) {
   if (pool) {
     await pool.query(
@@ -170,6 +211,7 @@ async function stateSave(obj) {
     if (!h.rows.length || (Date.now() - new Date(h.rows[0].created_at).getTime()) > 30 * 60 * 1000) {
       await pool.query('INSERT INTO erp_state_history (saved_at_ms, state) VALUES ($1,$2)', [obj.savedAtMs, obj.state]);
       await pool.query('DELETE FROM erp_state_history WHERE id NOT IN (SELECT id FROM erp_state_history ORDER BY id DESC LIMIT 20)');
+      try { const n = await journalUpsert(obj.state); if (n) console.log('[журнал] сущностей обновлено: ' + n); } catch (e) { console.error('[журнал]', e.message); }
     }
   } else {
     fs.writeFileSync(STATE_FILE, JSON.stringify(obj));
@@ -451,6 +493,7 @@ const CH_ENV_NAMES = {
   telegram: ['TELEGRAM_BOT_TOKEN'],
   vk: ['VK_GROUP_TOKEN'],
   max: ['MAX_BOT_TOKEN'],
+  whatsapp: ['WHATSAPP_SEND_URL'],
 };
 
 /* --- ключ-значение (курсоры опроса) --- */
@@ -799,7 +842,18 @@ async function channelsPollAll(deep) {
     }
   }
 }
-const CH_SENDSET = { avito: avitoSend, telegram: tgSendSet, vk: vkSendSet, max: maxSendSet };
+/* Отправка ответа в WhatsApp: POST на настраиваемый адрес источника
+   (провайдер Wazzup/Radist или мост). Формат минимальный: {to, text}. */
+async function waSend(set, chatId, text) {
+  const urlSend = set.env.WHATSAPP_SEND_URL;
+  if (!urlSend) throw new Error('WHATSAPP_SEND_URL не задан');
+  const headers = { 'Content-Type': 'application/json' };
+  if (set.env.WHATSAPP_TOKEN) headers['Authorization'] = 'Bearer ' + set.env.WHATSAPP_TOKEN;
+  const r = await fetch(urlSend, { method: 'POST', headers, body: JSON.stringify({ to: chatId, text: text }) });
+  if (!r.ok) throw new Error('WhatsApp send HTTP ' + r.status);
+  return true;
+}
+const CH_SENDSET = { avito: avitoSend, telegram: tgSendSet, vk: vkSendSet, max: maxSendSet, whatsapp: waSend };
 
 /* ---------- ПОЛНЫЙ ИМПОРТ ПЕРЕПИСКИ АВИТО (фоновая задача) ----------
    Постранично обходит ВСЕ чаты и ВСЮ глубину истории каждого чата,
@@ -1533,6 +1587,97 @@ const server = http.createServer((req, res) => {
   }
 
   /* ---- История облачной базы: список снимков со сводкой (по токену) ---- */
+  /* ---- Д3: боевой режим (вкл/выкл/статус) ---- */
+  if (req.method === 'POST' && url.pathname === '/api/state-production') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return readBody(req, async b => {
+      try {
+        if (b.off === true) { await kvSet('erp_production_base', ''); _prodBase = null; console.log('[боевой режим] выключен'); return sendJson(res, 200, { ok: true, production: false }); }
+        const cur = await stateLoad();
+        if (!cur || !cur.state) return sendJson(res, 400, { error: 'База пуста — сначала загрузите боевые данные' });
+        if (cur.state._demoBorn) return sendJson(res, 400, { error: 'Текущая база помечена как демо — боевой режим нельзя включить на демо-данных' });
+        const bid = cur.state._baseId;
+        if (!bid) return sendJson(res, 400, { error: 'У базы нет паспорта (_baseId) — сохраните базу актуальным клиентом и повторите' });
+        await kvSet('erp_production_base', String(bid)); _prodBase = String(bid);
+        console.log('[боевой режим] включён, паспорт базы: ' + bid);
+        sendJson(res, 200, { ok: true, production: true, baseId: bid });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    });
+  }
+  if (req.method === 'GET' && url.pathname === '/api/state-production') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    (async () => { try { const pb = await prodBase(); sendJson(res, 200, { ok: true, production: !!pb, baseId: pb || null }); } catch (e) { sendJson(res, 500, { error: e.message }); } })();
+    return;
+  }
+  /* ---- Д4: боевой запуск — авторитетная очистка демо-контента + сброс журнала ---- */
+  if (req.method === 'POST' && url.pathname === '/api/state-wipe') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return readBody(req, async () => {
+      try {
+        const cur = await stateLoad();
+        if (!cur || !cur.state) return sendJson(res, 200, { ok: true, note: 'база пуста' });
+        const st = cur.state;
+        const CLEAR = ['orders','service','leads','customers','cashOps','salesLog','financeOps','purchaseRequests','shipments','tradeinBonuses','serviceHandoffs','expenseClaims','fines','explanations','shiftSwaps','timeOffRequests'];
+        Object.keys(st.stores || {}).forEach(function (sid) {
+          const d = st.stores[sid]; if (!d) return;
+          CLEAR.forEach(function (k) { if (Array.isArray(d[k])) d[k] = []; });
+          d.warehouse = { tech: [], tradein: [], accessories: [], parts: [] };
+          if (d.assets) {
+            (d.assets.cashByStore || []).forEach(function (x) { x.amount = 0; });
+            d.assets.cashless = 0; d.assets.cashlessPending = 0; d.assets.storeWarehouse = 0;
+            if (d.assets.collection) { d.assets.collection.cash = 0; d.assets.collection.goods = 0; }
+          }
+          if (d.finance) { try { d.finance.turnover.total = 0; d.finance.revenue.total = 0; } catch (e) {} }
+          d.siteLastZakazId = null; d.siteLastRemontId = null;
+        });
+        st._demoBorn = false;
+        if (!st._baseId) st._baseId = 'base_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+        const now = Date.now();
+        await stateSave({ savedAtMs: now, savedBy: 'боевой запуск (очистка демо)', state: st });
+        if (pool) { try { await pool.query('DELETE FROM erp_journal'); } catch (e) {} }
+        console.log('[боевой запуск] контент очищен, журнал сброшен, паспорт: ' + st._baseId);
+        sendJson(res, 200, { ok: true, savedAtMs: now, baseId: st._baseId });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    });
+  }
+  /* ---- Журнал сущностей: счётчики (проверка Д1) ---- */
+  if (req.method === 'GET' && url.pathname === '/api/state-journal') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    (async () => {
+      try {
+        if (!pool) return sendJson(res, 200, { ok: true, items: [], hint: 'Журнал доступен только с PostgreSQL' });
+        const r = await pool.query('SELECT store, entity, count(*)::int AS n, max(updated_at) AS updated FROM erp_journal GROUP BY store, entity ORDER BY store, entity');
+        sendJson(res, 200, { ok: true, items: r.rows });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    })();
+    return;
+  }
+  /* ---- Д2: восстановление снимка из журнала (union в текущую базу, ничего не теряем) ---- */
+  if (req.method === 'POST' && url.pathname === '/api/state-rebuild') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return readBody(req, async () => {
+      try {
+        if (!pool) return sendJson(res, 400, { error: 'Восстановление доступно только с PostgreSQL' });
+        const r = await pool.query('SELECT store, entity, data FROM erp_journal');
+        const stores = {};
+        const ensure = sid => (stores[sid] = stores[sid] || { orders: [], customers: [], cashOps: [], service: [], warehouse: { tech: [], tradein: [], accessories: [], parts: [] } });
+        r.rows.forEach(row => {
+          const d = ensure(row.store), o = row.data;
+          if (row.entity === 'order') d.orders.push(o);
+          else if (row.entity === 'customer') d.customers.push(o);
+          else if (row.entity === 'cashop') d.cashOps.push(o);
+          else if (row.entity === 'repair') d.service.push(o);
+          else if (row.entity.indexOf('unit_') === 0) { const tab = row.entity.slice(5); (d.warehouse[tab] = d.warehouse[tab] || []).push(o); }
+        });
+        const rebuilt = { stores: stores };
+        const cur = await stateLoad();
+        const merged = (cur && cur.state) ? mergeUnion(cur.state, rebuilt) : rebuilt;
+        const now = Date.now();
+        await stateSave({ savedAtMs: now, savedBy: 'восстановление из журнала', state: merged });
+        sendJson(res, 200, { ok: true, stores: Object.keys(stores).length, rows: r.rows.length, savedAtMs: now });
+      } catch (e) { sendJson(res, 500, { error: e.message }); }
+    });
+  }
   if (req.method === 'GET' && url.pathname === '/api/state-history') {
     if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
     (async () => {
@@ -1614,6 +1759,13 @@ const server = http.createServer((req, res) => {
         const curState = cur && cur.state;
         const curDemo = !!(curState && curState._demoBorn);
         const incDemo = !!(b.state && b.state._demoBorn);
+        /* Д3: боевой режим — глушим демо и чужой/без паспорта, даже если база пуста */
+        const pb = await prodBase();
+        if (pb) {
+          const iB = b.state && b.state._baseId;
+          if (incDemo) { console.warn('[боевой режим] отклонён демо-снимок'); return sendJson(res, 200, { ok: true, ignored: 'production-no-demo', savedAtMs: cur ? cur.savedAtMs : 0 }); }
+          if (!iB || iB !== pb) { console.warn('[боевой режим] отклонён снимок без/с чужим паспортом'); return sendJson(res, 200, { ok: true, ignored: 'production-foreign-base', savedAtMs: cur ? cur.savedAtMs : 0 }); }
+        }
         /* демо-снимок НИКОГДА не перезаписывает реальную базу */
         if (incDemo && curState && !curDemo) {
           console.warn('[облачная база] отклонён демо-снимок поверх реальной базы');
@@ -1774,6 +1926,40 @@ const server = http.createServer((req, res) => {
   }
 
   /* ---- Каналы воронки: ответ клиенту в его канал (по токену) ---- */
+  /* ---- WhatsApp: проверка вебхука (Meta) ---- */
+  if (req.method === 'GET' && url.pathname === '/api/hooks/whatsapp') {
+    const ch = url.searchParams.get('hub.challenge');
+    if (ch) { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end(ch); }
+    return sendJson(res, 200, { ok: true, ready: true, hint: 'POST сюда сообщения WhatsApp: {from, name, text}' });
+  }
+  /* ---- WhatsApp: приём сообщений (универсально) ----
+     Любой источник (провайдер/мост) POST-ит сюда. Понимаем разные формы:
+     {from|phone|chatId, name, text|message}, а также {messages:[...]}. */
+  if (req.method === 'POST' && url.pathname === '/api/hooks/whatsapp') {
+    return readBody(req, async b => {
+      try {
+        const list = Array.isArray(b.messages) ? b.messages : (Array.isArray(b) ? b : [b]);
+        let saved = 0;
+        for (const m of list) {
+          if (!m || typeof m !== 'object') continue;
+          const from = String(m.from || m.phone || m.chatId || m.chat_id || m.sender || m.author || '').replace(/[^0-9]/g, '');
+          const text = String(m.text || m.message || m.body || (m.content && (m.content.text || m.content.body)) || '').trim();
+          if (!from || !text) continue;
+          const dir = (m.dir === 'out' || m.direction === 'out' || m.fromMe === true || m.outgoing === true) ? 'out' : 'in';
+          const name = String(m.name || m.senderName || m.pushName || m.contactName || '').slice(0, 80);
+          const id = String(m.id || m.messageId || m.msgId || (from + '_' + (m.timestamp || m.tsMs || Date.now())));
+          const ok = await chStore({
+            key: 'wa_' + id, store: String(m.store || '') || DEFAULT_STORE, channel: 'whatsapp',
+            chatId: from, dir, name: dir === 'in' ? (name || 'Клиент WhatsApp') : '', contact: from, item: '',
+            text: text.slice(0, 2000), tsMs: Number(m.tsMs || m.timestamp) || Date.now()
+          });
+          if (ok) saved++;
+        }
+        console.log('[whatsapp] принято сообщений: ' + saved);
+        sendJson(res, 200, { ok: true, saved });
+      } catch (e) { sendJson(res, 500, { error: String(e.message || e).slice(0, 200) }); }
+    });
+  }
   if (req.method === 'POST' && url.pathname === '/api/channels/reply') {
     if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
     return readBody(req, async b => {

@@ -1011,7 +1011,6 @@ body.light .ld-vip{color:#8a6100;}
 .mdash-num span{font-size:9.5px;color:var(--text-3);line-height:1.15;display:block;margin-top:2px;}
 </style>
 <style id="zenvox-css">
-
 /* ===== SC2: стили слоя 2.0 (Конструктор сети / Доступ) ===== */
 .sc2-chip{display:inline-block;border-radius:999px;padding:3px 11px;font-size:12px;margin:2px 4px 2px 0;cursor:pointer;user-select:none;border:1px solid rgba(139,146,160,.45);color:#8b92a0;background:transparent}
 .sc2-chip.on{background:rgba(52,199,123,.16);border-color:#34c77b;color:#34c77b;font-weight:600}
@@ -1054,6 +1053,50 @@ body.light .ld-vip{color:#8a6100;}
 .zv-code{font-family:ui-monospace,Menlo,monospace;letter-spacing:.5em;text-align:center;font-size:19px;caret-color:transparent}
 .zv-mail{margin-top:12px;padding:12px 14px;border-radius:12px;background:rgba(155,109,255,.07);border:1px solid rgba(155,109,255,.22);color:#dfe3ec;font-size:12.5px;line-height:1.5;white-space:pre-wrap;text-align:left}
 
+/* ── SC9: стили нового экрана «Управление сетью» ── */
+.sc2v2-count{font-weight:400;color:#8b92a0;font-size:13px;margin-left:6px}
+.sc2v2-kpi{background:rgba(139,146,160,.07);border:1px solid rgba(139,146,160,.2);border-radius:14px;padding:14px 18px;min-width:120px;display:flex;flex-direction:column;gap:4px}
+.sc2v2-kpi .k{font-size:22px;font-weight:700;color:#e8eaf0}
+.sc2v2-kpi .l{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#8b92a0}
+.sc2v2-sec-title{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#8b92a0;margin:22px 0 12px;font-weight:600}
+.sc2v2-list{display:flex;flex-direction:column;gap:8px}
+.sc2v2-card{border:1px solid rgba(139,146,160,.2);border-radius:14px;overflow:hidden;background:rgba(139,146,160,.04)}
+.sc2v2-card.open{border-color:rgba(52,199,123,.45)}
+.sc2v2-head{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;user-select:none}
+.sc2v2-head:hover{background:rgba(139,146,160,.06)}
+.sc2v2-caret{color:#8b92a0;font-size:12px;width:14px}
+.sc2v2-namewrap{flex:1;min-width:0}
+.sc2v2-name{font-weight:600;font-size:15px}
+.sc2v2-addr{font-size:12px;color:#8b92a0;margin-top:2px}
+.sc2v2-search{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.sc2v2-search .sc2-inp{flex:1;min-width:0}
+.sc2v2-tag{font-size:10px;background:rgba(155,109,255,.16);color:#9b6dff;border-radius:6px;padding:2px 7px;font-weight:600;vertical-align:middle}
+.sc2v2-mini{font-size:12px;color:#8b92a0}
+.sc2v2-body{padding:4px 16px 16px;border-top:1px solid rgba(139,146,160,.14)}
+.sc2v2-row{padding:8px 0;font-size:13px}
+.sc2v2-mini-kpi{display:flex;flex-wrap:wrap;gap:14px;padding:8px 0;font-size:13px;color:#b8bec9}
+.sc2v2-mini-kpi b{color:#e8eaf0}
+.sc2v2-subtitle{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#8b92a0;margin:14px 0 6px;font-weight:600}
+.sc2v2-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.sc2v2-tbl th{font-size:10px;text-transform:uppercase;color:#8b92a0;text-align:left;padding:6px 8px;border-bottom:1px solid rgba(139,146,160,.2)}
+.sc2v2-tbl td{padding:6px 8px;border-bottom:1px solid rgba(139,146,160,.12)}
+.sc2v2-emps{display:flex;flex-wrap:wrap;gap:6px}
+.sc2v2-emp{font-size:12px;background:rgba(139,146,160,.1);border-radius:8px;padding:4px 10px}
+.sc2v2-emp i{color:#8b92a0;font-style:normal;font-size:11px}
+.sc2v2-decl{display:flex;flex-direction:column;gap:5px}
+.sc2v2-declrow{font-size:12.5px;background:rgba(192,57,43,.08);border-left:2px solid rgba(192,57,43,.5);border-radius:6px;padding:6px 10px;color:#d8b0ac}
+.sc2v2-actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.sc2v2-danger{border-color:rgba(192,57,43,.5)!important;color:#e86a5c!important}
+.sc2v2-danger:hover{background:rgba(192,57,43,.14)!important}
+.sc2v2-create{display:flex;gap:14px;flex-wrap:wrap}
+.sc2v2-cbox{flex:1;min-width:280px;border:1px solid rgba(139,146,160,.2);border-radius:14px;padding:16px;background:rgba(139,146,160,.04)}
+.sc2v2-inline{display:flex;gap:8px;flex-wrap:wrap}
+.sc2v2-owners{display:flex;flex-direction:column;gap:6px}
+.sc2v2-ownrow{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid rgba(139,146,160,.16);border-radius:12px;padding:10px 14px;background:rgba(139,146,160,.04)}
+.sc2v2-muted{color:#8b92a0}
+.sc2v2-locktag{font-size:10px;background:rgba(192,57,43,.16);color:#e86a5c;border-radius:6px;padding:2px 8px;font-weight:600;margin-left:8px}
+.sc2v2-ok{border-color:rgba(52,199,123,.5)!important;color:#34c77b!important}
+.sc2v2-ok:hover{background:rgba(52,199,123,.14)!important}
 </style>
 </head>
 <body>
@@ -1074,6 +1117,7 @@ body.light .ld-vip{color:#8a6100;}
       <div class="topbar-icon-btn" id="searchBtn" title="Поиск по всему: телефон, имя, IMEI, № заказа (Ctrl+K)" style="display:flex;align-items:center;justify-content:center;font-size:15px;">🔍</div>
       <div class="topbar-icon-btn" id="tourBtn" title="Как работать с системой — короткий тур" style="display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;">?</div>
       <div id="demoBadge" style="display:none;align-items:center;gap:6px;padding:4px 10px;border-radius:8px;background:rgba(245,158,11,.15);color:#f59e0b;font-size:12px;font-weight:800;white-space:nowrap;cursor:help;"></div>
+      <div id="cloudBadge" style="display:none;align-items:center;gap:5px;padding:4px 9px;border-radius:8px;font-size:11.5px;font-weight:800;white-space:nowrap;cursor:help;"></div>
       <div class="topbar-spacer"></div>
       <div class="topbar-icon-btn" id="themeBtn" title="Светлая / тёмная тема"></div>
       <div class="topbar-icon-btn" id="bellBtn"><span class="dot-badge"></span></div>
@@ -1159,7 +1203,7 @@ function wave(base,amp,len,seed=0,trend=0){
 }
 
 let DATA = {
-  settings:{ prepLeadDays:1, exportBatchMax:50, monthlyReviewLeadDays:2, teamJoinHours:24, crmWaitHours:12, crmMaxActive:5, cardFeePct:14 },
+  settings:{ prepLeadDays:1, exportBatchMax:50, monthlyReviewLeadDays:2, teamJoinHours:24, crmWaitHours:12, crmMaxActive:5, cardFeePct:0 },
   stores:['Магазин «Центральный»','Магазин «Северный»'],
   assets:{
     cashByStore:[
@@ -1914,8 +1958,8 @@ const ROLES = {
   director:{label:'Директор — Лунная 4', short:'Д1', homeStoreId:'store_lunnaya', menu:['dashboard','crm','orders','service','warehouse','purchase','customers','pricing','finance','accounting','expenses','analytics','tasks','team','manage','connections','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:true, canConfirmPurchase:true, canPriceCollection:true},
   director2:{label:'Директор — Каширское ш. 8', short:'Д2', homeStoreId:'store_kashirka', menu:['dashboard','crm','orders','service','warehouse','purchase','customers','pricing','finance','accounting','expenses','analytics','tasks','team','manage','connections','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:true, canConfirmPurchase:true, canPriceCollection:true},
   admin:{label:'Админ', short:'АД', menu:['dashboard','connections','orders','manage','team','tasks','docs'], seePurchase:false, seeProfit:false, warehouseTabs:[], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
-  senior:{label:'Старший менеджер', short:'СМ', menu:['dashboard','crm','orders','service','warehouse','purchase','pricing','finance','expenses','analytics','tasks','team','manage','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:false, canConfirmPurchase:true, canPriceCollection:true},
-  seller:{label:'Менеджер', short:'МН', menu:['dashboard','crm','orders','service','warehouse','finance','expenses','tasks','team','docs'], seePurchase:false, seeProfit:false, warehouseTabs:['tech','tradein','accessories','parts'], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
+  senior:{label:'Старший менеджер', short:'СМ', menu:['dashboard','crm','orders','warehouse','purchase','pricing','finance','expenses','analytics','tasks','team','manage','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories'], canApproveExpenses:false, canConfirmPurchase:true, canPriceCollection:true},
+  seller:{label:'Менеджер', short:'МН', menu:['dashboard','crm','orders','warehouse','finance','expenses','tasks','team','docs'], seePurchase:false, seeProfit:false, warehouseTabs:['tech','tradein','accessories'], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
   master:{label:'Мастер', short:'МС', menu:['dashboard','service','warehouse','expenses','tasks','team','docs'], seePurchase:false, seeProfit:false, warehouseTabs:['parts'], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
   courier:{label:'Курьер (штатный)', short:'КУ', menu:['dashboard','deliveries','analytics','docs'], seePurchase:false, seeProfit:false, warehouseTabs:[], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
   collector:{label:'Сборщик', short:'СБ', menu:['dashboard','purchase','team','docs'], seePurchase:true, seeProfit:false, warehouseTabs:[], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:true},
@@ -2051,7 +2095,7 @@ function createEmptyStoreData(storeName){
   return {
     storeName:storeName||'Новый магазин',
     today:new Date().toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'}),
-    settings:{prepLeadDays:1, exportBatchMax:50, monthlyReviewLeadDays:2, teamJoinHours:24, crmWaitHours:12, crmMaxActive:5, cardFeePct:14},
+    settings:{prepLeadDays:1, exportBatchMax:50, monthlyReviewLeadDays:2, teamJoinHours:24, crmWaitHours:12, crmMaxActive:5, cardFeePct:0},
     assets:{cashByStore:[{store:storeName||'Касса',amount:0}], cashless:0, cashlessPending:0, cashlessSettleNote:'', collection:{cash:0,goods:0}, storeWarehouse:0},
     attention:{forOrders:[], restock:[], parts:[]},
     finance:{
@@ -4996,6 +5040,7 @@ function openStaleReviewModal(c){
     const o=findOrder(id);
     if(!o) return;
     setOrderStatus(o,'cancel');
+    o.cancelReason='Клиент не забрал заказ (разбор незакрытых)';
     (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'note', comment:'Разбор незакрытых: клиент не забрал — заказ отменён'});
     try{ releaseOrderItems(o); }catch(e){}
     toast('Заказ №'+id+' отменён', 'info');
@@ -5061,9 +5106,10 @@ function renderOrders(c){
   '</div><div class="topbar-spacer"></div>'+
   (isBossRole()?'<button class="btn btn-sm" id="mailSettingsBtn" title="Настройки клиентских рассылок: подтверждение заказа и оценка после выдачи">✉ Рассылки</button>':'')+
   (isBossRole()?'<button class="btn btn-sm" id="reviewsBtn" title="Оценки клиентов по звёздам из писем: кто доволен, кто нет, ответить клиенту">⭐ Оценки</button>':'')+
+  (isBossRole()?'<button class="btn btn-sm" id="cancelReasonsBtn" title="Почему клиенты отказываются: причины всех отменённых заказов">🚫 Причины отказов</button>':'')+
   ((isBossRole()||STATE.role==='senior')?'<button class="btn btn-sm" id="ordersArchiveBtn" title="Архив выданных заказов — только владелец и управляющий">'+ic('box')+' Архив'+(DATA.orders.some(o=>o.archived)?' ('+DATA.orders.filter(o=>o.archived).length+')':'')+'</button>':'')+
   ((isBossRole()||STATE.role==='admin')?'<button class="btn btn-sm" id="orderSettingsBtn" title="Настройки заказов">'+ic('gear')+'</button>':'')+
-  (getStoreExcludedPages().includes('service')?'':'<button class="btn" id="newRepairBtn">🔧 Заявка на ремонт</button>')+
+  ((!getStoreExcludedPages().includes('service') && (isBossRole()||STATE.role==='senior'||STATE.role==='seller'))?'<button class="btn" id="newRepairBtn">🔧 Принять в ремонт</button>':'')+
     '<button class="btn btn-primary" id="newOrderBtn">'+ic('plus')+' Создать заказ</button></div>';
 
   /* Что требует звонка прямо сейчас */
@@ -5191,14 +5237,16 @@ function renderOrders(c){
   document.getElementById('newOrderBtn').addEventListener('click', openNewOrderModal);
   const nrB=document.getElementById('newRepairBtn');
   if(nrB) nrB.addEventListener('click', ()=>{
-    /* приём в ремонт из Заказов: переходим в Сервис и открываем форму приёма */
-    STATE.page='service'; renderPage();
+    /* приём в ремонт: мастер/владелец идут в Сервис; менеджер — только форма приёмки */
+    if(STATE.role==='master'||isBossRole()){ STATE.page='service'; renderPage(); }
     openNewServiceModal(document.getElementById('pageContent'));
   });
   const setBtn=document.getElementById('orderSettingsBtn');
   if(setBtn) setBtn.addEventListener('click', openOrderSettingsModal);
   const archBtn=document.getElementById('ordersArchiveBtn');
   if(archBtn) archBtn.addEventListener('click', ()=>{ STATE.ordersView='archive'; renderOrders(c); });
+  const crb2=document.getElementById('cancelReasonsBtn');
+  if(crb2) crb2.addEventListener('click', ()=>openCancelReasonsModal());
   const mailBtn=document.getElementById('mailSettingsBtn');
   if(mailBtn) mailBtn.addEventListener('click', openMailSettingsModal);
   const rvBtn=document.getElementById('reviewsBtn');
@@ -6628,6 +6676,7 @@ function openConfirmOrderModal(id, c){
     }},
     {label:'Клиент отказался', cls:'btn-danger', action:()=>{
       setOrderStatus(o,'cancel');
+      o.cancelReason='Клиент отказался при согласовании';
       o.callLog.unshift({date:DATA.today, time:nowTime(), action:'call', comment:'Клиент отказался от заказа'});
       releaseOrderItems(o);
       closeModal(); renderOrders(c||document.getElementById('pageContent'));
@@ -6769,6 +6818,7 @@ function openPriceConfirmModal(id, c){
     }}]),
     {label:(inStore?'Клиент передумал':'Клиент отказался'), cls:'btn-danger', action:()=>{
       setOrderStatus(o,'cancel');
+      o.cancelReason=inStore?'Клиент передумал на месте':'Клиент отказался при согласовании цены';
       o.callLog.unshift({date:DATA.today, time:nowTime(), action:'call', comment:inStore?'Клиент передумал на месте — заказ отменён':'Клиент отказался от заказа при согласовании цены'});
       releaseOrderItems(o);
       closeModal(); renderOrders(c||document.getElementById('pageContent'));
@@ -6872,6 +6922,7 @@ function openChaseModal(id, c){
     }});
     actions.push({label:'Отменить заказ', cls:'btn-danger', action:()=>{
       setOrderStatus(o,'cancel');
+      o.cancelReason='Клиент не откликнулся после письма';
       o.callLog.unshift({date:DATA.today, time:nowTime(), action:'note', comment:'Заказ отменён: клиент не откликнулся после письма'});
       releaseOrderItems(o);
       closeModal(); renderOrders(c||document.getElementById('pageContent'));
@@ -6990,7 +7041,7 @@ function openOrderRejectModal(id, c){
     '</div>'+
     '<div class="field" style="margin-top:8px;"><label>Причина отказа</label>'+
       '<select class="select-mini" id="orjReason" style="width:100%;">'+ORDER_REJECT_REASONS.map(r=>'<option value="'+r+'">'+r+'</option>').join('')+'</select></div>'+
-    '<div class="field"><label>Комментарий — что произошло</label>'+
+    '<div class="field"><label>Комментарий — что произошло <span style="color:var(--negative);">*</span></label>'+
       '<textarea class="textarea-mini" id="orjComment" rows="3" style="width:100%;font-family:inherit;" placeholder="Например: при осмотре не понравился цвет; предлагали аналог — отказался"></textarea>'+
       '<div class="tsub" style="margin-top:3px;">Комментарии копятся и помогают понять, почему клиенты отказываются.</div></div>'+
     '<div class="tsub" style="margin-top:6px;">Что произойдёт: заказ уйдёт в «Отменён», привязанный товар вернётся в наличие, ненужные заявки закупа отменятся, письмо-оценка не отправится.</div>';
@@ -6998,6 +7049,7 @@ function openOrderRejectModal(id, c){
     {label:'Подтвердить отказ', cls:'btn-danger', action:()=>{
       const reason=document.getElementById('orjReason').value;
       const comment=document.getElementById('orjComment').value.trim();
+      if(!comment){ toast('Комментарий обязателен: отказ — это всегда содержательная причина','error'); return; }
       /* привязанные юниты — обратно в наличие */
       (o.items||[]).forEach(it=>{
         if(it.imei && it.imei!=='—'){
@@ -7027,6 +7079,23 @@ function openOrderRejectModal(id, c){
     }},
     {label:'Назад', cls:'', action:()=>{ closeModal(); openOrderModal(o.id, c); }}
   ]);
+}
+
+/* ПРИЧИНЫ ОТКАЗОВ (канон владельца, слияние 08.08): каждая отмена — с причиной;
+   руководство видит сводку по категориям и последние случаи. */
+function openCancelReasonsModal(){
+  const list=(DATA.orders||[]).filter(o=>o.status==='cancel');
+  if(!list.length){ openModal('🚫 Причины отказов','','<div class="empty"><b>Отменённых заказов нет</b></div>',[{label:'Закрыть', cls:'', action:closeModal}]); return; }
+  const cat=r=>String(r||'Без причины (старый заказ)').split(':')[0].split(' · ')[0].trim();
+  const counts={};
+  list.forEach(o=>{ const k=cat(o.cancelReason); counts[k]=(counts[k]||0)+1; });
+  let body='<div class="card" style="margin-bottom:12px;"><div class="kpi-label">По категориям · всего '+list.length+'</div>'+
+    Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([k,n])=>
+      '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span class="tsub">'+escHtml(k)+'</span><span class="mono tname">'+n+'</span></div>').join('')+'</div>';
+  body+='<div class="table-wrap"><table><thead><tr><th>№</th><th>Клиент</th><th>Когда</th><th>Причина</th></tr></thead><tbody>'+
+    list.slice(0,40).map(o=>'<tr><td class="mono">'+o.id+'</td><td>'+escHtml(o.name||'—')+'</td><td class="tsub">'+escHtml(String(o.closedAt||o.date||'—').split(' ')[0])+'</td>'+
+      '<td class="tsub">'+escHtml(o.cancelReason||'—')+'</td></tr>').join('')+'</tbody></table></div>';
+  openModal('🚫 Причины отказов', 'Каждая отмена — с причиной (канон)', body, [{label:'Закрыть', cls:'', action:closeModal}]);
 }
 
 /* ПОДАРОК К ЗАКАЗУ (05.08): стекло за отзыв, компенсация за ожидание, акция.
@@ -7379,80 +7448,42 @@ function printHeader(title, orderId){return '<div class="hdr"><div><h1>'+title+'
 /* БЛАНК ЗАКАЗА — по образцу iMagnate: данные клиента, таблица товаров
    с IMEI, итоги, гарантия, информация для покупателя, подписи */
 function printOrderBlank(id){
-  const o=findOrder(id);
-  if(!o) return;
-  const e=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const w=window.open('','_blank','width=800,height=1100');
-  if(!w){toast('Разрешите всплывающие окна','error');return;}
-  const sum=o.items.reduce((s,it)=>s+it.price,0);
-  const delivery=o.delivery||'0 ₽ (самовывоз из магазина)';
-
-  w.document.write('<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>Бланк заказа №'+o.id+'</title><style>'+printCSS()+'</style></head><body>'+
-    printBtn()+printHeader('БЛАНК ЗАКАЗА', o.id)+
-
-    '<div class="sec"><div class="st">Данные клиента</div>'+
-      '<div class="g2">'+
-        '<div><div class="r"><div class="lbl">ФИО:</div><div class="val">'+e(o.name)+'</div></div>'+
-          '<div class="r"><div class="lbl">Email:</div><div class="val">'+(o.email||'—')+'</div></div>'+
-          '<div class="r"><div class="lbl">Способ получения:</div><div class="val">'+e(o.method||'Самовывоз')+'</div></div>'+
-        '</div>'+
-        '<div><div class="r"><div class="lbl">Телефон:</div><div class="val">'+e(o.phone)+'</div></div>'+
-          '<div class="r"><div class="lbl">Комментарий:</div><div class="val">'+(o.clientComment||'—')+'</div></div>'+
-          '<div class="r"><div class="lbl">Способ оплаты:</div><div class="val">'+e(o.payment||'Наличными')+'</div></div>'+
-        '</div>'+
-      '</div>'+
+  const o=findOrder(id); if(!o) return;
+  const sum=o.items.reduce((s,it)=>s+(it.price||0),0);
+  const isPickup=!/доставка|курьер|достав/i.test(String(o.method||'Самовывоз'));
+  const delivLbl=isPickup?'Самовывоз из магазина':String(o.method||'Доставка');
+  const delivCost=0;   /* самовывоз бесплатно; платная доставка учтётся отдельно при вводе */
+  const total=sum+delivCost;
+  const dt=o.closedAt||o.issuedAt||o.date||DATA.today;
+  const rows=o.items.map(it=>'<tr><td>'+_svcEsc(it.name)+(it.boundImei&&it.boundImei!=='—'?'<div class="note" style="margin-top:2px;">IMEI: '+_svcEsc(it.boundImei)+'</div>':'')+'</td><td style="text-align:center;">1</td><td class="r">'+rub(it.price||0)+'</td><td class="r">'+rub(it.price||0)+'</td></tr>').join('');
+  const inner=
+    '<div class="top"><div class="logo">imagnate</div><div class="tr"><div class="no">№ заказа: '+o.id+'</div><div class="dt">Дата: '+_svcEsc(dt)+'</div></div></div>'+
+    '<div class="rule"></div><div class="dtitle">БЛАНК ЗАКАЗА</div>'+
+    '<div class="box"><h3>ДАННЫЕ КЛИЕНТА</h3><div class="grid2">'+
+      '<div class="fld"><b>ФИО:</b><span>'+_svcEsc(o.name||'—')+'</span></div>'+
+      '<div class="fld"><b>Телефон:</b><span>'+_svcEsc(o.phone||'—')+'</span></div>'+
+      '<div class="fld"><b>Email:</b><span>'+_svcEsc(o.email||'—')+'</span></div>'+
+      '<div class="fld"><b>Комментарий:</b><span>'+_svcEsc(o.clientComment||'—')+'</span></div>'+
     '</div>'+
-
-    '<div class="sec"><div class="st">Состав заказа</div>'+
-      '<table><thead><tr><th>№</th><th>Наименование товара</th><th>IMEI / S/N</th><th>Кол-во</th><th>Цена</th><th>Сумма</th></tr></thead><tbody>'+
-      o.items.map((it,i)=>'<tr><td>'+(i+1)+'</td><td>'+e(it.name)+'</td><td style="font-family:monospace;">'+(it.boundImei||'—')+'</td><td style="text-align:center;">1</td><td style="text-align:right;">'+it.price.toLocaleString('ru-RU')+' ₽</td><td style="text-align:right;">'+it.price.toLocaleString('ru-RU')+' ₽</td></tr>').join('')+
-      '</tbody></table>'+
-      '<div class="totals">Стоимость товаров: <b>'+sum.toLocaleString('ru-RU')+' ₽</b><br>Доставка: '+e(delivery)+'<br><br>ИТОГО К ОПЛАТЕ: <span class="big">'+sum.toLocaleString('ru-RU')+' ₽</span></div>'+
-    '</div>'+
-
-    '<div class="g2">'+
-      '<div class="sec"><div class="st">Гарантийные обязательства</div>'+
-        '<ul style="font-size:11px;line-height:1.6;padding-left:16px;">'+
-          '<li>Новая техника — 12 месяцев с даты покупки.</li>'+
-          '<li>Аксессуары — 1 месяц с даты покупки.</li>'+
-        '</ul>'+
-        '<div class="imp" style="margin-top:8px;"><b>Бесплатный ремонт при подтверждении заводского недостатка</b></div>'+
-        '<div style="font-size:10px;color:#666;line-height:1.5;margin-top:4px;">'+
-          '<b>Гарантия не распространяется на:</b><br>'+
-          '✕ механические повреждения; ✕ попадание влаги;<br>'+
-          '✕ последствия неправильной эксплуатации;<br>'+
-          '✕ самостоятельное вскрытие или ремонт; ✕ повреждение серийного номера.</div>'+
-      '</div>'+
-      '<div class="sec"><div class="st">Важная информация для покупателя</div>'+
-        '<ul style="font-size:11px;line-height:1.6;padding-left:16px;">'+
-          '<li>Покупатель уведомлён, что на отдельных устройствах приложение RuStore может отсутствовать.</li>'+
-          '<li>Покупатель проверил внешний вид товара при получении и претензий не имеет.</li>'+
-          '<li>Покупатель проверил комплектность товара при получении и претензий не имеет.</li>'+
-          '<li>Покупатель проверил работоспособность товара при получении.</li>'+
-          '<li>В случае выявления недостатков после получения товара покупатель вправе обратиться для рассмотрения обращения в индивидуальном порядке.</li>'+
-        '</ul>'+
-      '</div>'+
-    '</div>'+
-
-    '<div class="sec"><div class="st">Условия покупки</div>'+
-      '<div style="font-size:11px;">Настоящий бланк является подтверждением заключения договора розничной купли-продажи.</div>'+
-    '</div>'+
-
-    '<div class="sigs">'+
-      '<div class="sig"><div class="sig-t">Оформил заказ</div>'+
-        '<div class="r"><div class="lbl">ФИО продавца:</div><div class="val">_________________</div></div>'+
-        '<div class="sig-l"></div><div class="sig-s">Подпись</div></div>'+
-      '<div class="sig"><div class="sig-t">Подпись покупателя</div>'+
-        '<div class="r"><div class="lbl">ФИО:</div><div class="val">'+e(o.name)+'</div></div>'+
-        '<div class="sig-l"></div><div class="sig-s">Подпись</div>'+
-        '<div style="font-size:10px;margin-top:6px;">Дата: «____» _______________ 20____ г.</div></div>'+
-    '</div>'+
-
-    '<div class="foot"><span>Store Control</span></div>'+
-    '<div class="thanks"><b>БЛАГОДАРИМ ЗА ДОВЕРИЕ!</b><br>Мы всегда готовы помочь по вопросам гарантии, настройки и эксплуатации приобретённого товара.</div>'+
-    '</body></html>');
-  w.document.close();
-  toast('Бланк заказа №'+o.id+' сформирован','success');
+    '<div class="hl row" style="margin-top:12px;"><span>Способ получения: '+_svcEsc(delivLbl)+'</span><span>Способ оплаты: '+_svcEsc(o.payment||'Наличными')+'</span></div></div>'+
+    '<div class="box"><h3>СОСТАВ ЗАКАЗА</h3>'+
+      '<table><thead><tr><th>Наименование товара</th><th style="width:66px;text-align:center;">Кол-во</th><th class="r" style="width:120px;">Цена</th><th class="r" style="width:130px;">Сумма</th></tr></thead><tbody>'+
+      rows+
+      '<tr class="sum"><td colspan="3">Стоимость товаров:</td><td class="r">'+rub(sum)+'</td></tr>'+
+      '<tr><td colspan="3">Доставка ('+_svcEsc(delivLbl)+'):</td><td class="r">'+rub(delivCost)+'</td></tr>'+
+      '<tr class="sum"><td colspan="3">ИТОГО К ОПЛАТЕ:</td><td class="r">'+rub(total)+'</td></tr>'+
+      '</tbody></table></div>'+
+    '<div class="box"><h3 style="text-align:center;">ГАРАНТИЯ И ВОЗВРАТ | IMAGNATE</h3>'+
+      '<div class="wsub">Гарантийные сроки:</div>'+
+      '<ul><li>Техника: 1 год (смартфоны, ноутбуки, электроника)</li><li>Аксессуары: 1 месяц (чехлы, кабели, зарядки, джойстики)</li></ul>'+
+      '<div class="wsub">Гарантия не действует при:</div>'+
+      '<ul><li>механических/электрических повреждениях</li><li>неправильной эксплуатации или хранении</li><li>самостоятельном ремонте или вскрытии</li><li>повреждении серийного номера</li></ul>'+
+      '<div class="wsub">Товар надлежащего качества:</div>'+
+      '<ul><li>возврат/обмен в течение 14 дней при сохранении товарного вида</li><li>технически сложные товары не подлежат возврату</li></ul>'+
+      '<div class="note" style="margin-top:8px;">Полная информация: imagnate.ru/politics/garanty</div></div>'+
+    '<div class="signs"><div class="sig"><div class="l">Заказ оформил и выдал — продавец</div></div>'+
+      '<div class="sig"><div class="l">Товар получил, внешний вид и комплектность проверил, претензий нет — '+_svcEsc(o.name||'покупатель')+'</div></div></div>';
+  if(_svcDoc('Бланк заказа №'+o.id, inner)) toast('Бланк заказа №'+o.id+' сформирован','success');
 }
 
 /* ГАРАНТИЙНЫЙ ТАЛОН — выдаётся клиенту вместе с товаром: позиции с
@@ -7686,6 +7717,11 @@ function openWarrantyCaseModal(id, c){
 
 function openIssueModal(id){
   const o=findOrder(id);
+  /* НЕШТАТ-ФИКС 08.08: выданный/отменённый заказ повторно не выдаётся */
+  if(o && ['done','cancel'].includes(o.status)){
+    toast('Заказ №'+o.id+' уже '+(o.status==='done'?'выдан':'отменён')+' — повторная выдача невозможна.','error');
+    return;
+  }
   if(!orderReadyByStock(o)){
     (o.callLog=o.callLog||[]).push({date:DATA.today, time:nowTime(), action:'blocked', comment:'Попытка выдачи отклонена: товара нет в наличии на точке'});
     toast('Товара нет в наличии на этой точке — выдача невозможна', 'error');
@@ -7815,7 +7851,23 @@ function openIssueModal(id){
             it.imei=v; whUnit.status='reserved';
             statusEl.className='ok'; statusEl.innerHTML=ic('check')+(wasEmpty?' Код привязан к заказу':' Совпадает (модель та же — код перепривязан)'); scanState[i].matched=true; try{beep('ok');}catch(e){}
           } else {
-            statusEl.className='bad'; statusEl.innerHTML=ic('x')+' Не совпадает'; scanState[i].matched=false; try{beep('err');}catch(e){}
+            /* ПОЧЕМУ не подходит — говорим точно (случай двух Дайсонов 08.08):
+               сотрудник должен видеть причину, а не гадать и отдавать «любую». */
+            let why='Код не найден на складе — эта коробка не заведена в систему';
+            if(whUnit){
+              if(!whNameEq(whUnit.model, it.name)) why='Это другая модель: «'+whUnit.model+'» — нужна «'+it.name+'»';
+              else if(whUnit.status==='sold') why='Эта единица уже ПРОДАНА'+(whUnit.soldAt?' ('+whUnit.soldAt+')':'')+' — вернитесь к остаткам';
+              else if(whUnit.status==='reserved'){
+                let holderOrd=null;
+                try{ holderOrd=(DATA.orders||[]).find(oo=>oo.id!==o.id && !['done','cancel'].includes(oo.status) && (oo.items||[]).some(x=>x.imei===v)); }catch(e){}
+                why=holderOrd
+                  ? '⛔ Эта коробка закреплена за заказом №'+holderOrd.id+' ('+(holderOrd.name||'другой клиент')+') — возьмите другую коробку этой модели'
+                  : '⛔ Эта коробка зарезервирована под другой заказ — возьмите другую коробку этой модели';
+              }
+              else if(holder>=0) why='Этот код уже отсканирован в другой позиции этого заказа';
+            }
+            statusEl.className='bad'; statusEl.innerHTML=ic('x')+' Нельзя выдать'; scanState[i].matched=false; try{beep('err');}catch(e){}
+            toast(why,'error');
           }
         }
       }
@@ -7968,6 +8020,28 @@ function ensureMoneyData(){
   if(!DATA.salesLog) DATA.salesLog=[];               // журнал продаж
 }
 function isCashPayment(o){ return (o.payment||'').toLowerCase().includes('нал'); }
+/* КОМИССИИ ЭКВАЙРИНГА (канон владельца, слияние 08.08): банк удерживает ИЗ
+   суммы оплаты — клиент платит цену, магазину падает меньше. Это НЕ наценка
+   клиенту. Карта −2%, QR −0,4% по умолчанию; проценты — настройка магазина
+   (панель управления). Наличные — без удержаний. */
+function acqPct(pay){
+  const st=DATA.settings||{};
+  if(/карт/i.test(pay||'')) return (st.acqCardPct!=null?st.acqCardPct:2);
+  if(/qr/i.test(pay||''))  return (st.acqQrPct!=null?st.acqQrPct:0.4);
+  return 0;
+}
+function acqApply(sum, pay, srcLabel){
+  const pct=acqPct(pay);
+  const fee=Math.round(sum*pct/100);
+  if(fee>0){
+    try{
+      DATA.financeOps.unshift({date:DATA.today, type:'Комиссия эквайринга', amount:fee,
+        comment:srcLabel+' · '+pay+' −'+pct+'% (удержано банком из '+rub(sum)+')',
+        who:(typeof currentEmployeeName==='function'?currentEmployeeName():'')});
+    }catch(e){}
+  }
+  return sum-fee;
+}
 function courierWallet(courierId){ ensureMoneyData(); return DATA.courierWallets[courierId]||0; }
 function courierCreditTotal(courierId){ ensureMoneyData(); return DATA.courierCredits.filter(x=>x.courierId===courierId && !x.paidOut).reduce((s,x)=>s+x.amount,0); }
 
@@ -8056,13 +8130,13 @@ function recordSale(o, via, cashOverride, skipMoney){
     if(isCashPayment(o)){
       DATA.courierWallets[o.courierId]=(DATA.courierWallets[o.courierId]||0)+sum;   // нал у курьера — до сдачи в магазин
     } else {
-      DATA.assets.cashless+=sum;
+      DATA.assets.cashless+=acqApply(sum, o.payment||'Карта', 'Заказ №'+o.id+' (курьер)');
     }
   } else if(via==='reconcile'){
     DATA.assets.cashByStore[0].amount+=(cashOverride!=null?cashOverride:sum);       // фактически принятое от сдельного курьера
   } else {
     if(isCashPayment(o)) DATA.assets.cashByStore[0].amount+=sum;
-    else DATA.assets.cashless+=sum;
+    else DATA.assets.cashless+=acqApply(sum, o.payment||'Карта', 'Заказ №'+o.id);
   }
   /* Начисление курьеру за доставку — автоматически в ЗП */
   if((via==='courier'||via==='reconcile') && o.courierId){
@@ -8328,6 +8402,14 @@ function svcOverdue(t){
   return !!(d && today && d<today);
 }
 function svcOverdueCount(){ return (DATA.service||[]).filter(svcOverdue).length; }
+function svcRecalcParts(t){
+  try{
+    if(!Array.isArray(t.parts)) t.parts=[];
+    const missing=t.parts.some(p=>!(p.inStock||p.fromWarehouse));
+    if(missing){ if(t.status==='progress'||t.status==='new') t.status='wait_part'; }
+    else { if(t.status==='wait_part') t.status='progress'; }
+  }catch(e){}
+}
 function servicePartArrived(p){
   /* заявка закупа, созданная из ремонта, принята на склад — будим ремонт */
   try{
@@ -8343,6 +8425,11 @@ function servicePartArrived(p){
 }
 function openServicePayModal(id, c){
   const t=DATA.service.find(x=>x.id===id); if(!t) return;
+  /* НЕШТАТ-ФИКС 08.08: выданный ремонт нельзя оплатить второй раз */
+  if(t.status==='done'||t.status==='archive'){
+    toast('Ремонт №'+t.id+' уже выдан'+(t.paidAmount!=null?(' — оплата '+rub(t.paidAmount)+' проведена'+(t.issuedAt?(' '+t.issuedAt):'')):'')+'. Повторное списание невозможно.','error');
+    return;
+  }
   const sum=(t.cost!=null? t.cost : ((t.costLabor||0)+(t.costParts||0)))||0;
   let body='<div class="tsub" style="margin-bottom:10px;">Выдача устройства клиенту. Деньги проведутся автоматически: наличные — в кассу точки (с записью в журнал), карта — на безнал.</div>'+
     '<div class="field" style="margin-bottom:10px;"><label>Сумма к оплате</label><input class="input-mini" id="svcPaySum" type="number" style="width:100%;" value="'+sum+'"></div>'+
@@ -8369,6 +8456,7 @@ function openServicePayModal(id, c){
           comment:'Ремонт №'+t.id+' · '+t.device+' · '+kind, who:currentEmployeeName()});
       }
       t.status='done'; t.paidAmount=amount; t.paidKind=kind; t.issuedAt=DATA.today;
+      try{ const _d=parseRuDate(DATA.today)||new Date(); t.warrantyUntil=fmtRuDate(new Date(_d.getFullYear(),_d.getMonth(),_d.getDate()+90)); }catch(e){}
       t.history.push({date:DATA.today+' '+nowTime(), text:'Устройство выдано клиенту. Оплата: '+rub(amount)+' ('+kind+')'+(kind==='Наличные'?' — проведено в кассу точки':' — на безнал')});
       closeModal(); renderService(c||document.getElementById('pageContent'));
       toast('Ремонт №'+t.id+' выдан. '+(amount>0?('Оплата '+rub(amount)+' проведена.'):''), 'success');
@@ -8400,6 +8488,13 @@ function renderService(c){
     '<div class="topbar-spacer"></div>'+
     '<button class="btn btn-primary" id="newSvcBtn">'+ic('plus')+' Новая заявка</button>'+
   '</div>';
+  if(isBossRole()){
+    try{
+      const t0=schedToday();
+      const rr=(DATA.service||[]).filter(x=>{ if(!x.warrantyReworkOf) return false; const d=parseRuDate(x.accepted); return d && d.getMonth()===t0.getMonth() && d.getFullYear()===t0.getFullYear(); }).length;
+      if(rr) html+='<div class="card" style="margin-bottom:10px;border-color:var(--warning);"><div class="kpi-label" style="color:var(--warning);">↩ Возвраты по гарантии за месяц: '+rr+'</div><div class="tsub" style="margin-top:2px;">Бесплатные переделки — показатель качества ремонта и запчастей.</div></div>';
+    }catch(e){}
+  }
 
   // Уведомления о передаче ответственности — «личный кабинет» мастера.
   // В прототипе показываем все ожидающие запросы; в реальной системе —
@@ -8536,7 +8631,6 @@ function openNewServiceModal(c){
     '<div class="drill-block-label" style="margin-top:14px;">2. Данные устройства</div>'+
     '<div class="field-grid">'+
       '<div class="field"><label>Наименование / модель</label><input class="input-mini" id="svcNewDevice" placeholder="iPhone 16 Pro Max 256GB"></div>'+
-      '<div class="field"><label>IMEI / S/N</label><input class="input-mini" id="svcNewImei" placeholder="IMEI или серийный номер"></div>'+
       '<div class="field"><label>Пароль устройства (при наличии)</label><input class="input-mini" id="svcNewPassword" placeholder="PIN, графический ключ..."></div>'+
       '<div class="field"><label>Аккаунт снят с устройства?</label><select class="select-mini" id="svcNewAccountRemoved" style="width:100%;"><option value="yes">Да</option><option value="no" selected>Нет</option><option value="na">Не применимо</option></select></div>'+
     '</div>'+
@@ -8598,10 +8692,9 @@ function openNewServiceModal(c){
     });
 
     DATA.service.unshift({
-      id:newId, device, client, phone: phone||'—',
+      id:newId, device, client, phone: phone||'—', acceptedBy:(typeof currentEmployeeName==='function'?currentEmployeeName():''),
       issue, clientWords:issue,
       agreedWorks:document.getElementById('svcNewAgreedWorks').value.trim()||'',
-      imei:document.getElementById('svcNewImei').value.trim()||'',
       devicePassword:document.getElementById('svcNewPassword').value.trim()||'',
       accountRemoved:document.getElementById('svcNewAccountRemoved').value,
       condition,
@@ -8614,8 +8707,9 @@ function openNewServiceModal(c){
         {date:DATA.today+' '+nowTime(), text:'Заказ-наряд создан, устройство принято'},
       ], parts:[],
     });
-    closeModal(); STATE.svcFilter='new'; renderService(c);
-    toast('Заказ-наряд №'+newId+' создан', 'success');
+    closeModal();
+    if(STATE.role==='master'||isBossRole()){ STATE.svcFilter='new'; try{ renderService(c); }catch(e){} toast('Заказ-наряд №'+newId+' создан', 'success'); }
+    else { toast('Устройство принято в ремонт №'+newId+' — передано мастеру. Печатаю квитанцию о приёме.', 'success'); try{ openServiceBlank(newId); }catch(e){} }
   }}]);
 }
 
@@ -8672,6 +8766,29 @@ function openReassignServiceModal(id, c){
   }}]);
 }
 
+/* Гарантия на ремонт: срок (3 мес) от даты выдачи. */
+function svcWarrantyStatus(t){
+  try{
+    if(!t) return null;
+    let until = t.warrantyUntil ? parseRuDate(t.warrantyUntil) : null;
+    if(!until && t.issuedAt){ const d=parseRuDate(t.issuedAt); if(d) until=new Date(d.getFullYear(),d.getMonth(),d.getDate()+90); }
+    if(!until) return null;
+    const td=parseRuDate(DATA.today)||new Date();
+    const t0=new Date(td.getFullYear(),td.getMonth(),td.getDate());
+    const daysLeft=Math.round((until - t0)/86400000);
+    return {until:fmtRuDate(until), active:daysLeft>=0, daysLeft:daysLeft};
+  }catch(e){ return null; }
+}
+/* Прошлые ремонты этого клиента (по телефону, иначе по имени) — авто, без ручного поиска. */
+function svcClientPastRepairs(t){
+  try{
+    const ph=normPhone(t.phone||''); const nm=String(t.client||'').trim().toLowerCase();
+    if(ph.length<10 && !nm) return [];
+    return (DATA.service||[]).filter(x=> x && x.id!==t.id && (x.status==='done'||x.status==='archive') &&
+      ((ph.length>=10 && normPhone(x.phone||'')===ph) || (ph.length<10 && nm && String(x.client||'').trim().toLowerCase()===nm)))
+      .sort((a,b)=>(b.id||0)-(a.id||0)).slice(0,6);
+  }catch(e){ return []; }
+}
 function openServiceModal(id, c){
   const t=DATA.service.find(x=>x.id===id);
   if(!t) return;
@@ -8687,6 +8804,24 @@ function openServiceModal(id, c){
     field('Статус', st[0])+
   '</div>';
   body+='<div class="field" style="margin-top:6px;"><label>Слова клиента</label><div class="v" style="font-style:italic;">'+t.clientWords+'</div></div>';
+  /* Этап 3: клиент уже чинил у нас — авто по телефону, гарантия на устройство */
+  try{
+    const past=svcClientPastRepairs(t);
+    if(past.length){
+      const canRework=(t.status!=='done'&&t.status!=='archive');
+      body+='<div class="card" style="border-color:var(--warning);background:var(--warning-soft);margin:10px 0;">'+
+        '<div class="drill-block-label" style="color:var(--warning);">'+ic('alert')+' Клиент уже чинил у нас</div>'+
+        past.map(p=>{
+          const w=svcWarrantyStatus(p);
+          const wtxt = w ? (w.active?('<span class="ok">гарантия до '+w.until+' · осталось '+w.daysLeft+' дн.</span>'):'<span class="tsub">гарантия истекла ('+w.until+')</span>') : '<span class="tsub">без гарантии</span>';
+          return '<div class="hist-row"><div class="h-main">№'+p.id+' · '+escHtml(p.device||'')+'<div class="h-sub">'+escHtml(p.issuedAt||p.accepted||'')+' · '+wtxt+'</div></div>'+
+            ((canRework && w && w.active && t.warrantyReworkOf!==p.id)?'<button class="btn btn-sm btn-primary" data-svc-rework="'+p.id+'">Гарантийная переделка</button>':'')+
+          '</div>';
+        }).join('')+
+        '<div class="tsub" style="margin-top:6px;">Сверьте аппарат в руках с моделью прошлого ремонта. Если тот же и в гарантии — оформите переделку (0 ₽).</div>'+
+      '</div>';
+    }
+  }catch(e){}
 
   // Ответственный: в режиме просмотра статус менять нельзя, но можно
   // инициировать смену ответственного мастера (по согласию нового).
@@ -8703,27 +8838,34 @@ function openServiceModal(id, c){
 
   body+='<div class="drill-divider"></div><div class="drill-block-label">Запчасти</div>';
   body+='<div id="svcPartsList">';
+  const canParts=(STATE.role==='master'||isBossRole());   /* запчасти ведёт мастер; владелец/директор — для обзора */
   if(t.parts.length===0){
-    body+='<div class="tsub">Запчасти не указаны</div>';
+    body+='<div class="tsub">'+(canParts?'Запчастей нет. Если нужны — добавьте ниже и отмечайте наличие.':'Запчасти не указаны.')+'</div>';
   } else {
-    body+=t.parts.map((p,i)=>'<div class="check-row" id="svcpart'+t.id+'_'+i+'">'+
-      '<span>'+p.name+(p.fromWarehouse?' <span class="tsub mono">('+p.sku+' · '+rub(p.purchase)+')</span>':'')+'</span>'+
-      (p.fromWarehouse?'<span class="ok">'+ic('check')+' Списана со склада запчастей</span>':
-       p.inStock?'<span class="ok">'+ic('check')+' В наличии</span>':
-        '<span class="bad" style="gap:10px;">'+ic('x')+' Нет в наличии <button class="btn btn-sm btn-primary" data-svc-createreq="'+t.id+'_'+i+'">Создать заявку на закупку</button></span>')+
-    '</div>').join('');
+    body+=t.parts.map((p,i)=>{
+      const have=!!(p.inStock||p.fromWarehouse);
+      if(!canParts){
+        return '<div class="check-row" style="justify-content:space-between;align-items:center;gap:10px;"><span>'+escHtml(p.name)+'</span>'+
+          (have?'<span class="ok">'+ic('check')+' В наличии</span>':'<span class="bad">'+ic('x')+' Нет в наличии</span>')+'</div>';
+      }
+      return '<div class="check-row" id="svcpart'+t.id+'_'+i+'" style="justify-content:space-between;align-items:center;gap:10px;">'+
+        '<span>'+escHtml(p.name)+(p.fromWarehouse&&p.purchase?' <span class="tsub mono">('+rub(p.purchase)+')</span>':'')+'</span>'+
+        '<span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">'+
+          (have
+            ? '<button class="btn btn-sm btn-primary" data-svc-toggle="'+i+'">'+ic('check')+' В наличии</button>'
+            : '<button class="btn btn-sm" data-svc-toggle="'+i+'">Отметить в наличии</button><button class="btn btn-sm" data-svc-createreq="'+t.id+'_'+i+'" title="Отправить в Закуп, чтобы купили">В закуп</button>')+
+          ((t.status!=='done'&&t.status!=='archive')?'<button class="btn btn-sm" data-svc-delpart="'+i+'" title="Убрать">✕</button>':'')+
+        '</span>'+
+      '</div>';
+    }).join('');
   }
   body+='</div>';
-  /* Взять запчасть со склада сервиса — с учётом остатков */
-  if(t.status!=='done' && t.status!=='archive'){
-    const availParts=(DATA.warehouse.parts||[]).filter(p=>(p.qty||0)>0);
+  if(canParts && t.status!=='done' && t.status!=='archive'){
     body+='<div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap;">'+
-      '<select class="select-mini" id="svcPartPick" style="flex:1;min-width:200px;">'+
-        (availParts.length? availParts.map(p=>'<option value="'+p.sku+'">'+escHtml(p.model)+' · остаток '+p.qty+' · '+rub(p.purchase)+'</option>').join('') : '<option value="">— на складе запчастей пусто —</option>')+
-      '</select>'+
-      '<button class="btn btn-sm btn-primary" id="svcPartTake" '+(availParts.length?'':'disabled')+'>'+ic('plus')+' Взять со склада</button>'+
+      '<input class="input-mini" id="svcAddPart" style="flex:1;min-width:200px;" placeholder="Название запчасти (напр. Дисплейный модуль iPhone 13)">'+
+      '<button class="btn btn-sm btn-primary" id="svcAddPartBtn">'+ic('plus')+' Добавить</button>'+
     '</div>'+
-    '<div class="tsub" style="margin-top:6px;">Остаток на складе запчастей уменьшится, себестоимость запчастей ремонта пересчитается автоматически.</div>';
+    '<div class="tsub" style="margin-top:6px;">Отмечайте «в наличии», когда деталь у вас. Пока хоть одной нет — ремонт в статусе «Ждём запчасть». «В закуп» — чтобы деталь купили.</div>';
   }
 
   body+='<div class="drill-divider"></div><div class="drill-block-label">Добавить запись в историю</div>';
@@ -8731,7 +8873,7 @@ function openServiceModal(id, c){
 
   body+='<div class="drill-divider"></div><div class="drill-block-label">Бланк заказа</div>';
   body+='<div class="tsub" style="margin-bottom:8px;">Форма заполнена электронно. Сформируйте печатный бланк для подписи клиентом.</div>';
-  body+='<div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-sm btn-primary" id="svcPrintBlank">'+ic('docs')+' Сформировать бланк заказа</button><button class="btn btn-sm">Акт выдачи устройства</button><button class="btn btn-sm" id="svcDueEdit">✎ Срок готовности</button></div>';
+  body+='<div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-sm btn-primary" id="svcPrintBlank">'+ic('docs')+' Сформировать бланк заказа</button><button class="btn btn-sm" id="svcHandoutBtn">'+ic('docs')+' Акт выдачи</button><button class="btn btn-sm" id="svcDueEdit">✎ Срок готовности</button></div>';
 
   openModal('Ремонт №'+t.id+' · '+t.device, '<span class="badge '+st[1]+'">'+st[0]+'</span>', body);
 
@@ -8741,6 +8883,16 @@ function openServiceModal(id, c){
 
   // Печатный бланк заказа
   document.getElementById('svcPrintBlank').addEventListener('click', ()=>openServiceBlank(t.id));
+  { const hb=document.getElementById('svcHandoutBtn'); if(hb) hb.addEventListener('click', ()=>openServiceHandout(t.id)); }
+  document.querySelectorAll('[data-svc-rework]').forEach(el=>el.addEventListener('click', ()=>{
+    const pid=parseInt(el.dataset.svcRework); const p=DATA.service.find(x=>x.id===pid); if(!p) return;
+    t.warrantyReworkOf=pid; t.costLabor=0; t.costParts=0; t.cost=0;
+    p.returnedUnderWarranty=true; (p.returns=p.returns||[]).push(t.id);
+    t.history.push({date:DATA.today+' '+nowTime(), text:'Оформлено как гарантийная переделка ремонта №'+pid+' — бесплатно для клиента'});
+    try{ if(typeof lsSave==='function') lsSave(); }catch(e){} try{ cloudPushNow(); }catch(e){}
+    closeModal(); openServiceModal(t.id, c);
+    toast('Гарантийная переделка ремонта №'+pid+' — стоимость 0 ₽','success');
+  }));
   
 
   // Срок готовности — редактирование
@@ -8761,6 +8913,36 @@ function openServiceModal(id, c){
     document.getElementById('svcHistText').value='';
     toast('Запись добавлена', 'success');
   });
+  // Запчасти: мастер сам отмечает наличие / добавляет / убирает
+  document.querySelectorAll('[data-svc-toggle]').forEach(el=>el.addEventListener('click', ()=>{
+    const i=parseInt(el.dataset.svcToggle); const p=t.parts[i]; if(!p) return;
+    p.inStock=!(p.inStock||p.fromWarehouse); p.fromWarehouse=false;
+    if(p.inStock){
+      p.arrivedAt=DATA.today;
+      (DATA.purchaseRequests||[]).forEach(r=>{ if(r.createdFrom==='Ремонт №'+t.id+' ('+p.name+')' && r.status!=='received'){ r.status='received'; r.receivedAt=DATA.today; } });
+      t.history.push({date:DATA.today+' '+nowTime(), text:'Запчасть «'+p.name+'»: отмечена в наличии'});
+    } else {
+      t.history.push({date:DATA.today+' '+nowTime(), text:'Запчасть «'+p.name+'»: нет в наличии'});
+    }
+    svcRecalcParts(t);
+    try{ if(typeof lsSave==='function') lsSave(); }catch(e){}
+    try{ cloudPushNow(); }catch(e){}
+    closeModal(); openServiceModal(t.id, c);
+  }));
+  { const ap=document.getElementById('svcAddPartBtn'); if(ap) ap.addEventListener('click', ()=>{
+    const nm=(document.getElementById('svcAddPart').value||'').trim();
+    if(!nm){ toast('Введите название запчасти','error'); return; }
+    t.parts.push({name:nm.slice(0,80), inStock:false});
+    svcRecalcParts(t);
+    t.history.push({date:DATA.today+' '+nowTime(), text:'Добавлена запчасть «'+nm+'» (нет в наличии)'});
+    closeModal(); openServiceModal(t.id, c);
+  }); }
+  document.querySelectorAll('[data-svc-delpart]').forEach(el=>el.addEventListener('click', ()=>{
+    const i=parseInt(el.dataset.svcDelpart); if(!(i>=0)) return;
+    const p=t.parts[i]; t.parts.splice(i,1); svcRecalcParts(t);
+    if(p) t.history.push({date:DATA.today+' '+nowTime(), text:'Убрана запчасть «'+p.name+'»'});
+    closeModal(); openServiceModal(t.id, c);
+  }));
 
   // Взять запчасть со склада сервиса — списание остатка и учёт себестоимости
   const takeBtn=document.getElementById('svcPartTake');
@@ -8801,122 +8983,108 @@ function openServiceModal(id, c){
 
 /* Печатный бланк заказа — открывается в новом окне, готов к печати и
    подписи клиентом. Формируется из электронной формы заявки. */
-function openServiceBlank(id){
-  const t=DATA.service.find(x=>x.id===id);
-  if(!t) return;
-  const e=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const w=window.open('', '_blank', 'width=800,height=1100');
-  if(!w){ toast('Разрешите всплывающие окна для печати бланка', 'error'); return; }
-
-  // Чек-лист: ☑ если отмечено в ERP, ☐ если нет
-  const con=t.condition||{body:[],display:[],power:[],wifi:[],bt:[]};
-  const bx=(group,id,label)=>{
-    const arr=con[group]||[];
-    return '<label style="display:block;font-size:11px;line-height:1.7;">'+(arr.includes(id)?'☑':'☐')+' '+label+'</label>';
-  };
-  const accRem=t.accountRemoved==='yes'?'Да ☑ / Нет ☐' : (t.accountRemoved==='no'?'Да ☐ / Нет ☑' : '—');
-  const costL=(t.costLabor||0); const costP=(t.costParts||0); const costT=costL+costP;
-
+function _svcEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _svcDoc(title, inner){
+  const w=window.open('', '_blank', 'width=820,height=1120');
+  if(!w){ toast('Разрешите всплывающие окна для печати бланка', 'error'); return null; }
   w.document.write(
-    '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>Заказ-наряд №'+t.id+'</title>'+
-    '<style>*{margin:0;padding:0;box-sizing:border-box;}'+
-    'body{font-family:Arial,Helvetica,sans-serif;color:#111;max-width:750px;margin:0 auto;padding:24px 28px;font-size:12px;line-height:1.45;}'+
-    '.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;border-bottom:3px solid #e85d26;padding-bottom:12px;}'+
-    '.header h1{font-size:22px;font-weight:900;margin:0;} .header .title-sub{font-size:10px;color:#666;}'+
-    '.header .addr{text-align:right;font-size:10.5px;color:#444;line-height:1.4;}'+
-    '.meta{display:flex;justify-content:space-between;margin-bottom:14px;font-size:11.5px;}'+
-    '.sec{border:1.5px solid #ddd;border-radius:6px;padding:10px 12px;margin-bottom:10px;page-break-inside:avoid;}'+
-    '.sec-title{font-weight:800;font-size:12.5px;color:#e85d26;margin-bottom:6px;text-transform:uppercase;letter-spacing:.3px;}'+
-    '.row{display:flex;gap:12px;margin:3px 0;} .lbl{width:200px;font-weight:600;color:#444;flex-shrink:0;} .val{flex:1;}'+
-    '.grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:6px 0;} .grid5>div{} .grid5 .gh{font-weight:800;font-size:11px;text-transform:uppercase;margin-bottom:3px;}'+
-    '.cost-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px;}'+
-    '.cost-grid .cost-box{} .cost-grid .cost-row{display:flex;justify-content:space-between;margin:2px 0;} .cost-grid .cost-total{font-weight:800;border-top:1.5px solid #111;padding-top:3px;margin-top:4px;}'+
-    '.important{background:#fff4e5;border:1.5px solid #e85d26;border-radius:6px;padding:10px 12px;font-size:11px;}'+
-    '.important b{color:#e85d26;}'+
-    '.terms-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;}'+
-    '.terms-grid .terms-box{font-size:10.5px;line-height:1.5;color:#333;}'+
-    '.terms-grid .terms-box b{display:block;font-size:11.5px;color:#e85d26;margin-bottom:4px;text-transform:uppercase;}'+
-    '.terms-grid .terms-box li{margin-left:14px;margin-bottom:2px;}'+
-    '.confirm{font-size:10.5px;color:#444;margin-top:14px;padding-top:8px;border-top:1px solid #ccc;}'+
-    '.signatures{display:flex;justify-content:space-between;margin-top:30px;} .sig-block{width:42%;} .sig-block .sig-title{font-weight:800;font-size:11px;text-transform:uppercase;margin-bottom:4px;} .sig-block .sig-line{border-bottom:1px solid #111;margin:18px 0 3px;} .sig-block .sig-label{font-size:10px;color:#666;}'+
-    '.footer{display:flex;justify-content:space-around;margin-top:20px;font-size:10px;color:#888;border-top:1px solid #ddd;padding-top:8px;}'+
-    '@media print{.noprint{display:none !important;} body{padding:10px 16px;}}'+
+    '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>'+title+'</title><style>'+
+    '*{margin:0;padding:0;box-sizing:border-box;} body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1a1a1a;max-width:760px;margin:0 auto;padding:30px 36px;font-size:13px;}'+
+    '.top{display:flex;justify-content:space-between;align-items:flex-start;} .logo{font-size:36px;font-weight:800;letter-spacing:.5px;color:#9a7b3f;} .tr{text-align:right;} .tr .no{font-size:17px;font-weight:800;} .tr .dt{font-size:12.5px;color:#333;margin-top:3px;}'+
+    '.rule{height:2px;background:#111;margin:14px 0 20px;} .dtitle{text-align:center;font-size:17px;font-weight:800;letter-spacing:.6px;margin:4px 0 20px;}'+
+    '.box{border:1px solid #c9c9c9;border-radius:3px;padding:16px 18px;margin-bottom:16px;page-break-inside:avoid;} .box h3{font-size:13.5px;font-weight:800;letter-spacing:.5px;margin-bottom:12px;}'+
+    '.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px 36px;} .fld{display:flex;gap:10px;font-size:13px;padding:2px 0;} .fld b{min-width:140px;} '+
+    '.hl{background:#efefef;padding:9px 11px;border-radius:2px;font-weight:700;font-size:13px;} .hl.row{display:flex;justify-content:space-between;gap:16px;}'+
+    'table{width:100%;border-collapse:collapse;margin-top:4px;font-size:13px;} th,td{border:1px solid #c9c9c9;padding:9px 11px;text-align:left;} thead th{background:#efefef;font-weight:800;} .r{text-align:right;} tr.sum td{background:#efefef;font-weight:800;}'+
+    '.note{font-size:11.5px;color:#666;line-height:1.55;} .cond{display:grid;grid-template-columns:1fr 1fr;gap:4px 30px;font-size:12.5px;} .cond .g{padding:3px 0;} .cond .g b{font-weight:700;} .cond .g .m{color:#111;} .cond .g .no{color:#8a8a8a;}'+
+    '.wsub{font-weight:800;font-size:12.5px;margin:10px 0 4px;} ul{padding-left:18px;font-size:12.5px;line-height:1.5;}'+
+    '.signs{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:24px;} .sig .l{border-top:1px solid #333;margin-top:32px;padding-top:6px;font-size:12px;color:#333;}'+
+    '.tag{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:20px;background:#efefef;color:#333;margin-left:8px;}'+
+    '@media print{.noprint{display:none!important;} body{padding:12px 16px;}}'+
     '</style></head><body>'+
-    '<button class="noprint" onclick="window.print()" style="position:fixed;top:12px;right:12px;padding:10px 20px;cursor:pointer;background:#e85d26;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;">Печать</button>'+
-
-    '<div class="header"><div><h1>ЗАКАЗ-НАРЯД<br>НА РЕМОНТ УСТРОЙСТВА</h1><div class="title-sub">Store Control · техника · сервис · аксессуары</div></div><div class="addr">Сервисный центр<br>Store Control</div></div>'+
-    '<div class="meta"><div>Дата приёма: <b>'+e(t.accepted)+'</b></div><div>№ заказа: <b>'+t.id+'</b></div></div>'+
-
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
-      '<div class="sec"><div class="sec-title">1. Данные клиента</div>'+
-        '<div class="row"><div class="lbl">ФИО:</div><div class="val">'+e(t.client)+'</div></div>'+
-        '<div class="row"><div class="lbl">Телефон:</div><div class="val">'+e(t.phone)+'</div></div>'+
-      '</div>'+
-      '<div class="sec"><div class="sec-title">2. Данные устройства</div>'+
-        '<div class="row"><div class="lbl">Наименование / модель:</div><div class="val">'+e(t.device)+'</div></div>'+
-        '<div class="row"><div class="lbl">IMEI / S/N:</div><div class="val">'+e(t.imei||'')+'</div></div>'+
-        '<div class="row"><div class="lbl">Пароль устройства:</div><div class="val">'+e(t.devicePassword||'—')+'</div></div>'+
-        '<div class="row"><div class="lbl">Аккаунт снят:</div><div class="val">'+accRem+'</div></div>'+
-      '</div>'+
-    '</div>'+
-
-    '<div class="sec"><div class="sec-title">3. Заявленная неисправность (со слов клиента)</div><div>'+e(t.issue||t.clientWords||'')+'</div></div>'+
-
-    '<div class="sec"><div class="sec-title">4. Согласованные работы</div><div>'+(t.agreedWorks?e(t.agreedWorks):'<span style="color:#999;">—</span>')+'</div></div>'+
-
-    '<div class="sec"><div class="sec-title">5. Стоимость и сроки ремонта</div>'+
-      '<div class="cost-grid">'+
-        '<div class="cost-box">'+
-          '<div class="cost-row"><span>Стоимость работ:</span><b>'+costL.toLocaleString('ru-RU')+' ₽</b></div>'+
-          '<div class="cost-row"><span>Стоимость запчастей:</span><b>'+costP.toLocaleString('ru-RU')+' ₽</b></div>'+
-          '<div class="cost-row cost-total"><span>ИТОГО:</span><b>'+costT.toLocaleString('ru-RU')+' ₽</b></div>'+
-          '<div style="font-size:10px;color:#888;margin-top:3px;">Стоимость указана с учётом запчастей и работы.</div>'+
-        '</div>'+
-        '<div>'+
-          '<div class="row"><div class="lbl">Ориентировочный срок:</div><div class="val">'+(t.estDays||'уточняется')+'</div></div>'+
-        '</div>'+
-      '</div>'+
-      '<div class="important" style="margin-top:8px;"><b>⚠ ВАЖНО:</b> Дополнительные неисправности, выявленные в процессе ремонта, а также изменение стоимости ремонта согласовываются с клиентом отдельно.</div>'+
-    '</div>'+
-
-    '<div class="sec"><div class="sec-title">6. Состояние устройства при приёме</div>'+
-      '<div class="grid5">'+
-        '<div><div class="gh">Корпус</div>'+bx('body','ok','Без повреждений')+bx('body','scratches','Царапины')+bx('body','scuffs','Потёртости')+bx('body','chips','Сколы')+bx('body','cracks','Трещины')+bx('body','deform','Деформация')+'</div>'+
-        '<div><div class="gh">Дисплей</div>'+bx('display','ok','Исправен')+bx('display','scratches','Царапины')+bx('display','cracks','Трещины')+bx('display','broken','Разбит')+bx('display','noimage','Нет изображения')+bx('display','nosensor','Не раб. сенсор')+'</div>'+
-        '<div><div class="gh">Устройство</div>'+bx('power','on','Включается')+bx('power','off','Не включается')+bx('power','reboot','Цикл. перезагрузка')+bx('power','diag','Треб. диагностика')+'</div>'+
-        '<div><div class="gh">Wi-Fi</div>'+bx('wifi','ok','Работает')+bx('wifi','bad','Не работает')+bx('wifi','na','Проверка невозм.')+'</div>'+
-        '<div><div class="gh">Bluetooth</div>'+bx('bt','ok','Работает')+bx('bt','bad','Не работает')+bx('bt','na','Проверка невозм.')+'</div>'+
-      '</div>'+
-      (t.conditionExtras?'<div style="margin-top:4px;font-size:11px;"><b>Дополнительные особенности:</b> '+e(t.conditionExtras)+'</div>':'')+
-    '</div>'+
-
-    '<div class="terms-grid">'+
-      '<div class="terms-box"><b>7. Порядок выполнения работ</b><ol><li>Ремонт выполняется согласно согласованным работам и стоимости.</li><li>В случае выявления дополнительных неисправностей, не входящих в согласованный ремонт, стоимость и сроки согласовываются с клиентом дополнительно.</li><li>Ремонт выполняется после согласования всех изменений.</li></ol></div>'+
-      '<div class="terms-box"><b>8. Важная информация для клиента</b><ul><li>Клиент уведомлён о необходимости создания резервной копии данных перед сдачей устройства в ремонт.</li><li>В отдельных случаях ремонт может потребовать удаления пользовательских данных.</li><li>Срок хранения готового устройства после уведомления клиента — 30 календарных дней.</li><li>По истечении срока хранения сервисный центр не несёт ответственности за сохранность устройства.</li></ul></div>'+
-    '</div>'+
-
-    '<div class="confirm">Клиент подтверждает правильность сведений, указанных в настоящем заказ-наряде, и согласие с условиями ремонта.</div>'+
-
-    '<div class="sec" style="margin-top:12px;"><div class="sec-title">9. Подписи сторон</div>'+
-      '<div class="signatures">'+
-        '<div class="sig-block"><div class="sig-title">Устройство передал</div>'+
-          '<div class="row"><div class="lbl">ФИО клиента:</div><div class="val">'+e(t.client)+'</div></div>'+
-          '<div class="sig-line"></div><div class="sig-label">Подпись</div>'+
-          '<div style="margin-top:8px;font-size:10.5px;">Дата: «____» _______________ 20____ г.</div>'+
-        '</div>'+
-        '<div class="sig-block"><div class="sig-title">Ремонт оформил</div>'+
-          '<div class="row"><div class="lbl">ФИО сотрудника:</div><div class="val">'+(t.master||'____________________')+'</div></div>'+
-          '<div class="sig-line"></div><div class="sig-label">Подпись</div>'+
-          '<div style="margin-top:8px;font-size:10.5px;">Дата: «____» _______________ 20____ г.</div>'+
-        '</div>'+
-      '</div>'+
-    '</div>'+
-
-    '<div class="footer"><span>Store Control · Сервисный центр</span></div>'+
-    '</body></html>'
-  );
+    '<button class="noprint" onclick="window.print()" style="position:fixed;top:12px;right:12px;padding:9px 18px;cursor:pointer;background:#9a7b3f;color:#fff;border:none;border-radius:8px;font-weight:700;">Печать</button>'+
+    inner+'</body></html>');
   w.document.close();
-  toast('Заказ-наряд №'+t.id+' сформирован — можно печатать', 'success');
+  return w;
+}
+/* чек-лист состояния устройства → строки бланка */
+function _svcCondHTML(t){
+  const LBL={ body:{ok:'Без повреждений',scratches:'Царапины',scuffs:'Потёртости',chips:'Сколы',cracks:'Трещины',deform:'Деформация'},
+    display:{ok:'Исправен',scratches:'Царапины',cracks:'Трещины',broken:'Разбит',noimage:'Нет изображения',nosensor:'Не работает сенсор'},
+    power:{on:'Включается',off:'Не включается',reboot:'Цикл. перезагрузка',diag:'Требуется диагностика'},
+    wifi:{ok:'Работает',bad:'Не работает',na:'Проверка невозможна'},
+    bt:{ok:'Работает',bad:'Не работает',na:'Проверка невозможна'} };
+  const G={body:'Корпус',display:'Дисплей',power:'Устройство',wifi:'Wi-Fi',bt:'Bluetooth'};
+  const con=t.condition||{};
+  let html='<div class="cond">';
+  Object.keys(G).forEach(k=>{
+    const ids=(con[k]||[]);
+    const labels=ids.map(i=>LBL[k][i]).filter(Boolean).join(', ');
+    html+='<div class="g"><b>'+G[k]+':</b> '+(labels?'<span class="m">'+_svcEsc(labels)+'</span>':'<span class="no">— не отмечено</span>')+'</div>';
+  });
+  html+='</div>';
+  if(t.conditionExtras) html+='<div class="note" style="margin-top:8px;"><b>Особые отметки:</b> '+_svcEsc(t.conditionExtras)+'</div>';
+  return html;
+}
+/* КВИТАНЦИЯ О ПРИЁМЕ В РЕМОНТ */
+function openServiceBlank(id){
+  const t=DATA.service.find(x=>x.id===id); if(!t) return;
+  const cost=(t.cost!=null? t.cost : ((t.costLabor||0)+(t.costParts||0)));
+  const inner=
+    '<div class="top"><div class="logo">imagnate</div><div class="tr"><div class="no">№ ремонта: РМ-'+t.id+'</div><div class="dt">Принято: '+_svcEsc(t.accepted||DATA.today)+'</div></div></div>'+
+    '<div class="rule"></div><div class="dtitle">КВИТАНЦИЯ О ПРИЁМЕ В РЕМОНТ</div>'+
+    '<div class="box"><h3>ДАННЫЕ КЛИЕНТА</h3><div class="grid2">'+
+      '<div class="fld"><b>ФИО:</b><span>'+_svcEsc(t.client||'—')+'</span></div>'+
+      '<div class="fld"><b>Телефон:</b><span>'+_svcEsc(t.phone||'—')+'</span></div>'+
+      '<div class="fld"><b>Принял:</b><span>'+_svcEsc(t.master||t.acceptedBy||'—')+'</span></div>'+
+    '</div></div>'+
+    '<div class="box"><h3>УСТРОЙСТВО</h3><div class="grid2">'+
+      '<div class="fld"><b>Модель:</b><span>'+_svcEsc(t.device||'—')+'</span></div>'+
+      '<div class="fld"><b>Приметы:</b><span>'+_svcEsc(t.conditionExtras||'—')+'</span></div>'+
+      '<div class="fld"><b>Код доступа:</b><span>'+_svcEsc(t.devicePassword||'—')+'</span></div>'+
+    '</div><div class="hl" style="margin-top:12px;">Заявленная неисправность: '+_svcEsc(t.issue||t.clientWords||'—')+'</div></div>'+
+    '<div class="box"><h3>СОСТОЯНИЕ ПРИ ПРИЁМЕ <span class="tag">фиксируем ДО ремонта</span></h3>'+_svcCondHTML(t)+
+      '<div class="note" style="margin-top:10px;">Отмеченные пункты — повреждения, зафиксированные при приёме. За дефекты, не указанные в квитанции, сервис ответственности не несёт.</div></div>'+
+    '<div class="box"><h3>ПРЕДВАРИТЕЛЬНО</h3>'+
+      '<div class="hl row"><span>Работы: '+_svcEsc(t.agreedWorks||'уточняются после диагностики')+'</span><span>Срок: '+_svcEsc(t.estDays||'уточняется')+'</span></div>'+
+      '<div class="hl row" style="margin-top:8px;"><span>Ориентировочная стоимость</span><span>'+(cost?('≈ '+rub(cost)):'по диагностике')+'</span></div>'+
+      '<div class="note" style="margin-top:10px;">Диагностика бесплатна при согласии на ремонт. Окончательная цена согласуется с клиентом до начала работ; оплата — по факту при выдаче. Срок хранения невостребованного устройства — 60 дней.</div></div>'+
+    '<div class="signs"><div class="sig"><div class="l">Устройство сдал, с состоянием при приёме согласен — клиент</div></div>'+
+      '<div class="sig"><div class="l">Устройство принял — '+_svcEsc(t.master||t.acceptedBy||'сотрудник')+'</div></div></div>';
+  if(_svcDoc('Квитанция о приёме РМ-'+t.id, inner)) toast('Квитанция о приёме РМ-'+t.id+' сформирована', 'success');
+}
+/* АКТ ВЫПОЛНЕННЫХ РАБОТ · ВЫДАЧА */
+function openServiceHandout(id){
+  const t=DATA.service.find(x=>x.id===id); if(!t) return;
+  const costL=(t.costLabor||0), costP=(t.costParts||0);
+  const total=(t.paidAmount!=null? t.paidAmount : (t.cost!=null? t.cost : (costL+costP)))||0;
+  const partNames=(t.parts||[]).map(p=>p.name).filter(Boolean).join(', ');
+  let rows='';
+  rows+='<tr><td>'+_svcEsc(t.agreedWorks||'Ремонтные работы')+' (работа)</td><td style="text-align:center;">1</td><td class="r">'+rub(costL)+'</td><td class="r">'+rub(costL)+'</td></tr>';
+  if(costP>0 || partNames) rows+='<tr><td>Запчасти'+(partNames?': '+_svcEsc(partNames):'')+'</td><td style="text-align:center;">1</td><td class="r">'+rub(costP)+'</td><td class="r">'+rub(costP)+'</td></tr>';
+  const pay=(t.paidKind||'—')+(t.paidAmount!=null?' · оплачено при выдаче':'');
+  const inner=
+    '<div class="top"><div class="logo">imagnate</div><div class="tr"><div class="no">№ ремонта: РМ-'+t.id+'</div><div class="dt">Выдано: '+_svcEsc(t.issuedAt||DATA.today)+'</div></div></div>'+
+    '<div class="rule"></div><div class="dtitle">АКТ ВЫПОЛНЕННЫХ РАБОТ · ВЫДАЧА ИЗ РЕМОНТА</div>'+
+    '<div class="box"><h3>ДАННЫЕ КЛИЕНТА</h3><div class="grid2">'+
+      '<div class="fld"><b>ФИО:</b><span>'+_svcEsc(t.client||'—')+'</span></div>'+
+      '<div class="fld"><b>Телефон:</b><span>'+_svcEsc(t.phone||'—')+'</span></div>'+
+      '<div class="fld"><b>Устройство:</b><span>'+_svcEsc(t.device||'—')+'</span></div>'+
+      '<div class="fld"><b>№ ремонта:</b><span>РМ-'+t.id+'</span></div>'+
+    '</div></div>'+
+    '<div class="box"><h3>ВЫПОЛНЕННЫЕ РАБОТЫ И ЗАПЧАСТИ</h3>'+
+      '<table><thead><tr><th>Наименование</th><th style="width:66px;text-align:center;">Кол-во</th><th class="r" style="width:110px;">Цена</th><th class="r" style="width:120px;">Сумма</th></tr></thead><tbody>'+
+      rows+'<tr class="sum"><td colspan="3">ИТОГО К ОПЛАТЕ:</td><td class="r">'+rub(total)+'</td></tr></tbody></table>'+
+      '<div class="hl row" style="margin-top:12px;"><span>Способ оплаты</span><span>'+_svcEsc(pay)+'</span></div></div>'+
+    '<div class="box"><h3 style="text-align:center;">ГАРАНТИЯ НА РЕМОНТ | IMAGNATE</h3>'+
+      '<div class="hl row"><span>Гарантия на выполненные работы и установленную запчасть</span><span>3 месяца</span></div>'+
+      '<div class="wsub">Гарантия не действует при:</div>'+
+      '<ul><li>повреждении контроллера питания (микросхемы управления зарядом) — его выход из строя вызывается зарядкой несертифицированными или неисправными зарядными устройствами, что находится вне контроля сервиса</li></ul>'+
+      '<div class="note">Гарантия распространяется на заменённый узел и произведённые работы. При обращении по гарантии предъявите этот акт или назовите телефон — по номеру ремонта мы найдём его в системе.</div></div>'+
+    '<div class="box" style="padding:12px 18px;"><div class="note" style="font-size:12.5px;color:#222;">Устройство проверено в присутствии клиента, работает исправно. Претензий к внешнему виду и комплектации нет.</div></div>'+
+    '<div class="signs"><div class="sig"><div class="l">Устройство получил, с работами и гарантией согласен — клиент</div></div>'+
+      '<div class="sig"><div class="l">Работы выполнил и выдал — '+_svcEsc(t.master||'мастер')+'</div></div></div>';
+  if(_svcDoc('Акт выдачи РМ-'+t.id, inner)) toast('Акт выдачи РМ-'+t.id+' сформирован', 'success');
 }
 
 /* ============================================================
@@ -9387,8 +9555,10 @@ function renderWarehouse(c){
           (hasImei?'<td class="mono">'+(it.price?rub(it.price):'—')+'</td>':'<td class="mono">'+it.qty+' шт.</td>')+
           '<td><span class="badge '+st[1]+'">'+st[0]+'</span>'+((typeof isStale!=='undefined'&&isStale)?'<div class="tsub" style="color:var(--negative);font-weight:600;">⚠ не закрыт</div>':'')+'</td>'+
           '<td>'+it.location+'</td>'+
-          (isBu?('<td>'+(it.status==='instock'?'<button class="btn btn-sm btn-primary" data-sellbu="'+it.imei+'">Продать</button>':'')+'</td>')
-            :(isAcc?('<td>'+((it.qty||0)>0?'<button class="btn btn-sm btn-primary" data-sellacc="'+escAttr(it.sku||it.model)+'">Продать</button>':'')+'</td>'):''))+
+          (isBu?('<td style="white-space:nowrap;">'+(it.status==='instock'?'<button class="btn btn-sm btn-primary" data-sellbu="'+it.imei+'">Продать</button> ':'')+
+            '<button class="btn btn-sm" data-bulabel="'+it.imei+'" title="Печатная этикетка со штрих-кодом на коробку/пакет — единица опознаётся сканом">🏷</button></td>')
+            :(isAcc?('<td style="white-space:nowrap;">'+((it.qty||0)>0?'<button class="btn btn-sm btn-primary" data-sellacc="'+escAttr(it.sku||it.model)+'">Продать</button>':'')+
+              (((it.qty||0)>0 && (isBossRole()||STATE.role==='senior'))?' <button class="btn btn-sm" data-serialize="'+escAttr(it.sku||it.model)+'" title="Перевести в поштучный учёт по серийникам — выдача станет только по скану">🔢 Единичный учёт</button>':'')+'</td>'):''))+
         '</tr>';
       });
       html+='</tbody></table></div>';
@@ -9476,7 +9646,9 @@ function renderWarehouse(c){
   const tiBtn=document.getElementById('whTradeinBtn');
   if(tiBtn) tiBtn.addEventListener('click', ()=>openTradeinAcceptModal(c));
   c.querySelectorAll('[data-sellbu]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation(); openSellBuModal(el.dataset.sellbu, c);}));
+  c.querySelectorAll('[data-bulabel]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation(); openBuLabelModal(el.dataset.bulabel);}));
   c.querySelectorAll('[data-sellacc]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation(); openSellAccModal(el.dataset.sellacc, c);}));
+  c.querySelectorAll('[data-serialize]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation(); openSerializeAccModal(el.dataset.serialize, c);}));
 }
 
 /* ============================================================
@@ -9570,7 +9742,8 @@ function tiRecommend(base, cond){
 let TI=null;
 function openTradeinAcceptModal(c){
   ensureTradeinData();
-  if(!TI) TI={model:'', imei:'', base:'', amount:'', mode:'buyout', orderId:'', icloudOff:false,
+  const mk=((DATA.settings=DATA.settings||{}).buMarkupPct)||30;
+  if(!TI) TI={model:'', imei:'', base:'', amount:'', mode:'buyout', orderId:'', icloudOff:false, batteryPct:'', markup:'',
               cond:{screen:'ideal', body:'ideal', battery:'good', kit:'full'}};
   const activeOrders=DATA.orders.filter(o=>ACTIVE_RESERVE_STATUSES.includes(o.status));
   const rec=(TI.base>0)? tiRecommend(parseFloat(TI.base)||0, TI.cond) : null;
@@ -9579,16 +9752,22 @@ function openTradeinAcceptModal(c){
     '<div class="field"><label>Модель *</label><input class="input-mini" id="tiModel" style="width:100%;" value="'+escAttr(TI.model)+'" placeholder="iPhone 13 128GB Blue"></div>'+
     '<div class="field"><label>IMEI *</label><input class="input-mini" id="tiImei" style="width:100%;" value="'+escAttr(TI.imei)+'"></div>'+
   '</div>';
+  body+='<div class="tsub" style="margin-top:4px;">IMEI — с аппарата: набор <b>*#06#</b> или «Настройки → Об устройстве» (коробка не нужна). Нужен для учёта, проверки на блокировку и гарантии.</div>';
   body+='<div class="drill-block-label" style="margin-top:10px;">Чек-лист состояния</div><div class="field-grid">'+
     '<div class="field"><label>Экран</label><select class="select-mini" id="tiScreen" style="width:100%;">'+sel('screen',TI.cond.screen)+'</select></div>'+
     '<div class="field"><label>Корпус</label><select class="select-mini" id="tiBody" style="width:100%;">'+sel('body',TI.cond.body)+'</select></div>'+
     '<div class="field"><label>Батарея</label><select class="select-mini" id="tiBattery" style="width:100%;">'+sel('battery',TI.cond.battery)+'</select></div>'+
     '<div class="field"><label>Комплект</label><select class="select-mini" id="tiKit" style="width:100%;">'+sel('kit',TI.cond.kit)+'</select></div>'+
   '</div>';
+  body+='<div class="field" style="margin-top:8px;"><label>Ёмкость аккумулятора, %</label><input class="input-mini" id="tiBatteryPct" type="number" min="0" max="100" style="width:100%;" value="'+escAttr(String(TI.batteryPct||''))+'" placeholder="напр. 87"></div>';
   body+='<div class="toggle-row" style="margin:10px 0;"><div class="toggle-switch '+(TI.icloudOff?'on':'')+'" id="tiIcloud"></div><b>iCloud / аккаунт отвязан</b> — обязательное условие приёма</div>';
   body+='<div class="field-grid">'+
     '<div class="field"><label>База: цена такого же в идеале, ₽</label><input class="input-mini" id="tiBase" type="number" style="width:100%;" value="'+escAttr(String(TI.base))+'"></div>'+
     '<div class="field"><label>Сумма выкупа, ₽ *</label><input class="input-mini" id="tiAmount" type="number" style="width:100%;" value="'+escAttr(String(TI.amount))+'"></div>'+
+  '</div>';
+  body+='<div class="field-grid">'+
+    '<div class="field"><label>Наценка на витрину, %</label><input class="input-mini" id="tiMarkup" type="number" min="0" style="width:100%;" value="'+escAttr(String((TI.markup!==''&&TI.markup!=null)?TI.markup:mk))+'"></div>'+
+    '<div class="field"><label>Цена на витрине, ₽</label><div class="v" style="font-weight:700;padding-top:6px;">'+((parseFloat(TI.amount)||0)>0?rub(Math.round((parseFloat(TI.amount)||0)*(1+((parseFloat(TI.markup)||mk)/100))/100)*100):'—')+'</div></div>'+
   '</div>';
   if(rec!=null) body+='<div class="kpi-delta" style="margin:4px 0 10px;color:var(--accent-2);">Калькулятор рекомендует: <b>'+rub(rec)+'</b> <button class="btn btn-sm" id="tiUseRec" style="margin-left:8px;">Подставить</button></div>';
   body+='<div class="drill-block-label" style="margin-top:6px;">Режим</div>'+
@@ -9606,14 +9785,24 @@ function openTradeinAcceptModal(c){
     const amount=parseFloat(TI.amount);
     if(isNaN(amount)||amount<=0){ toast('Укажите сумму выкупа', 'error'); return; }
     if(findUnit(TI.imei.trim())){ toast('Такой IMEI уже есть на складе', 'error'); return; }
+    /* НЕШТАТ-ФИКС 08.08: выкуп не может увести кассу в минус — проверка ДО постановки на склад */
+    if(TI.mode==='buyout'){
+      const cashAvail=(DATA.assets.cashByStore[0].amount||0);
+      if(amount>cashAvail){
+        toast('В кассе только '+rub(cashAvail)+', выкуп на '+rub(amount)+' провести нельзя. Пополните кассу или согласуйте выкуп с руководством.','error');
+        return;
+      }
+    }
+    const markupPct=(parseFloat(TI.markup)||mk); (DATA.settings=DATA.settings||{}).buMarkupPct=markupPct;
     const unit={imei:TI.imei.trim(), model:TI.model.trim()+' (Trade-in)', purchase:amount,
-      price:Math.round(amount*1.3/100)*100, status:'instock', location:getCurrentStore().shortName||'Магазин',
-      condition:{...TI.cond, icloudOff:true}, acceptedBy:currentEmployeeName(), acceptedAt:DATA.today};
+      price:Math.round(amount*(1+markupPct/100)/100)*100, status:'instock', location:getCurrentStore().shortName||'Магазин',
+      condition:{...TI.cond, icloudOff:true}, batteryPct:(parseFloat(TI.batteryPct)||null), acceptedBy:currentEmployeeName(), acceptedAt:DATA.today};
     DATA.warehouse.tradein.push(unit);
     if(TI.mode==='buyout'){
       DATA.assets.cashByStore[0].amount-=amount;
       DATA.financeOps.unshift({date:DATA.today, type:'Выкуп б/у', amount, comment:unit.model+' ('+unit.imei+') · выкуп за наличные', who:currentEmployeeName()});
       toast('Принято: '+unit.model+'. Из кассы выдано '+rub(amount), 'success');
+      setTimeout(()=>{ try{ openBuLabelModal(unit.imei); }catch(e){} }, 400);
     } else {
       const o=findOrder(parseInt(TI.orderId));
       if(!o){ toast('Выберите заказ для зачёта', 'error'); return; }
@@ -9635,11 +9824,14 @@ function openTradeinAcceptModal(c){
     TI.cond.battery=document.getElementById('tiBattery').value;
     TI.cond.kit=document.getElementById('tiKit').value;
     TI.mode=document.getElementById('tiMode').value;
+    const bp=document.getElementById('tiBatteryPct'); if(bp) TI.batteryPct=bp.value;
+    const mkEl=document.getElementById('tiMarkup'); if(mkEl) TI.markup=mkEl.value;
     const tio=document.getElementById('tiOrder'); if(tio) TI.orderId=tio.value;
   }
   const rerender=()=>{ syncTI(); openTradeinAcceptModal(c); };
   ['tiScreen','tiBody','tiBattery','tiKit','tiMode'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('change', rerender); });
   document.getElementById('tiBase').addEventListener('change', rerender);
+  ['tiBatteryPct','tiMarkup'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('change', rerender); });
   document.getElementById('tiIcloud').addEventListener('click', function(){ syncTI(); TI.icloudOff=!TI.icloudOff; openTradeinAcceptModal(c); });
   const useRec=document.getElementById('tiUseRec');
   if(useRec) useRec.addEventListener('click', ()=>{ syncTI(); TI.amount=tiRecommend(parseFloat(TI.base)||0, TI.cond); openTradeinAcceptModal(c); });
@@ -9671,7 +9863,7 @@ function openSellAccModal(code, c){
     const sum=Math.round(price*n);
     it.qty-=n;
     const cost=Math.round((it.purchase||0)*n);
-    if(pay==='Наличные'){ try{ cashBoxRef().amount+=sum; }catch(e){} } else DATA.assets.cashless+=sum;
+    if(pay==='Наличные'){ try{ cashBoxRef().amount+=sum; }catch(e){} } else DATA.assets.cashless+=acqApply(sum, pay, 'Аксессуар '+it.model);
     DATA.salesLog.unshift({orderId:'акс: '+it.model, date:DATA.today, time:nowTime(), sum:sum, cost:cost, margin:sum-cost, payment:pay, via:'acc_store', by:currentEmployeeName()});
     DATA.financeOps.unshift({date:DATA.today, type:'Продажа аксессуара', amount:sum, comment:it.model+' × '+n+' · '+pay, who:currentEmployeeName()});
     if(DATA.finance){ DATA.finance.turnover.total+=sum; DATA.finance.revenue.total+=(sum-cost); }
@@ -9682,6 +9874,56 @@ function openSellAccModal(code, c){
     toast('Продано: '+it.model+' × '+n+' за '+rub(sum)+' ('+pay+')', 'success');
   }}]);
 }
+function openBuSaleAct(imei){
+  const it=(DATA.warehouse.tradein||[]).find(x=>x.imei===imei); if(!it) return;
+  const cond=it.condition||{};
+  const lab=(g,k)=>{ try{ return TI_COEF[g][k].label; }catch(e){ return k||'—'; } };
+  const buyer=it.soldTo||{};
+  const price=it.soldPrice||it.price||0;
+  const inner=
+    '<div class="top"><div class="logo">imagnate</div><div class="tr"><div class="no">№ б/у: '+_svcEsc(String(it.imei).slice(-6))+'</div><div class="dt">Продано: '+_svcEsc(it.soldAt||DATA.today)+'</div></div></div>'+
+    '<div class="rule"></div><div class="dtitle">АКТ ПРОДАЖИ Б/У УСТРОЙСТВА</div>'+
+    '<div class="box"><h3>ПОКУПАТЕЛЬ</h3><div class="grid2">'+
+      '<div class="fld"><b>ФИО:</b><span>'+_svcEsc(buyer.name||'—')+'</span></div>'+
+      '<div class="fld"><b>Телефон:</b><span>'+_svcEsc(buyer.phone||'—')+'</span></div>'+
+    '</div></div>'+
+    '<div class="box"><h3>УСТРОЙСТВО (Б/У)</h3><div class="grid2">'+
+      '<div class="fld"><b>Модель:</b><span>'+_svcEsc(String(it.model||'').replace(/ \(Trade-in\)$/,''))+'</span></div>'+
+      '<div class="fld"><b>IMEI:</b><span>'+_svcEsc(it.imei||'—')+'</span></div>'+
+      '<div class="fld"><b>Аккумулятор:</b><span>'+(it.batteryPct?it.batteryPct+'%':'—')+'</span></div>'+
+      '<div class="fld"><b>iCloud/аккаунт:</b><span>отвязан</span></div>'+
+    '</div>'+
+    '<div class="hl" style="margin-top:12px;">Состояние: экран — '+_svcEsc(lab("screen",cond.screen))+'; корпус — '+_svcEsc(lab("body",cond.body))+'; батарея — '+_svcEsc(lab("battery",cond.battery))+'; комплект — '+_svcEsc(lab("kit",cond.kit))+'.</div></div>'+
+    '<div class="box"><h3>ОПЛАТА</h3>'+
+      '<table><thead><tr><th>Наименование</th><th class="r" style="width:140px;">Сумма</th></tr></thead><tbody>'+
+      '<tr><td>'+_svcEsc(String(it.model||'').replace(/ \(Trade-in\)$/,''))+' (б/у)</td><td class="r">'+rub(price)+'</td></tr>'+
+      '<tr class="sum"><td>ИТОГО К ОПЛАТЕ:</td><td class="r">'+rub(price)+'</td></tr></tbody></table></div>'+
+    '<div class="box"><h3 style="text-align:center;">ГАРАНТИЯ НА Б/У | IMAGNATE</h3>'+
+      '<div class="hl row"><span>Гарантия на работоспособность</span><span>3 месяца с даты продажи</span></div>'+
+      '<div class="wsub">Гарантия не действует при:</div>'+
+      '<ul><li>механических повреждениях (падение, удар, изгиб)</li><li>попадании влаги</li><li>вскрытии устройства или ремонте в другом месте</li></ul>'+
+      '<div class="note">Внешний вид и состояние оценены покупателем при покупке (устройство бывшее в употреблении). При обращении по гарантии предъявите этот акт или назовите телефон.</div></div>'+
+    '<div class="box" style="padding:12px 18px;"><div class="note" style="font-size:12.5px;color:#222;">Устройство проверено в присутствии покупателя, работает исправно, аккаунт отвязан. С состоянием б/у устройства покупатель ознакомлен и согласен.</div></div>'+
+    '<div class="signs"><div class="sig"><div class="l">Устройство получил, с состоянием и гарантией согласен — покупатель</div></div>'+
+      '<div class="sig"><div class="l">Продал — '+_svcEsc((typeof currentEmployeeName==='function'?currentEmployeeName():'сотрудник'))+'</div></div></div>';
+  if(_svcDoc('Акт продажи б/у '+it.imei, inner)) toast('Акт продажи б/у сформирован', 'success');
+}
+/* ЭТИКЕТКА Б/У (канон владельца, сшивка 08.08): каждая б/у единица — со своим
+   печатным штрих-кодом; гарантия и выдача опознаются сканом. */
+function openBuLabelModal(imei){
+  const it=(DATA.warehouse.tradein||[]).find(x=>x.imei===imei); if(!it) return;
+  const label=unitLabelHTML({name:String(it.model||'').replace(/ \(Trade-in\)$/,'')+' · б/у'+(it.batteryPct?(' · АКБ '+it.batteryPct+'%'):''), code:it.imei});
+  const body='<div style="text-align:center;">'+label+'</div>'+
+    '<div class="tsub" style="margin-top:12px;line-height:1.55;">Наклейте на коробку или пакет устройства. Скан этикетки открывает единицу, при выдаче — сверяет, что отдаёте именно её.</div>';
+  openModal('🏷 Этикетка б/у — '+escHtml(it.model),'',body,[{label:'Распечатать', cls:'btn-primary', action:()=>{
+    const w=window.open('','_blank','width=480,height=420');
+    if(!w){ toast('Разрешите всплывающие окна, чтобы печатать этикетки','error'); return; }
+    w.document.write('<html><head><title>Этикетка б/у '+it.imei+'</title></head><body style="display:flex;justify-content:center;padding:24px;font-family:Arial;">'+label+'</body></html>');
+    w.document.close(); w.focus();
+    setTimeout(()=>{ try{ w.print(); }catch(e){} },300);
+  }},{label:'Закрыть', cls:'', action:closeModal}]);
+}
+
 function openSellBuModal(imei, c){
   ensureMoneyData();
   const it=DATA.warehouse.tradein.find(x=>x.imei===imei);
@@ -9689,8 +9931,10 @@ function openSellBuModal(imei, c){
   let body='<div class="field-grid">'+
     field('Аппарат', it.model)+field('IMEI', it.imei)+
     field('Закупка (выкуп)', rub(it.purchase))+field('Цена на витрине', it.price?rub(it.price):'—')+
+    (it.batteryPct?field('Аккумулятор', it.batteryPct+'%'):'')+
   '</div>'+
-  '<div class="field" style="margin-top:12px;"><label>Сумма продажи</label><input class="input-mini" id="buPrice" type="number" min="0" style="width:100%;" value="'+(it.price||'')+'"></div>'+
+  '<div class="field-grid" style="margin-top:10px;"><div class="field"><label>Покупатель (ФИО)</label><input class="input-mini" id="buBuyerName" style="width:100%;" placeholder="для гарантии"></div><div class="field"><label>Телефон покупателя</label><input class="input-mini" id="buBuyerPhone" style="width:100%;"></div></div>'+
+  '<div class="field" style="margin-top:8px;"><label>Сумма продажи</label><input class="input-mini" id="buPrice" type="number" min="0" style="width:100%;" value="'+(it.price||'')+'"></div>'+
   '<div class="field" style="margin-top:8px;"><label>Оплата</label><select class="select-mini" id="buPay" style="width:100%;"><option>Наличные</option><option>Карта</option><option>QR-код</option></select></div>'+
   '<div class="field" id="buCommentWrap" style="display:none;margin-top:8px;"><label>Комментарий — почему ниже закупа <span style="color:var(--negative);">*</span></label><input class="input-mini" id="buComment" style="width:100%;"></div>';
   openModal('Продажа б/у — '+it.model, 'Гарантия на б/у: 3 месяца с момента продажи', body, [{label:'Продать', cls:'btn-primary', action:()=>{
@@ -9705,7 +9949,8 @@ function openSellBuModal(imei, c){
     }
     const pay=document.getElementById('buPay').value;
     it.status='sold'; it.soldAt=DATA.today; it.soldPrice=price; it.soldComment=comment;
-    if(pay==='Наличные') DATA.assets.cashByStore[0].amount+=price; else DATA.assets.cashless+=price;
+    it.soldTo={name:((document.getElementById('buBuyerName')||{}).value||'').trim(), phone:((document.getElementById('buBuyerPhone')||{}).value||'').trim()};
+    if(pay==='Наличные') DATA.assets.cashByStore[0].amount+=price; else DATA.assets.cashless+=acqApply(price, pay, 'Б/у '+it.model);
     DATA.salesLog.unshift({orderId:'б/у '+it.imei, date:DATA.today, time:nowTime(), sum:price, cost:it.purchase, margin:price-it.purchase, payment:pay, via:'bu_store', by:currentEmployeeName()});
     /* Мотивация трейд-ина: 12% маржи принявшему + 12% продавшему (настраиваемо) */
     ensureTradeinData();
@@ -9722,8 +9967,62 @@ function openSellBuModal(imei, c){
     if(DATA.finance){ DATA.finance.turnover.total+=price; DATA.finance.revenue.total+=(price-it.purchase); }
     if(price<it.purchase) pushNotif('Владелец', '⚠ Б/у «'+it.model+'» продан НИЖЕ закупа: '+rub(price)+' при выкупе '+rub(it.purchase)+'. Продавец: '+currentEmployeeName()+'. Комментарий: '+comment);
     closeModal(); renderWarehouse(c); beep('ok');
+    try{ openBuSaleAct(it.imei); }catch(e){}
     toast('Продано за '+rub(price)+' ('+pay+'). Гарантия б/у — 3 мес. с '+DATA.today, 'success');
   }}]);
+}
+
+/* ЕДИНИЧНЫЙ УЧЁТ (случай двух Дайсонов 08.08): у дорогой техники без IMEI
+   (фены, приставки, часы) на коробке есть серийный номер. Сканируем серийники —
+   позиция переезжает из «Аксессуаров» в «Технику» поштучно. Дальше каждая
+   коробка уникальна: выдача только сканом, чужой резерв не отдать. */
+function openSerializeAccModal(key, c){
+  const it=(DATA.warehouse.accessories||[]).find(x=>(x.sku||x.model)===key);
+  if(!it || (it.qty||0)<=0){ toast('Позиция не найдена или остаток нулевой','error'); return; }
+  const n=it.qty;
+  let body='<div class="tsub" style="line-height:1.6;margin-bottom:10px;">У «'+escHtml(it.model)+'» остаток <b>'+n+' шт.</b> '+
+    'Отсканируйте серийный номер с коробки КАЖDОЙ единицы — позиция переедет в «Технику» поштучно. '+
+    'После этого две одинаковые коробки перестанут быть неразличимыми: выдача — только сканом, чужую не отдать.</div>';
+  for(let i=0;i<n;i++){
+    body+='<div class="field"><label>Серийный № коробки '+(i+1)+' из '+n+'</label>'+
+      '<input class="input-mini mono" data-ser-inp="'+i+'" style="width:100%;" placeholder="Скан или ввод серийника с коробки"></div>';
+  }
+  body+='<div class="tsub" style="margin-top:6px;">Сканер работает как клавиатура: наведите на код — поле заполнится само. Cерийники должны быть разными.</div>';
+  openModal('🔢 Единичный учёт — '+it.model, n+' шт. → поштучно в «Технику»', body, [
+    {label:'Перевести в единичный учёт', cls:'btn-primary', action:()=>{
+      const vals=[];
+      for(let i=0;i<n;i++){
+        const v=((document.querySelector('[data-ser-inp="'+i+'"]')||{}).value||'').trim();
+        if(!v){ toast('Заполните серийник коробки '+(i+1)+' из '+n,'error'); return; }
+        if(vals.includes(v)){ toast('Серийник «'+v+'» указан дважды — коробки должны отличаться','error'); return; }
+        if(typeof findUnit==='function' && findUnit(v)){ toast('Серийник «'+v+'» уже есть на складе','error'); return; }
+        vals.push(v);
+      }
+      vals.forEach(v=>{
+        DATA.warehouse.tech.push({imei:v, model:it.model, purchase:(it.purchase||0), price:(it.price||0)||null,
+          status:'instock', location:it.location||((typeof getCurrentStore==='function' && getCurrentStore().shortName)||'Магазин'),
+          serializedFrom:'accessories', serializedAt:DATA.today, serializedBy:(typeof currentEmployeeName==='function'?currentEmployeeName():'')});
+      });
+      it.qty=0; it.status='out';
+      (DATA.financeOps=DATA.financeOps||[]).unshift({date:DATA.today, type:'Единичный учёт', amount:0,
+        comment:'«'+it.model+'» переведён в поштучный учёт: '+n+' шт., серийники '+vals.join(', '),
+        who:(typeof currentEmployeeName==='function'?currentEmployeeName():'')});
+      try{ if(typeof lsSave==='function') lsSave(); }catch(e){}
+      try{ cloudPushNow(); }catch(e){}
+      closeModal();
+      try{ STATE.whFilters.tab='tech'; renderWarehouse(c||document.getElementById('pageContent')); }catch(e){}
+      try{ beep('ok'); }catch(e){}
+      toast('«'+it.model+'»: '+n+' шт. теперь в «Технике» поштучно. Выдача — только по скану серийника.','success');
+    }},
+    {label:'Отмена', cls:'', action:closeModal}
+  ]);
+  setTimeout(()=>{
+    const inps=[...document.querySelectorAll('[data-ser-inp]')];
+    inps.forEach((inp,i)=>inp.addEventListener('keydown', e=>{
+      if(e.key==='Enter'){ e.preventDefault(); if(inps[i+1]) inps[i+1].focus(); }
+    }));
+    if(inps[0]) inps[0].focus();
+  }, 60);
 }
 
 function openWarehouseItemDrill(code){
@@ -15098,6 +15397,42 @@ function controlPanelHTML(){
   }
   html+='</div>';
 
+  /* --- Деньги: эквайринг и мотивация (канон владельца, слияние 08.08) --- */
+  if(isBossRole()){
+    const st=DATA.settings||{};
+    const tr=DATA.tradeinRates||{buy:12, sell:12};
+    html+='<div class="section"><div class="section-head"><div class="section-title">💳 Деньги: комиссии и мотивация</div></div>'+
+      '<div class="card" style="margin-bottom:10px;"><div class="kpi-label">Комиссии эквайринга</div>'+
+      '<div class="tsub" style="margin-top:4px;line-height:1.6;">Банк удерживает комиссию ИЗ суммы оплаты: клиент платит цену, магазину падает меньше. Это не наценка клиенту. Пример: картой 100 000 → магазину 98 000.</div>'+
+      '<div style="display:flex;gap:14px;margin-top:10px;flex-wrap:wrap;align-items:center;">'+
+        '<span class="tsub">Карта, %:</span><input class="input-mini" id="acqCardInp" type="number" step="0.1" min="0" max="15" value="'+(st.acqCardPct!=null?st.acqCardPct:2)+'" style="width:90px;">'+
+        '<span class="tsub">QR, %:</span><input class="input-mini" id="acqQrInp" type="number" step="0.1" min="0" max="15" value="'+(st.acqQrPct!=null?st.acqQrPct:0.4)+'" style="width:90px;">'+
+        '<button class="btn btn-sm btn-primary" id="acqSaveBtn">Сохранить</button>'+
+      '</div></div>'+
+      '<div class="card"><div class="kpi-label">Мотивация трейд-ина</div>'+
+      '<div class="tsub" style="margin-top:4px;line-height:1.6;">Процент от маржи б/у после реализации: выкупившему и продавшему. Один человек сделал оба действия — получает оба бонуса.</div>'+
+      '<div style="display:flex;gap:14px;margin-top:10px;flex-wrap:wrap;align-items:center;">'+
+        '<span class="tsub">За выкуп, %:</span><input class="input-mini" id="tiBuyInp" type="number" step="1" min="0" max="50" value="'+tr.buy+'" style="width:90px;">'+
+        '<span class="tsub">За продажу, %:</span><input class="input-mini" id="tiSellInp" type="number" step="1" min="0" max="50" value="'+tr.sell+'" style="width:90px;">'+
+        '<button class="btn btn-sm btn-primary" id="tiRatesSaveBtn">Сохранить</button>'+
+      '</div></div></div>';
+  }
+
+  /* --- 5. Боевой запуск базы (только владелец): очистить демо и запереть облако на боевую базу --- */
+  if(isBossRole()){
+    html+='<div class="section"><div class="section-head"><div class="section-title">🚀 Боевой запуск базы</div></div>'+
+      '<div class="placeholder-card" style="border-style:dashed;border-color:rgba(255,90,90,.4);background:rgba(255,90,90,.05);">'+
+      '<span class="badge b-cancel">Только владелец · необратимо</span>'+
+      '<b>Перевести систему в боевой режим</b>'+
+      '<p>Делается ОДИН раз — в день реальной приёмки. Сервер сам, авторитетно, очищает все демо-данные (заказы, склад, кассы, клиентов, сервис, заявки) и намертво запирает облако на паспорт этой базы: демо-снимки и снимки с чужим паспортом больше не принимаются ни с какого компьютера. После запуска система перезагрузится на чистую боевую базу, и всё, что вы внесёте дальше, будет храниться в БД и переживать смену версий.</p>'+
+      '<p style="color:var(--negative);margin:0;"><b>Отменить нельзя.</b> Убедитесь, что демо-примеры вам больше не нужны.</p>'+
+      '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;">'+
+        '<button class="btn btn-sm btn-danger" id="prodStartBtn">🚀 Боевой запуск</button>'+
+        '<button class="btn btn-sm" id="prodStatusBtn">Проверить статус</button>'+
+        '<span class="tsub" id="prodStatusLbl" style="opacity:.75;"></span>'+
+      '</div></div></div>';
+  }
+
   return html;
 }
 
@@ -15137,6 +15472,46 @@ function demoDetox(){
   });
   try{ fullSave(); }catch(e){}
   return n;
+}
+/* Д4: БОЕВОЙ ЗАПУСК. Локальная очистка не проходит в облако (хранитель сливает
+   записи и демо возвращается), поэтому очистку делает сервер авторитетно
+   (/state-wipe), затем запирает облако на паспорт этой базы (/state-production),
+   а клиент перезагружается на чистую боевую базу. */
+function productionStartDialog(){
+  if(!isBossRole()){ toast('Только владелец','error'); return; }
+  const c=erpServerCreds();
+  if(!c){ toast('Нет связи с сервером — подключите систему (шестерёнка Заказов)','error'); return; }
+  openModal('Боевой запуск базы','Необратимо',
+    '<div class="tsub" style="line-height:1.7;">Сервер очистит ВСЕ демо-данные и запрёт облако на боевую базу. '+
+    'Демо-заказы, склад, кассы, клиенты, сервис и заявки удалятся на сервере и на этом компьютере — <b>отменить нельзя</b>.<br><br>'+
+    'Чтобы подтвердить, введите слово <b>БОЕВОЙ</b>:'+
+    '<input class="input" id="prodConfirmInp" placeholder="БОЕВОЙ" autocomplete="off" style="margin-top:8px;text-transform:uppercase;">'+
+    '<div id="prodConfirmErr" style="color:var(--negative);margin-top:6px;min-height:16px;"></div></div>',
+    [{label:'🚀 Запустить боевой режим', cls:'btn-danger', action:()=>{
+      const v=((document.getElementById('prodConfirmInp')||{}).value||'').trim().toUpperCase();
+      if(v!=='БОЕВОЙ'){ const e=document.getElementById('prodConfirmErr'); if(e) e.textContent='Введите слово БОЕВОЙ, чтобы подтвердить.'; return; }
+      productionStart();
+    }},
+    {label:'Отмена', cls:'', action:closeModal}]);
+}
+async function productionStart(){
+  const c=erpServerCreds();
+  if(!c){ toast('Нет связи с сервером','error'); return; }
+  closeModal();
+  openModal('Боевой запуск…','','<div class="tsub">Очищаю демо на сервере и запираю базу…</div>',[]);
+  try{
+    const h={'Content-Type':'application/json','Authorization':'Bearer '+c.token};
+    const w=await fetch(c.api+'/state-wipe',{method:'POST',headers:h,body:'{}'}).then(r=>r.json());
+    if(!w || w.ok!==true) throw new Error((w&&w.error)||'сервер не подтвердил очистку');
+    const p=await fetch(c.api+'/state-production',{method:'POST',headers:h,body:'{}'}).then(r=>r.json());
+    if(!p || p.ok!==true) throw new Error((p&&p.error)||'сервер не подтвердил боевой режим');
+    window._skipAutosave=true;
+    try{ localStorage.removeItem(LS_FULL_KEY); localStorage.removeItem('erp_base_id'); }catch(e){}
+    location.reload();
+  }catch(e){
+    closeModal();
+    toast('Боевой запуск не удался: '+(e && e.message ? e.message : e),'error');
+  }
 }
 /* ПОЛНЫЙ БЭКАП В ФАЙЛ (05.08): сервер отдаёт базу + историю снимков +
    заявки одним JSON. Если сервер недоступен — скачивается локальный снимок
@@ -15346,6 +15721,34 @@ function wireControlPanel(c){
         renderManage(c);
       }},
       {label:'Отмена', cls:'', action:closeModal}]);
+  });
+  const acqSave=document.getElementById('acqSaveBtn');
+  if(acqSave) acqSave.addEventListener('click', ()=>{
+    if(!DATA.settings) DATA.settings={};
+    DATA.settings.acqCardPct=Math.max(0, Math.min(15, parseFloat(document.getElementById('acqCardInp').value)||0));
+    DATA.settings.acqQrPct=Math.max(0, Math.min(15, parseFloat(document.getElementById('acqQrInp').value)||0));
+    if(typeof lsSave==='function') lsSave();
+    toast('Комиссии эквайринга: карта −'+DATA.settings.acqCardPct+'%, QR −'+DATA.settings.acqQrPct+'%','success');
+  });
+  const tiSave=document.getElementById('tiRatesSaveBtn');
+  if(tiSave) tiSave.addEventListener('click', ()=>{
+    if(typeof ensureTradeinData==='function') ensureTradeinData();
+    DATA.tradeinRates.buy=Math.max(0, Math.min(50, parseFloat(document.getElementById('tiBuyInp').value)||0));
+    DATA.tradeinRates.sell=Math.max(0, Math.min(50, parseFloat(document.getElementById('tiSellInp').value)||0));
+    if(typeof lsSave==='function') lsSave();
+    toast('Мотивация трейд-ина: выкуп '+DATA.tradeinRates.buy+'%, продажа '+DATA.tradeinRates.sell+'%','success');
+  });
+  const psb=document.getElementById('prodStartBtn');
+  if(psb) psb.addEventListener('click', ()=>productionStartDialog());
+  const pstb=document.getElementById('prodStatusBtn');
+  if(pstb) pstb.addEventListener('click', ()=>{
+    const lbl=document.getElementById('prodStatusLbl');
+    const cc=erpServerCreds();
+    if(!cc){ if(lbl) lbl.textContent='нет связи с сервером'; return; }
+    if(lbl) lbl.textContent='проверяю…';
+    fetch(cc.api+'/state-production',{headers:{'Authorization':'Bearer '+cc.token}})
+      .then(r=>r.json()).then(j=>{ if(lbl) lbl.textContent=(j&&j.production)?('боевой режим ВКЛЮЧЁН · паспорт '+(j.baseId||'—')):'боевой режим выключен (демо-данные принимаются)'; })
+      .catch(()=>{ if(lbl) lbl.textContent='ошибка связи'; });
   });
   c.querySelectorAll('[data-emp-del]').forEach(el=>el.addEventListener('click',()=>{
     if(!isBossRole()){ toast('Только владелец','error'); return; }
@@ -17090,7 +17493,7 @@ function applySiteOrderStatus(o, rawSt, stamp, dStore){
 function siteRepairStatusToErp(rawSt){
   const st=String(rawSt||'').toLowerCase().trim();
   if(!st) return 'new';
-  if(/^done$|complete|vypoln|выполн|finish|success|выдан|заверш/.test(st)) return 'done';
+  if(/^done$|complete|vypoln|выполн|finish|success|выдан|заверш|отработ|otrabot/.test(st)) return 'done';
   if(/reject|otkaz|отказ|cancel|otmen|отмен/.test(st)) return 'archive';
   if(/запчаст|детал|part|постав/.test(st)) return 'wait_part';
   if(/оплат|payment|предоплат/.test(st)) return 'wait_payment';
@@ -21937,7 +22340,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-128 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-146 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -22826,6 +23229,28 @@ function openLeadDialog(id, c){
       toast('Заявка отмечена обработанной — переносится в «Общение»','success');
     }});
   }
+  if(['new','working','waiting'].includes(l.stage) && !l.serviceRepairId){
+    actions.push({label:'🔧 Передать в сервис', action:()=>{
+      const newId=Math.max(1000, ...((DATA.service||[]).map(t=>typeof t.id==='number'?t.id:0)))+1;
+      const chLbl=((CHANNELS[l.channel]||{}).label||l.channel||'канал');
+      const lastMsgs=((l.msgs||[]).filter(m=>m.dir==='in').slice(-3).map(m=>m.text).filter(Boolean).join(' / '));
+      const issue=lastMsgs||('Обращение по ремонту'+(l.item?': '+l.item:'')+' ('+chLbl+')');
+      (DATA.service=DATA.service||[]).unshift({
+        id:newId, device:(l.item||'Устройство — уточнить у клиента'), client:(l.name||'Клиент '+chLbl), phone:(l.contact||'—'),
+        issue:issue, clientWords:issue, agreedWorks:'', devicePassword:'', condition:{}, conditionExtras:'',
+        master:null, acceptedBy:(typeof currentEmployeeName==='function'?currentEmployeeName():''),
+        status:'new', accepted:DATA.today, urgency:'normal', parts:[], fromLead:l.id,
+        history:[{date:DATA.today+' '+nowTime(), text:'Передано в сервис из CRM ('+chLbl+') менеджером '+me}]
+      });
+      l.serviceRepairId=newId; l.stage='won'; l.lastTouch=DATA.today;
+      (l.notes=l.notes||[]).unshift({date:DATA.today, text:'Передано в сервис — ремонт №'+newId+' (разберёт мастер)'});
+      try{ pushNotif('Мастер', '🔧 Новая заявка в ремонт №'+newId+' из CRM ('+chLbl+'): '+(l.name||'')+(l.item?', '+l.item:'')+(l.contact?', '+l.contact:'')); }catch(e){}
+      try{ if(typeof lsSave==='function') lsSave(); }catch(e){}
+      try{ cloudPushNow(); }catch(e){}
+      closeModal(); refreshCrm(c);
+      toast('Передано в сервис — ремонт №'+newId+'. Мастер увидит заявку.','success');
+    }});
+  }
   if(['new','working'].includes(l.stage)){
     actions.push({label:'🚫 Не актуальна', cls:'btn-danger', action:()=>{ closeModal(); openLeadCancelModal(l.id, c); }});
   }
@@ -23291,11 +23716,13 @@ function postOrderMoney(o, byLabel){
     DATA.cashOps.unshift(op); applyCashOp(op);
     o.cashPosted='cash';
     toast('Наличные по заказу №'+o.id+' ('+rub(sum)+') зачислены в кассу','success');
-  } else if(/карт/i.test(pay)){
+  } else if(/карт|qr/i.test(pay)){
     if(!DATA.assets) DATA.assets={};
-    DATA.assets.cashless=(DATA.assets.cashless||0)+Math.round(sum);
-    o.cashPosted='card';
-    toast('Оплата картой по заказу №'+o.id+' ('+rub(sum)+') учтена в безнале','success');
+    const net=acqApply(Math.round(sum), pay, 'Заказ №'+o.id);
+    DATA.assets.cashless=(DATA.assets.cashless||0)+net;
+    o.cashPosted=/qr/i.test(pay)?'qr':'card';
+    const fee=Math.round(sum)-net;
+    toast('Оплата ('+pay+') по заказу №'+o.id+': '+rub(sum)+(fee>0?', в безнал за вычетом комиссии банка: '+rub(net):' учтена в безнале'),'success');
   }
   /* способ оплаты не указан — ничего не проводим, продавец внесёт вручную */
 }
@@ -23765,9 +24192,11 @@ function cloudSyncPush(payload, force){
       fetch(c.api+'/state',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.token},
         body:JSON.stringify({savedAtMs:payload.savedAtMs||Date.now(), savedBy:(ROLES[STATE.role]||{}).label||'', state:payload})})
         .then(r=>r.json())
-        .then(j=>{ if(j&&j.ok){ window._cloudSync.status='ok'; window._cloudSync.lastError=null; }
-                   else { window._cloudSync.status='error'; window._cloudSync.lastError=(j&&j.error)||'?'; } })
-        .catch(e=>{ window._cloudSync.status='error'; window._cloudSync.lastError=String(e); });
+        .then(j=>{ if(j&&j.ok){ window._cloudSync.status='ok'; window._cloudSync.lastError=null;
+                     if((payload.savedAtMs||0) >= (window._cloudDirtyMs||0)) window._cloudDirty=false;   /* подтверждено облаком */
+                     try{ updateCloudBadge(); }catch(e){} }
+                   else { window._cloudSync.status='error'; window._cloudSync.lastError=(j&&j.error)||'?'; try{ updateCloudBadge(); }catch(e){} } })
+        .catch(e=>{ window._cloudSync.status='error'; window._cloudSync.lastError=String(e); try{ updateCloudBadge(); }catch(e2){} });
     };
     if(window._cloudPullOk){ doPush(); return; }
     /* СТРАХОВКА: этот комп ещё ни разу не читал облако. Прежде чем отправлять
@@ -23836,11 +24265,18 @@ function buildFullPayload(){
 }
 /* Мгновенная отправка в облако после важного действия (скан, продажа, выдача):
    не ждём минутный цикл — другой комп не успеет затереть. */
+function cloudMarkDirty(ms){
+  /* НЕОТПРАВЛЕННЫЕ ИЗМЕНЕНИЯ: помечаем до подтверждения облака. Снимается
+     только когда сервер ответил ok на снимок не старее этой отметки. */
+  window._cloudDirty=true; window._cloudDirtyMs=ms||Date.now();
+  try{ updateCloudBadge(); }catch(e){}
+}
 function cloudPushNow(){
   try{
     if(window._skipAutosave) return;
     const payload=buildFullPayload();
     try{ localStorage.setItem(LS_FULL_KEY, JSON.stringify(payload)); }catch(e){}
+    cloudMarkDirty(payload.savedAtMs);
     cloudSyncPush(payload, true);
   }catch(e){}
 }
@@ -23848,6 +24284,7 @@ function fullSave(){
   if(window._skipAutosave) return;   /* при сбросе не даём пересохранить данные перед перезагрузкой */
   try{
     const payload=buildFullPayload();
+    cloudMarkDirty(payload.savedAtMs);
     localSyncPush(payload);   /* локальный сервер данных (если найден) — общие данные для всех устройств */
     cloudSyncPush(payload);   /* облачная копия на Render — связывает дом и магазин */
     try{
@@ -23924,6 +24361,53 @@ try{
 }catch(e){}
 setTimeout(updateDemoBadge, 500);
 setInterval(updateDemoBadge, 15000);
+/* ИНДИКАТОР ОБЛАКА (08.08): сотрудник ВИДИТ, ушли ли его данные в облако.
+   Зелёный — всё подтверждено сервером; жёлтый — отправляется; красный — не
+   уходит (нет связи). Плюс автоповтор и предупреждение при закрытии вкладки. */
+function updateCloudBadge(){
+  try{
+    const el=document.getElementById('cloudBadge'); if(!el) return;
+    const c=erpServerCreds();
+    const off=!c || window._demoBorn || window._skipAutosave || (DATA && DATA.settings && DATA.settings.cloudSyncEnabled===false);
+    if(off){ el.style.display='none'; return; }
+    el.style.display='inline-flex';
+    if(window._cloudSync.status==='error'){
+      el.style.background='rgba(239,68,68,.15)'; el.style.color='#ef4444';
+      el.textContent='☁ ⚠ не в облаке';
+      el.title='Данные сохранены на этом компьютере, но НЕ дошли до облака: '+(window._cloudSync.lastError||'нет связи')+'. Система повторяет отправку сама. Не закрывайте вкладку и проверьте интернет.';
+    } else if(window._cloudDirty){
+      el.style.background='rgba(245,158,11,.12)'; el.style.color='#f59e0b';
+      el.textContent='☁ отправляю…';
+      el.title='Изменения сохранены на компьютере и отправляются в облако.';
+    } else {
+      el.style.background='rgba(34,197,94,.12)'; el.style.color='#22c55e';
+      el.textContent='☁ в облаке ✓';
+      el.title='Все изменения подтверждены облачной базой. Компьютер можно выключать.';
+    }
+  }catch(e){}
+}
+setTimeout(updateCloudBadge, 700);
+setInterval(updateCloudBadge, 5000);
+/* Автоповтор: если что-то не подтверждено облаком дольше 45 сек — шлём заново
+   принудительно (хранитель на сервере всё равно ничего не теряет при слиянии). */
+setInterval(()=>{
+  try{
+    if(!window._cloudDirty || window._skipAutosave || window._demoBorn) return;
+    if(!erpServerCreds()) return;
+    if(Date.now()-(window._cloudDirtyMs||0) < 45000) return;
+    cloudPushNow();
+  }catch(e){}
+}, 45000);
+window.addEventListener('beforeunload', function(e){
+  try{
+    if(window._skipAutosave || window._demoBorn) return;
+    if(window._cloudDirty && window._cloudSync.status==='error'){
+      e.preventDefault();
+      e.returnValue='Данные ещё не дошли до облака — если закрыть сейчас, они останутся только на этом компьютере.';
+      return e.returnValue;
+    }
+  }catch(err){}
+});
 setTimeout(()=>{
   try{
     const raw=sessionStorage.getItem('erp_pull_info');
@@ -24842,6 +25326,7 @@ function pinLockShow(){
   }catch(e){ console.warn('seed logins:', e); }
 })();
 
+window.ZENVOX_GATE=true;   /* FUSION: активируем гейт ДО пин-проверки (иначе всплывает старое пин-окно) */
 /* PIN-режим: при запуске — восстановить сессию устройства или показать вход */
 try{
   if(!window.ZENVOX_GATE && pinModeOn()){   /* FUSION */
@@ -24857,7 +25342,6 @@ if(loaded && DATA.siteCatalog.length){
 }
 </script>
 <script id="zenvox-layer">
-
 /* ============================================================
    SC2 — слой Store Control 2.0 поверх сборки 26.07-15.
    Вживляет разработанное в скелете:
@@ -25253,14 +25737,82 @@ function zvReconcileTransfer(sentRefs, acceptedRefs){
 }
 
 
-if (typeof module!=='undefined' && module.exports) module.exports={sc2HhmmToMin, sc2LoginCheck, zvEnc, zvDec, zvValidNewAuth, zvCheckCreds, zvResetEmail, zvSalt, zvHashHex, zv2faMask, zvCode6, zvStaffPass, zvValidStaffPass, zvValidRegistration, zvInWorkWindow, zvNeedAutoLogout, zvCanRecover, zvValidOwnerReg, zvValidInn, zvValidOgrn, zvValidStoreTemplate, zvValidPin, zvPriceHoldUntil, zvNeedsClientWait, zvPriceExpired, zvOrderNext, ZORDER_TRANSITIONS, ZORDER_STATUSES, zvFeeRates, zvPayoutOf, zvValidExpense, zvCanDebit, zvValidTransfer, zvReconcileTransfer};
+
+/* ══════════ SC9: СТАТИСТИКА ТОЧКИ для СУ — чистая логика ══════════
+   Агрегирует заказы и финансы точки по месяцам и за год. Всё из готовых журналов. */
+/* ключ месяца 'YYYY-MM' из ts */
+function zvMonthKey(ts){ const d=new Date(ts); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+/* Сводка по заказам точки. orders — массив заказов этой точки.
+   Возвращает {total, issued, declined, active, revenue, byMonth:{'YYYY-MM':{issued,declined,revenue}}, declineComments:[{ts,item,comment}]}. */
+function zvOrderStats(orders, nowTs){
+  orders=Array.isArray(orders)? orders : [];
+  const res={total:orders.length, issued:0, declined:0, active:0, revenue:0, byMonth:{}, declineComments:[]};
+  for(const o of orders){
+    const mk=zvMonthKey(o.createdTs||nowTs||Date.now());
+    if(!res.byMonth[mk]) res.byMonth[mk]={issued:0, declined:0, revenue:0, orders:0};
+    res.byMonth[mk].orders++;
+    if(o.status==='issued'){
+      res.issued++; res.byMonth[mk].issued++;
+      const rev=(typeof o.paidNet==='number'? o.paidNet : (o.price||0));
+      res.revenue+=rev; res.byMonth[mk].revenue+=rev;
+    } else if(o.status==='declined'||o.status==='canceled'){
+      res.declined++; res.byMonth[mk].declined++;
+      /* комментарии отказов из лога */
+      if(Array.isArray(o.log)){
+        for(const l of o.log){
+          if(l.comment && (l.ev==='decline'||l.ev==='noPickup'||l.ev==='cancel')){
+            res.declineComments.push({ts:l.ts, item:o.item||'', client:o.client||'', comment:l.comment});
+          }
+        }
+      }
+    } else {
+      res.active++;
+    }
+  }
+  res.revenue=Math.round(res.revenue*100)/100;
+  return res;
+}
+/* Обороты по финансам точки (только продажи, тип sale). fin — NET.zFin отфильтрованный по точке.
+   Возвращает {salesTotal, byMonth:{'YYYY-MM':sum}}. */
+function zvFinStats(fin){
+  fin=Array.isArray(fin)? fin : [];
+  const res={salesTotal:0, byMonth:{}};
+  for(const f of fin){
+    if(f.type!=='sale') continue;
+    const mk=zvMonthKey(f.ts);
+    res.byMonth[mk]=(res.byMonth[mk]||0)+(f.amount||0);
+    res.salesTotal+=(f.amount||0);
+  }
+  res.salesTotal=Math.round(res.salesTotal*100)/100;
+  return res;
+}
+
+
+/* ══════════ SC10: ПОСТАВЩИКИ — чистая логика (валидация) ══════════ */
+/* Валидация карточки поставщика. */
+function zvValidSupplier(tpl){
+  tpl=tpl||{};
+  if(!String(tpl.name||'').trim()) return {ok:false, err:'Укажите название поставщика'};
+  return {ok:true};
+}
+/* Валидация товара поставщика: название обязательно, цена >= 0 (0 = «цена по запросу»). */
+function zvValidSupplierGood(g){
+  g=g||{};
+  if(!String(g.title||'').trim()) return {ok:false, err:'Укажите название товара'};
+  const price=Number(g.price);
+  if(isNaN(price)) return {ok:false, err:'Цена должна быть числом'};
+  if(price<0) return {ok:false, err:'Цена не может быть отрицательной'};
+  return {ok:true};
+}
+
+if (typeof module!=='undefined' && module.exports) module.exports={sc2HhmmToMin, sc2LoginCheck, zvEnc, zvDec, zvValidNewAuth, zvCheckCreds, zvResetEmail, zvSalt, zvHashHex, zv2faMask, zvCode6, zvStaffPass, zvValidStaffPass, zvValidRegistration, zvInWorkWindow, zvNeedAutoLogout, zvCanRecover, zvValidOwnerReg, zvValidInn, zvValidOgrn, zvValidStoreTemplate, zvValidPin, zvPriceHoldUntil, zvNeedsClientWait, zvPriceExpired, zvOrderNext, ZORDER_TRANSITIONS, ZORDER_STATUSES, zvFeeRates, zvPayoutOf, zvValidExpense, zvCanDebit, zvValidTransfer, zvReconcileTransfer, zvMonthKey, zvOrderStats, zvFinStats, zvValidSupplier, zvValidSupplierGood};
 /* ===== SC2-PURE-END ===== */
 
 if (typeof window!=='undefined') (function(){
   try{ window.ZENVOX_GATE=true; }catch(e){}
 'use strict';
 const NET_KEY='store_control_erp_net_v1';
-const SC2_BUILD='26.07-15 + SC8.0';
+const SC2_BUILD='26.07-15 + SC10.0';
 const MODULE_KEYS=['acc','tech','service','pc'];
 const MODULE_LABELS={acc:'Аксессуары', tech:'Техника', service:'Ремонт', pc:'Сборка ПК'};
 
@@ -25337,15 +25889,18 @@ function defaultNet(){
     staffSession:null, /* сессия сотрудника: {staffId, siteId, shiftId} */
     owners:[],          /* ВДМ: {id, fio, email, phone, alias, salt, passHash, iters, status:pending|active, cabinetOn:bool} */
     ownerInvites:[],    /* приглашения на регистрацию ВДМ: {id, email, status:new|filled|approved, reg} */
-    partnerMsgs:[],     /* письма от партнёров в СУ: {id, ownerId, text, ts, read} */
+    partnerMsgs:[],     /* письма от партнёров в СУ: {id, storeId, storeName, authorRole, authorName, ownerId, text, ts, read} */
     storeInvites:[],    /* приглашения на создание магазина: {id, ownerId, status:new|filled|returned|approved|declined, tpl, comment} */
+    suppliers:[],       /* поставщики (SC10): {id, ownerId, name, description, active, ts} */
+    supplierGoods:{},   /* товары поставщика: {supplierId:[{id, title, description, price, inStock, ts}]} */
+    storeFavSuppliers:{},/* избранные поставщики магазина: {storeId:[supplierId]} */
     ownerSession:null,  /* сессия ВДМ в ЛК: {ownerId} */
     deviceSession:null, /* устройство: {storeId, deviceId, deviceName} — какой магазин залогинен на этом устройстве */
     storeDevices:{},    /* {storeId:[{id,name,ts,active}]} — устройства магазина для ЛК ВДМ */
     storePins:{},       /* {storeId:'123456'} — ПИН выхода, задаёт ВДМ */
     activeShift:null,   /* смена сотрудника на устройстве: {staffId, storeId, in} */
-    net:{login:'Zenvox', salt:'f0e1d2c3b4a5968778695a4b3c2d1e0f', passHash:'7b530a5371d34ac2699d385d9f7ffce490dce4ec1532bf2fb1b41874c01e28e0', iters:310000, email:'zenvox@mail.ru'},
-    imag:{login:'somethingspecial', salt:'a1b2c3d4e5f60718293a4b5c6d7e8f90', passHash:'30ef945c6fa34ce1f2a60c41e4e4bede6fa90d597237eace66301d1974ac5e8d', iters:310000, email:'i_magnate@mail.ru', companyId:'c1'},
+    net:{login:'Zenvox', salt:'f0e1d2c3b4a5968778695a4b3c2d1e0f', passHash:'f8f0fec691c80579f6ad92721f2eef33fe61a8292fdec2e850309fd01d0747a5', iters:310000, email:'zenvox@mail.ru'},
+    imag:{login:'somethingspecial', salt:'a1b2c3d4e5f60718293a4b5c6d7e8f90', passHash:'9bf8f4dcd4793c02c79b8d60f40728b74598f94128283d98150b33c9a073161f', iters:310000, email:'i_magnate@mail.ru', companyId:'c1'},
     session:null,
     storeCollections:{store_kashirka:['rc1'], store_lunnaya:['rc1']},
     storeRegion:{store_kashirka:'Москва', store_lunnaya:'Москва'},
@@ -25393,6 +25948,10 @@ function zOrderById(id){ return NET.zorders.find(o=>o.id===id); }
 function zOrderApply(id, action, opts){
   opts=opts||{};
   const ord=zOrderById(id); if(!ord) return {ok:false, err:'Заказ не найден'};
+  /* причина отказа ОБЯЗАТЕЛЬНА — ЕРП собирает комментарии отказов (канон) */
+  if((action==='decline'||action==='noPickup'||action==='cancel') && !String(opts.comment||'').trim()){
+    return {ok:false, err:'Укажите причину отказа (комментарий обязателен)'};
+  }
   const ctx={ inStock: !!opts.inStock, nowTs: Date.now(), sourcerHasIt: !!ord.sourcerHasIt };
   const r=zvOrderNext(ord, action, ctx);
   if(!r.ok) return r;
@@ -25639,15 +26198,14 @@ function seedAccess(){
     if(!p.ownerIds.includes('own_seregin')) p.ownerIds.push('own_seregin');
     p.email='i_magnate@mail.ru';
   }
-  /* ДЕМО: второй магазин на ту же рабочую почту, чтобы при восстановлении появлялся выбор адреса */
-  if(!NET.access['store_demo2']){
-    const ad=ensureAccess('store_demo2');
-    ad.login='втораямечта'; ad.salt='c9d2e1f0a3b4958677a6b5c4d3e2f1a0';
-    ad.passHash='0'; ad.iters=310000;
-    NET.customStores=NET.customStores||[];
-    if(!NET.customStores.some(x=>x.id==='store_demo2'))
-      NET.customStores.push({id:'store_demo2', name:'iMagnate — Демо-точка 2', shortName:'Демо-2', address:'Пример пр-т, 2', modules:{accessories:true,tech:true}});
-    NET.storeProfiles['store_demo2']={ownerId:'own_seregin', ownerIds:['own_seregin'], email:'i_magnate@mail.ru', accessOn:true, mailConfirm:true};
+  /* Демо-точка 2 удалена по решению владельца. Одноразовая чистка уже сохранённой в браузере. */
+  if(!NET.demo2Removed){
+    if(NET.access) delete NET.access['store_demo2'];
+    if(Array.isArray(NET.customStores)) NET.customStores=NET.customStores.filter(x=>x.id!=='store_demo2');
+    if(NET.storeProfiles) delete NET.storeProfiles['store_demo2'];
+    if(NET.storeCollections) delete NET.storeCollections['store_demo2'];
+    if(NET.storeRegion) delete NET.storeRegion['store_demo2'];
+    NET.demo2Removed=true;
   }
   if(!a2.devices.length) a2.devices.push(
     {id:'d_l1', num:1, name:'Касса у входа', active:true, lastLogin:null},
@@ -25721,10 +26279,14 @@ async function vdmLogin(alias, pass){
   if(!ok) return {ok:false, err:'Неверный псевдоним или пароль'};
   return {ok:true, owner:o};
 }
-function vdmSendPartnerMsg(ownerId, text){
+function vdmSendPartnerMsg(ownerId, text, meta){
   text=String(text||'').trim();
   if(!text) return {ok:false, err:'Напишите текст обращения'};
-  NET.partnerMsgs.unshift({id:'pm_'+Date.now(), ownerId:ownerId, text:text, ts:Date.now(), read:false});
+  meta=meta||{};
+  NET.partnerMsgs.unshift({id:'pm_'+Date.now()+'_'+Math.floor(Math.random()*100000),
+    storeId:meta.storeId||null, storeName:meta.storeName||'',
+    authorRole:meta.authorRole||'', authorName:meta.authorName||'',
+    ownerId:ownerId||null, text:text, ts:Date.now(), read:false});
   saveNet(); return {ok:true};
 }
 function vdmToggleCabinet(ownerId){
@@ -25887,6 +26449,119 @@ function storeUnbindOwner(storeId, ownerId){
   p.ownerIds.splice(i,1); saveNet();
   return {ok:true, left:p.ownerIds.length};
 }
+
+/* ── SC9: удаление точек и владельцев (для нового экрана СУ) ── */
+/* Удалить точку целиком: профиль, привязки, кастомную запись. Не трогает базовые демо-точки без подтверждения. */
+function sc2DeleteSite(storeId){
+  if(!storeId) return {ok:false, err:'Не указана точка'};
+  const p=NET.storeProfiles&&NET.storeProfiles[storeId];
+  if(!p) return {ok:false, err:'Точка не найдена'};
+  /* удаляем профиль */
+  delete NET.storeProfiles[storeId];
+  /* удаляем из кастомных точек */
+  if(Array.isArray(NET.customStores)) NET.customStores=NET.customStores.filter(x=>x.id!==storeId);
+  /* чистим связанные коллекции/регионы/доступ/устройства */
+  if(NET.storeCollections) delete NET.storeCollections[storeId];
+  if(NET.storeRegion) delete NET.storeRegion[storeId];
+  if(NET.access) delete NET.access[storeId];
+  if(NET.storeDevices) delete NET.storeDevices[storeId];
+  saveNet();
+  return {ok:true};
+}
+/* Удалить владельца: убрать из NET.owners и отвязать от всех точек. */
+function sc2DeleteOwner(ownerId){
+  if(!ownerId) return {ok:false, err:'Не указан владелец'};
+  const o=NET.owners.find(x=>x.id===ownerId);
+  if(!o) return {ok:false, err:'Владелец не найден'};
+  /* отвязать от всех точек */
+  Object.keys(NET.storeProfiles||{}).forEach(sid=>{
+    const p=NET.storeProfiles[sid];
+    if(Array.isArray(p.ownerIds)) p.ownerIds=p.ownerIds.filter(id=>id!==ownerId);
+    if(p.ownerId===ownerId) delete p.ownerId;
+  });
+  NET.owners=NET.owners.filter(x=>x.id!==ownerId);
+  saveNet();
+  return {ok:true};
+}
+
+/* ══════════ SC10: ПОСТАВЩИКИ — NET-обвязка ══════════ */
+function zSuppliersEnsure(){
+  if(!Array.isArray(NET.suppliers)) NET.suppliers=[];
+  if(!NET.supplierGoods||typeof NET.supplierGoods!=='object') NET.supplierGoods={};
+  if(!NET.storeFavSuppliers||typeof NET.storeFavSuppliers!=='object') NET.storeFavSuppliers={};
+}
+/* создать поставщика (СУ, через владельца) */
+function supplierCreate(ownerId, tpl){
+  zSuppliersEnsure();
+  const o=NET.owners.find(x=>x.id===ownerId && x.status==='active');
+  if(!o) return {ok:false, err:'Выберите подтверждённого владельца'};
+  const v=zvValidSupplier(tpl); if(!v.ok) return v;
+  const id='sup_'+Date.now()+'_'+Math.floor(Math.random()*100000);
+  NET.suppliers.push({id:id, ownerId:ownerId, name:String(tpl.name).trim(),
+    description:String(tpl.description||'').trim(), active:true, ts:Date.now()});
+  NET.supplierGoods[id]=[];
+  saveNet();
+  return {ok:true, id:id};
+}
+/* удалить поставщика (+ его товары + из избранного магазинов) */
+function supplierDelete(supplierId){
+  zSuppliersEnsure();
+  if(!NET.suppliers.some(s=>s.id===supplierId)) return {ok:false, err:'Поставщик не найден'};
+  NET.suppliers=NET.suppliers.filter(s=>s.id!==supplierId);
+  delete NET.supplierGoods[supplierId];
+  Object.keys(NET.storeFavSuppliers).forEach(sid=>{
+    NET.storeFavSuppliers[sid]=(NET.storeFavSuppliers[sid]||[]).filter(id=>id!==supplierId);
+  });
+  saveNet();
+  return {ok:true};
+}
+function supplierById(id){ zSuppliersEnsure(); return NET.suppliers.find(s=>s.id===id)||null; }
+function suppliersOfOwner(ownerId){ zSuppliersEnsure(); return NET.suppliers.filter(s=>s.ownerId===ownerId); }
+/* обновить описание поставщика (сам поставщик о себе) */
+function supplierSetInfo(supplierId, patch){
+  zSuppliersEnsure();
+  const s=supplierById(supplierId); if(!s) return {ok:false, err:'Поставщик не найден'};
+  patch=patch||{};
+  if(typeof patch.name==='string' && patch.name.trim()) s.name=patch.name.trim();
+  if(typeof patch.description==='string') s.description=patch.description.trim();
+  saveNet();
+  return {ok:true};
+}
+/* товары поставщика */
+function supplierGoods(supplierId){ zSuppliersEnsure(); return (NET.supplierGoods[supplierId]||[]).slice(); }
+function supplierGoodAdd(supplierId, g){
+  zSuppliersEnsure();
+  if(!supplierById(supplierId)) return {ok:false, err:'Поставщик не найден'};
+  const v=zvValidSupplierGood(g); if(!v.ok) return v;
+  const good={id:'sg_'+Date.now()+'_'+Math.floor(Math.random()*100000),
+    title:String(g.title).trim(), description:String(g.description||'').trim(),
+    price:Number(g.price), inStock:(g.inStock!==false), ts:Date.now()};
+  if(!NET.supplierGoods[supplierId]) NET.supplierGoods[supplierId]=[];
+  NET.supplierGoods[supplierId].push(good);
+  saveNet();
+  return {ok:true, id:good.id};
+}
+function supplierGoodRemove(supplierId, goodId){
+  zSuppliersEnsure();
+  const arr=NET.supplierGoods[supplierId]; if(!arr) return {ok:false, err:'Нет товаров'};
+  const before=arr.length;
+  NET.supplierGoods[supplierId]=arr.filter(x=>x.id!==goodId);
+  saveNet();
+  return {ok: NET.supplierGoods[supplierId].length<before};
+}
+/* избранное магазина */
+function storeFavSuppliers(storeId){ zSuppliersEnsure(); return (NET.storeFavSuppliers[storeId]||[]).slice(); }
+function storeFavToggle(storeId, supplierId){
+  zSuppliersEnsure();
+  if(!supplierById(supplierId)) return {ok:false, err:'Поставщик не найден'};
+  const arr=NET.storeFavSuppliers[storeId]||[];
+  const i=arr.indexOf(supplierId);
+  if(i<0) arr.push(supplierId); else arr.splice(i,1);
+  NET.storeFavSuppliers[storeId]=arr;
+  saveNet();
+  return {ok:true, fav:(i<0)};
+}
+
 function storeOwnerIds(storeId){
   const p=NET.storeProfiles&&NET.storeProfiles[storeId]; if(!p) return [];
   if(Array.isArray(p.ownerIds)) return p.ownerIds.slice();
@@ -26343,17 +27018,17 @@ function sc2EnsureSupreme(){
   if(document.getElementById('sc2Supreme')) return;
   const wrap=document.createElement('div');
   wrap.id='sc2Supreme';
-  wrap.style.cssText='position:fixed;inset:0;z-index:99990;overflow:auto;display:none;background:rgba(10,13,18,.985);padding:20px;';
+  wrap.style.cssText='position:fixed;inset:0;z-index:99990;overflow:auto;display:none;background:rgba(10,13,18,.985);padding:56px 20px 20px;';
   wrap.innerHTML=
     '<div style="max-width:1180px;margin:0 auto;">'+
     '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px;">'+
       '<div style="font-size:19px;font-weight:700;">Управление сетью <span class="tsub" style="font-weight:400;font-size:13px;">· создание точек, точки сбора, владельцев и управление всем</span></div>'+
       '<div style="flex:1;"></div>'+
       '<span class="sc2-chip on" id="sc2SupTabNet">Сеть</span>'+
-      '<span class="sc2-chip" id="sc2SupTabOwners">Владельцы</span>'+
-      '<span class="sc2-chip" id="sc2SupTabMsgs">Письма от партнёров</span>'+
-      '<span class="sc2-chip" id="sc2SupTabAcc">Доступ и устройства</span>'+
+      '<span class="sc2-chip" id="sc2SupTabOwners">Заявки</span>'+
+      '<span class="sc2-chip" id="sc2SupTabMsgs">Письма</span>'+
       '<button class="btn" id="sc2SupClose">⟵ В ЕРП точки</button>'+
+      '<button class="btn" id="sc2SupLogout" style="border-color:rgba(192,57,43,.55);background:rgba(192,57,43,.14);color:#e86a5c;font-weight:700;">Завершить сеанс</button>'+
     '</div>'+
     '<div id="sc2SupBody"></div>'+
     '</div>';
@@ -26362,24 +27037,27 @@ function sc2EnsureSupreme(){
   const tabNet=wrap.querySelector('#sc2SupTabNet');
   const tabOwners=wrap.querySelector('#sc2SupTabOwners');
   const tabMsgs=wrap.querySelector('#sc2SupTabMsgs');
-  const tabAcc=wrap.querySelector('#sc2SupTabAcc');
   function show(tab){
     tabNet.classList.toggle('on', tab==='net');
     tabOwners.classList.toggle('on', tab==='owners');
     tabMsgs.classList.toggle('on', tab==='msgs');
-    tabAcc.classList.toggle('on', tab==='acc');
     wrap.dataset.tab=tab;
     body.innerHTML='';
-    if(tab==='net') renderSc2Network(body);
-    else if(tab==='owners') renderVdmAdmin(body);
+    if(tab==='net'){ sc2NetContainer=body; renderSc2NetworkV2(body); }
+    else if(tab==='owners') renderVdmAdmin(body);   /* «Заявки» — модерация анкет */
     else if(tab==='msgs') renderPartnerMsgs(body);
-    else renderSc2Access(body);
+    else { sc2NetContainer=body; renderSc2NetworkV2(body); }
   }
   tabNet.addEventListener('click',()=>show('net'));
   tabOwners.addEventListener('click',()=>show('owners'));
   tabMsgs.addEventListener('click',()=>show('msgs'));
-  tabAcc.addEventListener('click',()=>show('acc'));
   wrap.querySelector('#sc2SupClose').addEventListener('click',()=>{ wrap.style.display='none'; });
+  const supLo=wrap.querySelector('#sc2SupLogout');
+  if(supLo){
+    supLo.addEventListener('click',()=>{ NET.session=null; saveNet(); location.reload(); });
+    supLo.addEventListener('mouseenter',()=>{ supLo.style.background='rgba(192,57,43,.26)'; supLo.style.borderColor='rgba(192,57,43,.85)'; });
+    supLo.addEventListener('mouseleave',()=>{ supLo.style.background='rgba(192,57,43,.14)'; supLo.style.borderColor='rgba(192,57,43,.55)'; });
+  }
   wrap._show=show;
 }
 window.sc2SupremeRefresh=function(){
@@ -26390,6 +27068,14 @@ function sc2OpenSupreme(){
   sc2EnsureSupreme();
   const wrap=document.getElementById('sc2Supreme');
   wrap.style.display='block';
+  /* если вошли как суперадмин — прятать кнопку «В ЕРП точки» (он не в магазине) */
+  const isSup = NET.session && NET.session.type==='supreme';
+  const closeBtn=wrap.querySelector('#sc2SupClose');
+  if(closeBtn) closeBtn.style.display = isSup ? 'none' : '';
+  const supLo=wrap.querySelector('#sc2SupLogout');
+  if(supLo) supLo.style.display = isSup ? '' : 'none';   /* выход в шапке — только для суперадмина */
+  const gLogout=document.getElementById('zvLogout');
+  if(gLogout) gLogout.style.display = isSup ? 'none' : '';  /* плавающую у СУ прячем, чтобы не было нахлёста */
   wrap._show(wrap.dataset.tab||'net');
 }
 function sc2EnsureSessionButtons(){
@@ -26413,7 +27099,9 @@ function sc2EnsureSessionButtons(){
       document.body.appendChild(lo);
     }
     lo.textContent='Завершить сеанс';
-    lo.style.cssText='position:fixed;right:16px;top:16px;z-index:99980;padding:10px 16px;border-radius:12px;border:1px solid #4a5568;background:#1a1f2b;color:#e8eaf0;font:inherit;font-weight:600;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.35);';
+    lo.style.cssText='position:fixed;right:16px;top:16px;z-index:99991;display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:10px;border:1px solid rgba(192,57,43,.55);background:rgba(192,57,43,.14);color:#e86a5c;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;transition:all .15s;backdrop-filter:blur(6px);';
+    lo.onmouseenter=()=>{ lo.style.background='rgba(192,57,43,.24)'; lo.style.borderColor='rgba(192,57,43,.8)'; };
+    lo.onmouseleave=()=>{ lo.style.background='rgba(192,57,43,.14)'; lo.style.borderColor='rgba(192,57,43,.55)'; };
     lo.onclick=()=>{ NET.session=null; saveNet(); location.reload(); };
   } else if(lo){ lo.remove(); }
   const sb=box.querySelector('#sc2SupBtn'); if(sb) sb.addEventListener('click', sc2OpenSupreme);
@@ -26424,6 +27112,14 @@ let zv2fa=null;
 function zvApplySession(){
   const ses=NET.session;
   if(!ses) return;
+  if(ses.type==='supreme'){
+    /* Суперадмин НЕ привязан к магазину: прячем весь интерфейс точки (#app),
+       показываем только экран «Управление сетью». Данные магазина суперадмину не видны. */
+    const app=document.getElementById('app'); if(app) app.style.display='none';
+    sc2EnsureSessionButtons();
+    try{ sc2OpenSupreme(); }catch(e){}
+    return;
+  }
   if(ses.type==='franchise'){
     const co=NET.companies.find(c=>c.id===ses.companyId);
     if(co && co.storeIds.length && !co.storeIds.includes(STATE.activeStoreId)) switchStore(co.storeIds[0]);
@@ -26900,6 +27596,274 @@ function storeOwnersDialog(storeId){
   document.body.appendChild(w);
   render();
 }
+/* ══════════ SC9: НОВЫЙ ЧИСТЫЙ ЭКРАН «Управление сетью» ══════════
+   Три блока: сводка · магазины с раскрытием (статистика) · управление.
+   Строится рядом со старым renderSc2Network; переключатель — sc2UseNewNet. */
+function sc2SitesForNet(){
+  /* все точки: базовые из STORES + кастомные + профили */
+  const seen={}; const out=[];
+  const addrOf=(id)=>{ const cs=(NET.customStores||[]).find(x=>x.id===id); if(cs&&cs.address) return cs.address; const p=NET.storeProfiles&&NET.storeProfiles[id]; return (p&&p.legalAddr)||(p&&p.address)||''; };
+  (STORES||[]).forEach(s=>{ if(!seen[s.id]){ seen[s.id]=1; out.push({id:s.id, name:s.shortName||s.name||s.id, kind:'store', address:addrOf(s.id)}); } });
+  (NET.customStores||[]).forEach(s=>{ if(!seen[s.id]){ seen[s.id]=1; out.push({id:s.id, name:s.name||s.id, kind:s.kind||'store', address:s.address||addrOf(s.id)}); } });
+  Object.keys(NET.storeProfiles||{}).forEach(sid=>{ if(!seen[sid]){ seen[sid]=1; out.push({id:sid, name:sid, kind:'store', address:addrOf(sid)}); } });
+  return out;
+}
+function sc2SiteAccessOn(sid){ const p=NET.storeProfiles&&NET.storeProfiles[sid]; return !p || p.accessOn!==false; }
+function sc2OwnerName(oid){ const o=NET.owners.find(x=>x.id===oid); return o? (o.fio||o.alias||o.id) : '—'; }
+function sc2NetToggleSite(sid){ sc2NetOpen=(sc2NetOpen===sid?null:sid); sc2RenderNet(); }
+var sc2NetOpen=null;
+var sc2NetQuery='';
+var sc2OwnQuery='';
+
+function renderSc2NetworkV2(c){
+  const sites=sc2SitesForNet();
+  const owners=(NET.owners||[]).filter(o=>o.status==='active');
+  const nowTs=Date.now();
+  const perSite={};
+  sites.forEach(s=>{
+    const orders=(NET.zorders||[]).filter(o=>o.storeId===s.id);
+    perSite[s.id]=zvOrderStats(orders, nowTs);
+  });
+  let html='';
+  /* --- Магазины с раскрытием + поиск --- */
+  html+='<div class="sc2v2-sec-title">Магазины и точки сбора <span class="sc2v2-count">'+sites.length+'</span></div>';
+  html+='<div class="sc2v2-search"><input class="sc2-inp" id="sc2NetSearch" placeholder="Поиск по названию или адресу…" value="'+eh(sc2NetQuery)+'">'+
+    (sc2NetQuery?'<span class="sc2v2-muted" style="font-size:12px;">фильтр: «'+eh(sc2NetQuery)+'»</span>':'')+'</div>';
+  const q=sc2NetQuery.trim().toLowerCase();
+  const shown=sites.filter(s=>{
+    if(!q) return true;
+    return (s.name||'').toLowerCase().includes(q) || (s.address||'').toLowerCase().includes(q);
+  });
+  html+='<div class="sc2v2-list">';
+  if(!shown.length) html+='<div class="sc2v2-muted" style="padding:10px 0;">Ничего не найдено по запросу «'+eh(sc2NetQuery)+'»</div>';
+  shown.forEach(s=>{
+    const st=perSite[s.id];
+    const emps=(typeof sc2Employees==='function'? sc2Employees():[]).filter(e=>e.siteId===s.id && e.active!==false);
+    const ownIds=storeOwnerIds(s.id);
+    const ownNames=ownIds.map(sc2OwnerName).join(', ')||'<span class="sc2v2-muted">нет владельца</span>';
+    const open=(sc2NetOpen===s.id);
+    html+='<div class="sc2v2-card'+(open?' open':'')+'">';
+    html+='<div class="sc2v2-head" data-netsite="'+s.id+'">'+
+      '<div class="sc2v2-caret">'+(open?'▾':'▸')+'</div>'+
+      '<div class="sc2v2-namewrap"><div class="sc2v2-name">'+eh(s.name)+(s.kind==='rc'?' <span class="sc2v2-tag">точка сбора</span>':'')+'</div>'+
+        (s.address?'<div class="sc2v2-addr">'+eh(s.address)+'</div>':'')+'</div>'+
+      '<div class="sc2v2-mini">'+st.issued+' выдано · '+sc2Money(st.revenue)+' ₽ · '+emps.length+' сотр.</div>'+
+      (sc2SiteAccessOn(s.id)?'':'<span class="sc2v2-locktag">доступ закрыт</span>')+
+    '</div>';
+    if(open){
+      html+='<div class="sc2v2-body">';
+      /* владельцы */
+      html+='<div class="sc2v2-row"><b>Владельцы:</b> '+ownNames+'</div>';
+      /* KPI точки */
+      html+='<div class="sc2v2-mini-kpi">'+
+        '<span>Всего заказов: <b>'+st.total+'</b></span>'+
+        '<span>Выдано: <b>'+st.issued+'</b></span>'+
+        '<span>Отказы/отмены: <b>'+st.declined+'</b></span>'+
+        '<span>В работе: <b>'+st.active+'</b></span>'+
+        '<span>Оборот: <b>'+sc2Money(st.revenue)+' ₽</b></span>'+
+        '<span>Сотрудников: <b>'+emps.length+'</b></span>'+
+      '</div>';
+      /* по месяцам */
+      const months=Object.keys(st.byMonth).sort().reverse();
+      if(months.length){
+        html+='<div class="sc2v2-subtitle">По месяцам</div><table class="sc2v2-tbl"><thead><tr><th>Месяц</th><th>Заказы</th><th>Выдано</th><th>Отказы</th><th>Оборот, ₽</th></tr></thead><tbody>';
+        months.forEach(mk=>{ const m=st.byMonth[mk];
+          html+='<tr><td>'+mk+'</td><td>'+m.orders+'</td><td>'+m.issued+'</td><td>'+m.declined+'</td><td>'+sc2Money(m.revenue)+'</td></tr>';
+        });
+        html+='</tbody></table>';
+      } else html+='<div class="sc2v2-muted" style="padding:6px 0;">Пока нет заказов</div>';
+      /* сотрудники */
+      if(emps.length){
+        html+='<div class="sc2v2-subtitle">Сотрудники ('+emps.length+')</div><div class="sc2v2-emps">';
+        emps.forEach(e=>{ html+='<span class="sc2v2-emp">'+eh(e.name)+' <i>'+eh(e.role||'')+'</i></span>'; });
+        html+='</div>';
+      }
+      /* комментарии отказов */
+      if(st.declineComments.length){
+        html+='<div class="sc2v2-subtitle">Комментарии отказов ('+st.declineComments.length+')</div><div class="sc2v2-decl">';
+        st.declineComments.slice(-10).reverse().forEach(d=>{
+          html+='<div class="sc2v2-declrow"><b>'+eh(d.item||'')+'</b>'+(d.client?' · '+eh(d.client):'')+' — '+eh(d.comment)+'</div>';
+        });
+        html+='</div>';
+      }
+      /* управление точкой */
+      const accOn=sc2SiteAccessOn(s.id);
+      html+='<div class="sc2v2-actions">'+
+        '<button class="btn '+(accOn?'sc2v2-danger':'sc2v2-ok')+'" data-netaccess="'+s.id+'">'+(accOn?'Отключить доступ':'Включить доступ')+'</button>'+
+        '<button class="btn sc2v2-ok" data-netbind="'+s.id+'">+ Добавить владельца</button>'+
+        '<button class="btn" data-netunbind="'+s.id+'">Отвязать владельца</button>'+
+        '<button class="btn sc2v2-danger" data-netdelsite="'+s.id+'">Удалить точку</button>'+
+      '</div>';
+      html+='</div>';
+    }
+    html+='</div>';
+  });
+  html+='</div>';
+
+  /* --- Управление: создание --- */
+  html+='<div class="sc2v2-sec-title">Создание</div>';
+  html+='<div class="sc2v2-create">'+
+    '<div class="sc2v2-cbox">'+
+      '<div class="sc2v2-subtitle">Новый владелец</div>'+
+      '<div class="sc2v2-muted" style="margin-bottom:8px;">На почту уйдёт ссылка-анкета. После заполнения — подтверждение во вкладке «Владельцы».</div>'+
+      '<div class="sc2v2-inline"><input class="sc2-inp" id="v2OwnerEmail" placeholder="Почта владельца"><button class="btn btn-primary" id="v2OwnerBtn">Пригласить</button></div>'+
+      '<div class="sc2-bad" id="v2OwnerErr"></div>'+
+    '</div>'+
+    '<div class="sc2v2-cbox">'+
+      '<div class="sc2v2-subtitle">Новая точка</div>'+
+      '<div class="sc2v2-muted" style="margin-bottom:8px;">Точка создаётся через владельца (он получит ссылку на заполнение данных). Выберите владельца:</div>'+
+      '<div class="sc2v2-inline">'+
+        '<input class="sc2-inp" id="v2SiteOwner" list="v2OwnerList" placeholder="Начните вводить ФИО владельца…" autocomplete="off">'+
+        '<datalist id="v2OwnerList">'+owners.map(o=>'<option value="'+eh(o.fio||o.alias)+'">').join('')+'</datalist>'+
+        '<button class="btn btn-primary" id="v2SiteBtn">Создать точку</button>'+
+      '</div>'+
+      '<div class="sc2-bad" id="v2SiteErr"></div>'+
+    '</div>'+
+  '</div>';
+
+  /* --- Владельцы: список с удалением --- */
+  html+='<div class="sc2v2-sec-title">Владельцы сети <span class="sc2v2-count">'+owners.length+'</span></div>';
+  html+='<div class="sc2v2-search"><input class="sc2-inp" id="sc2OwnSearch" placeholder="Поиск по имени, отчеству или фамилии…" value="'+eh(sc2OwnQuery)+'"></div>';
+  const oq=sc2OwnQuery.trim().toLowerCase();
+  const shownOwners=owners.filter(o=>!oq || (o.fio||'').toLowerCase().includes(oq) || (o.alias||'').toLowerCase().includes(oq));
+  html+='<div class="sc2v2-owners">';
+  if(!owners.length) html+='<div class="sc2v2-muted">Пока нет владельцев</div>';
+  else if(!shownOwners.length) html+='<div class="sc2v2-muted" style="padding:10px 0;">Не найдено по запросу «'+eh(sc2OwnQuery)+'»</div>';
+  shownOwners.forEach(o=>{
+    const boundSites=sites.filter(s=>storeOwnerIds(s.id).includes(o.id)).map(s=>s.name);
+    html+='<div class="sc2v2-ownrow">'+
+      '<div><b>'+eh(o.fio||o.alias)+'</b> <span class="sc2v2-muted">'+eh(o.email||'')+'</span>'+
+      (boundSites.length?'<div class="sc2v2-muted" style="font-size:11px;">точки: '+boundSites.map(eh).join(', ')+'</div>':'<div class="sc2v2-muted" style="font-size:11px;">не привязан к точкам</div>')+'</div>'+
+      '<button class="btn sc2v2-danger" data-netdelowner="'+o.id+'">Удалить</button>'+
+    '</div>';
+  });
+  html+='</div>';
+
+  c.innerHTML=html;
+  sc2NetBind(c);
+}
+function sc2Money(n){ return (Math.round(n)||0).toLocaleString('ru-RU'); }
+
+/* обработчики нового экрана */
+function sc2NetBind(c){
+  /* поиск по названию/адресу */
+  const search=c.querySelector('#sc2NetSearch');
+  if(search){
+    search.addEventListener('input',()=>{
+      sc2NetQuery=search.value;
+      sc2RenderNet();
+      const el=sc2NetContainer&&sc2NetContainer.querySelector('#sc2NetSearch');
+      if(el){ el.focus(); const v=el.value; el.value=''; el.value=v; }
+    });
+  }
+  const ownSearch=c.querySelector('#sc2OwnSearch');
+  if(ownSearch){
+    ownSearch.addEventListener('input',()=>{
+      sc2OwnQuery=ownSearch.value;
+      sc2RenderNet();
+      const el=sc2NetContainer&&sc2NetContainer.querySelector('#sc2OwnSearch');
+      if(el){ el.focus(); const v=el.value; el.value=''; el.value=v; }
+    });
+  }
+  /* раскрытие точки */
+  c.querySelectorAll('[data-netsite]').forEach(el=>el.addEventListener('click',()=>sc2NetToggleSite(el.dataset.netsite)));
+  /* пригласить владельца */
+  const ob=c.querySelector('#v2OwnerBtn');
+  if(ob) ob.addEventListener('click',()=>{
+    const email=c.querySelector('#v2OwnerEmail').value;
+    const r=vdmInvite(email);
+    if(!r.ok){ c.querySelector('#v2OwnerErr').textContent=r.err; return; }
+    if(typeof toast==='function') toast('Приглашение отправлено на '+email,'success');
+    c.querySelector('#v2OwnerEmail').value='';
+  });
+  /* создать точку через владельца */
+  const sb=c.querySelector('#v2SiteBtn');
+  if(sb) sb.addEventListener('click',()=>{
+    const typed=String(c.querySelector('#v2SiteOwner').value||'').trim().toLowerCase();
+    if(!typed){ c.querySelector('#v2SiteErr').textContent='Выберите владельца'; return; }
+    const owner=(NET.owners||[]).find(o=>o.status==='active' && ((o.fio||'').toLowerCase()===typed || (o.alias||'').toLowerCase()===typed));
+    if(!owner){ c.querySelector('#v2SiteErr').textContent='Владелец не найден — выберите из списка'; return; }
+    const r=storeInviteCreate(owner.id);
+    if(!r.ok){ c.querySelector('#v2SiteErr').textContent=r.err; return; }
+    if(typeof toast==='function') toast('Ссылка на создание точки отправлена владельцу','success');
+    sc2RenderNet();
+  });
+  /* отвязать владельца от точки */
+  /* добавить (привязать) владельца к точке */
+  c.querySelectorAll('[data-netbind]').forEach(el=>el.addEventListener('click',()=>{
+    const sid=el.dataset.netbind;
+    const bound=storeOwnerIds(sid);
+    const free=(NET.owners||[]).filter(o=>o.status==='active' && !bound.includes(o.id));
+    if(!free.length){ if(typeof toast==='function') toast('Нет свободных владельцев (все уже привязаны или ещё не созданы)','info'); return; }
+    zvPickOwner({title:'Добавить владельца к точке', hint:'Найдите и выберите владельца:',
+      items:free.map(o=>({id:o.id, label:(o.fio||o.alias), sub:o.email||''})),
+      onPick:(oid)=>sc2NetDoBind(sid, oid)});
+  }));
+  c.querySelectorAll('[data-netunbind]').forEach(el=>el.addEventListener('click',()=>{
+    const sid=el.dataset.netunbind;
+    const ids=storeOwnerIds(sid);
+    if(!ids.length){ if(typeof toast==='function') toast('У точки нет владельцев','info'); return; }
+    /* всегда окошко выбора КОГО отвязать — чтобы не отвязать не того */
+    zvPickOwner({title:'Отвязать владельца от точки', hint:'Выберите, кого отвязать (владелец останется в системе):',
+      items:ids.map(id=>{ const o=NET.owners.find(x=>x.id===id); return {id:id, label:o?(o.fio||o.alias):id, sub:o&&o.email||''}; }),
+      onPick:(oid)=>sc2NetDoUnbind(sid, oid)});
+  }));
+  /* включить/отключить доступ магазина */
+  c.querySelectorAll('[data-netaccess]').forEach(el=>el.addEventListener('click',()=>{
+    const sid=el.dataset.netaccess;
+    const on=sc2SiteAccessOn(sid);
+    if(on){
+      zvConfirm({title:'Отключить доступ магазину?', sub:'Все устройства и активные сессии этой точки будут разорваны — никто не сможет войти в систему магазина, пока вы не включите доступ обратно.', danger:true, okText:'Отключить', onOk:()=>{
+        storeToggleAccess(sid);
+        if(typeof toast==='function') toast('Доступ магазину отключён','success');
+        sc2RenderNet();
+      }});
+    } else {
+      storeToggleAccess(sid);
+      if(typeof toast==='function') toast('Доступ магазину включён','success');
+      sc2RenderNet();
+    }
+  }));
+  /* удалить точку */
+  c.querySelectorAll('[data-netdelsite]').forEach(el=>el.addEventListener('click',()=>{
+    const sid=el.dataset.netdelsite;
+    /* удаление точки требует код подтверждения с почты zenvox@mail.ru */
+    const code=zvCode6();
+    zvCodeConfirm({title:'Удаление точки', sub:'Введите код подтверждения, отправленный на', email:(NET.mailFrom||'zenvox@mail.ru'), code:code,
+      onOk:()=>{
+        const r=sc2DeleteSite(sid);
+        if(typeof toast==='function') toast(r.ok?'Точка удалена':'Ошибка: '+r.err, r.ok?'success':'error');
+        sc2NetOpen=null; sc2RenderNet();
+      },
+      onFail:()=>{ if(typeof toast==='function') toast('Неверный код — удаление отменено','error'); }});
+  }));
+  /* удалить владельца */
+  c.querySelectorAll('[data-netdelowner]').forEach(el=>el.addEventListener('click',()=>{
+    const oid=el.dataset.netdelowner;
+    zvConfirm({title:'Удалить владельца?', sub:'Владелец будет удалён и отвязан от всех точек. Необратимо.', danger:true, okText:'Удалить', onOk:()=>{
+      const r=sc2DeleteOwner(oid);
+      if(typeof toast==='function') toast(r.ok?'Владелец удалён':'Ошибка: '+r.err, r.ok?'success':'error');
+      sc2RenderNet();
+    }});
+  }));
+}
+function sc2NetDoBind(sid, oid){
+  const r=storeBindOwner(sid, oid);
+  if(!r.ok){ if(typeof toast==='function') toast('Ошибка: '+r.err,'error'); return; }
+  if(typeof toast==='function') toast('Владелец добавлен к точке','success');
+  sc2RenderNet();
+}
+function sc2NetDoUnbind(sid, oid){
+  const r=storeUnbindOwner(sid, oid);
+  if(!r.ok){ if(typeof toast==='function') toast('Ошибка: '+r.err,'error'); return; }
+  if(typeof toast==='function') toast(r.left===0?'Отвязан. У точки больше нет владельцев':'Владелец отвязан','success');
+  sc2RenderNet();
+}
+/* перерисовать текущий контейнер сети */
+var sc2NetContainer=null;
+function sc2RenderNet(){ if(sc2NetContainer) renderSc2NetworkV2(sc2NetContainer); }
+
+
 function renderSc2Network(c){
   let html='';
   NET.companies.forEach(co=>{
@@ -26966,26 +27930,7 @@ function renderSc2Network(c){
     '</div>';
 
   const sites=sc2Sites();
-  const staffRows=sc2Employees().map(e=>{
-    const sn=(sites.find(s=>s.id===e.siteId)||{name:'—'}).name;
-    const hired=(NET.staff||[]).some(x=>x.key===e.key);
-    return '<tr><td>'+eh(e.name)+'</td><td class="tsub">'+eh(e.role)+'</td>'+
-      '<td class="sc2-mono">'+eh(e.code)+'</td><td class="tsub">'+eh(sn)+'</td>'+
-      '<td>'+(e.active?'<span class="sc2-ok">активен</span>':'<span class="sc2-bad">уволен</span>')+'</td>'+
-      '<td>'+(hired?'<button class="btn" style="padding:3px 10px;font-size:12px;" data-sc2fire="'+e.key+'">'+(e.active?'Уволить':'Вернуть')+'</button>':'<span class="tsub" style="font-size:11px;">демо-данные</span>')+'</td></tr>';
-  }).join('');
-  html+='<div class="card" style="margin-bottom:16px;">'+
-    '<div class="section-title">Сотрудники сети</div>'+
-    '<div class="tsub">Найм рождает сотрудника: роль, площадка и личный код из 6 цифр выдаются здесь. Увольнение гасит код — вход умирает мгновенно.</div>'+
-    '<table class="sc2-tbl"><thead><tr><th>Сотрудник</th><th>Роль</th><th>Код</th><th>Площадка</th><th>Статус</th><th></th></tr></thead>'+
-    '<tbody>'+staffRows+'</tbody></table>'+
-    '<div class="sc2-row">'+
-      '<input class="sc2-inp" id="sc2HireName" placeholder="Имя сотрудника">'+
-      '<select class="sc2-inp" id="sc2HireRole">'+HIRE_ROLES.map(r=>'<option>'+r+'</option>').join('')+'</select>'+
-      '<select class="sc2-inp" id="sc2HireSite">'+sites.map(s=>'<option value="'+s.id+'">'+eh(s.name)+(s.kind==='rc'?' · точка сбора':'')+'</option>').join('')+'</select>'+
-      '<button class="btn btn-primary" id="sc2HireBtn">Нанять</button>'+
-    '</div><div class="tsub sc2-bad" id="sc2HireErr" style="margin-top:6px;"></div>'+
-    '</div>';
+  /* Наём сотрудников магазина убран из СУ — это делает владелец/директор в ЕРП точки (раздел «Сотрудники»). */
 
   html+='<div class="card">'+
     '<div class="section-title">Создать компанию (франчайзи)</div>'+
@@ -27061,8 +28006,8 @@ function renderSc2Network(c){
     if(resp) sc2Hire(resp, 'Ответственный (точка сбора)', res.id);
     toast('Точка сбора создана'+(resp?' · ответственный назначен, код выдан':''),'success'); sc2Rerender();
   });
-  c.querySelectorAll('[data-sc2fire]').forEach(el=>el.addEventListener('click',()=>sc2FireToggle(el.dataset.sc2fire)));
-  c.querySelector('#sc2HireBtn').addEventListener('click',()=>{
+  const hireBtnEl=c.querySelector('#sc2HireBtn');
+  if(hireBtnEl) hireBtnEl.addEventListener('click',()=>{
     const res=sc2Hire(c.querySelector('#sc2HireName').value, c.querySelector('#sc2HireRole').value, c.querySelector('#sc2HireSite').value);
     if(!res.ok){ c.querySelector('#sc2HireErr').textContent=res.err; return; }
     toast('Сотрудник нанят · личный код: '+res.code,'success'); sc2Rerender();
@@ -27210,7 +28155,10 @@ if(!Array.isArray(NET.zExpenses)) NET.zExpenses=[];
 if(!Array.isArray(NET.zNotify)) NET.zNotify=[];
 if(!Array.isArray(NET.zTransfers)) NET.zTransfers=[];
 if(!NET.zWallets||typeof NET.zWallets!=='object') NET.zWallets={};
-/* FUSION: заказы 29.07 НЕ обнуляем — они основа */
+if(!NET.zLegacyOrdersCleared){
+  try{ Object.keys(STORE_DATA).forEach(sid=>{ if(STORE_DATA[sid]&&Array.isArray(STORE_DATA[sid].orders)) STORE_DATA[sid].orders=[]; }); }catch(e){}
+  NET.zLegacyOrdersCleared=true;
+}
 recreateCustomStores();
 applyModules();
 seedAccess();
@@ -27491,6 +28439,38 @@ function zvConfirm(o){
   w.querySelector('#zvCfOk').addEventListener('click',()=>done(true));
   w.querySelector('#zvCfCancel').addEventListener('click',()=>done(false));
 }
+
+/* Окошко ВЫБОРА владельца из списка (с поиском по ФИО). items:[{id,label,sub}], onPick(id). */
+function zvPickOwner(o){
+  o=o||{}; const items=o.items||[];
+  const w=zvModalBase(
+    '<div class="zv-sub" style="font-weight:700;">'+eh(o.title||'Выберите владельца')+'</div>'+
+    (o.hint?'<div class="tsub" style="margin-top:6px;">'+eh(o.hint)+'</div>':'')+
+    '<input class="zv-field" id="zvPickSearch" autocomplete="off" placeholder="Поиск по ФИО…">'+
+    '<div id="zvPickList" style="max-height:280px;overflow:auto;margin-top:10px;display:flex;flex-direction:column;gap:6px;"></div>'+
+    '<div class="sc2-row" style="margin-top:12px;justify-content:flex-end;">'+
+      '<button class="zv-btn" id="zvPickCancel" style="background:transparent;border:1px solid rgba(255,255,255,.2);flex:0 0 auto;padding:0 16px;">Отмена</button>'+
+    '</div>');
+  const listEl=w.querySelector('#zvPickList');
+  const search=w.querySelector('#zvPickSearch');
+  function draw(q){
+    q=(q||'').trim().toLowerCase();
+    const shown=items.filter(it=>!q || (it.label||'').toLowerCase().includes(q) || (it.sub||'').toLowerCase().includes(q));
+    if(!shown.length){ listEl.innerHTML='<div class="tsub" style="padding:8px;">Ничего не найдено</div>'; return; }
+    listEl.innerHTML=shown.map(it=>'<div class="zv-pick-row" data-pick="'+eh(it.id)+'" style="border:1px solid rgba(139,146,160,.2);border-radius:10px;padding:9px 12px;cursor:pointer;">'+
+      '<b>'+eh(it.label)+'</b>'+(it.sub?' <span class="tsub">'+eh(it.sub)+'</span>':'')+'</div>').join('');
+    listEl.querySelectorAll('[data-pick]').forEach(el=>{
+      el.addEventListener('mouseenter',()=>{ el.style.borderColor='rgba(52,199,123,.6)'; el.style.background='rgba(52,199,123,.08)'; });
+      el.addEventListener('mouseleave',()=>{ el.style.borderColor='rgba(139,146,160,.2)'; el.style.background='transparent'; });
+      el.addEventListener('click',()=>{ w.remove(); if(o.onPick) o.onPick(el.dataset.pick); });
+    });
+  }
+  draw('');
+  search.addEventListener('input',()=>draw(search.value));
+  setTimeout(()=>search.focus(),30);
+  w.querySelector('#zvPickCancel').addEventListener('click',()=>{ w.remove(); if(o.onCancel)o.onCancel(); });
+}
+
 /* Уведомление (замена alert): onOk() по закрытию. */
 function zvAlert(o){
   o=o||{};
@@ -27807,11 +28787,20 @@ function renderPartnerMsgs(c){
   let html='<div class="card"><div class="section-title">Письма от партнёров ('+msgs.length+')</div>';
   if(!msgs.length) html+='<div class="tsub">Обращений пока нет.</div>';
   else html+=msgs.map(m=>{
-    const o=NET.owners.find(x=>x.id===m.ownerId);
     const d=new Date(m.ts);
+    /* автор: роль + имя (директор/владелец/старший сотрудник); магазин, откуда письмо */
+    const roleLabel={owner:'Владелец', director:'Директор', senior:'Старший сотрудник'}[m.authorRole]||m.authorRole||'';
+    let author=m.authorName||'';
+    if(!author && m.ownerId){ const o=NET.owners.find(x=>x.id===m.ownerId); author=o?(o.fio||o.alias):''; }
+    const storeName=m.storeName || (m.storeId||'');
+    const header=[roleLabel, author].filter(Boolean).join(' · ') || '—';
     return '<div class="sc2-row" style="align-items:flex-start;border-top:1px solid rgba(139,146,160,.15);padding-top:8px;">'+
-      '<div style="flex:1;"><b>'+eh(o?o.alias:'—')+'</b> <span class="tsub">'+eh(o?o.fio:'')+' · '+d.toLocaleString('ru-RU')+'</span>'+
-      '<div style="margin-top:4px;">'+eh(m.text)+'</div></div></div>';
+      '<div style="flex:1;">'+
+        '<b>'+eh(header)+'</b>'+
+        (storeName?' <span class="sc2v2-tag">'+eh(storeName)+'</span>':'')+
+        ' <span class="tsub">'+d.toLocaleString('ru-RU')+'</span>'+
+        '<div style="margin-top:4px;">'+eh(m.text)+'</div>'+
+      '</div></div>';
   }).join('');
   html+='</div>';
   c.innerHTML=html;
@@ -27920,7 +28909,10 @@ function vdmShowCabinet(){
   }));
   w.querySelector('#vcWrite').addEventListener('click',()=>{
     zvAsk({title:'Обращение в Zenvox', hint:'Ваше сообщение администратору сети:', placeholder:'Текст обращения', okText:'Отправить',
-      onOk:(t)=>{ if(!t) return; const res=vdmSendPartnerMsg(o.id, t); toast(res.ok?'Обращение отправлено в Zenvox':res.err, res.ok?'success':'error'); }});
+      onOk:(t)=>{ if(!t) return;
+        const myStores=(typeof ownerStores==='function'? ownerStores(o.id):[]).map(s=>s.name||s.id);
+        const res=vdmSendPartnerMsg(o.id, t, {authorRole:'owner', authorName:(o.fio||o.alias), storeName:myStores.join(', ')});
+        toast(res.ok?'Обращение отправлено в Zenvox':res.err, res.ok?'success':'error'); }});
   });
   w.querySelector('#vcOut').addEventListener('click',()=>{ NET.ownerSession=null; saveNet(); w.style.display='none'; zvShowLogin(); });
 }
@@ -27932,7 +28924,6 @@ if(NET.session && NET.session.deviceId){ zvStartDeviceWatch(); }
 if(NET.session){ zvApplySession(); } else { zvShowLogin(); }
 try{ toast('Zenvox '+SC2_BUILD+' загружена','success'); }catch(e){}
 })();
-
 </script>
 </body>
 </html>
