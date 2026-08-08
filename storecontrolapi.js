@@ -1135,6 +1135,16 @@ async function orderWatchTick() {
   } finally { _watchBusy = false; }
 }
 setInterval(() => { orderWatchTick().catch(e => console.log('orderWatch:', e.message)); }, 60000);
+/* СТОРОЖ-БУДИЛЬНИК (08.08): внешний самозапрос каждые 10 минут — Render видит
+   входящий трафик и не усыпляет сервис. Без него бесплатный тариф засыпал
+   через 15 минут тишины, и первое открытие ERP утром попадало на холодный
+   старт (30–60 сек), из-за чего синхронизация клиента не стартовала. */
+setInterval(() => {
+  fetch(EXT_URL + '/api/health')
+    .then(r => { if (!r.ok) console.log('[будильник] health: HTTP ' + r.status); })
+    .catch(e => console.log('[будильник] ' + e.message));
+}, 10 * 60 * 1000);
+console.log('[будильник] самопинг каждые 10 минут: ' + EXT_URL + '/api/health');
 setTimeout(() => { orderWatchTick().catch(() => {}); }, 8000);
 
 const server = http.createServer((req, res) => {
