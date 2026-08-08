@@ -1147,6 +1147,49 @@ setInterval(() => {
 console.log('[будильник] самопинг каждые 10 минут: ' + EXT_URL + '/api/health');
 setTimeout(() => { orderWatchTick().catch(() => {}); }, 8000);
 
+
+/* ---- АВИТО-АГЕНТ (сборка 177): сервер сам достаёт цены с выдачи Авито.
+   Антибот Авито может закрыть доступ облачному IP — тогда честная ошибка,
+   у клиента остаётся ручной путь (вставить выдачу → «Посчитать»). ---- */
+async function avitoMarketPrices(q) {
+  const urls = [
+    'https://m.avito.ru/rossiya?q=' + encodeURIComponent(q),
+    'https://www.avito.ru/rossiya?q=' + encodeURIComponent(q)
+  ];
+  let lastErr = 'Авито не ответил';
+  for (const u of urls) {
+    try {
+      const ctl = new AbortController();
+      const tm = setTimeout(() => ctl.abort(), 12000);
+      const r = await fetch(u, {
+        signal: ctl.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'ru-RU,ru;q=0.9'
+        }
+      });
+      clearTimeout(tm);
+      if (!r.ok) { lastErr = 'Авито ответил кодом ' + r.status + (r.status === 403 ? ' (антибот)' : ''); continue; }
+      const html = await r.text();
+      if (/h-captcha|hcaptcha|geetest|are you a robot|подтвердите, что вы не робот/i.test(html)) { lastErr = 'Авито показал проверку-антибот'; continue; }
+      const out = [];
+      let m;
+      const re1 = /"price"\s*:\s*\{[^{}]*?"value"\s*:\s*(\d{4,7})/g;
+      while ((m = re1.exec(html))) out.push(parseInt(m[1], 10));
+      if (!out.length) { const re2 = /"price"\s*:\s*(\d{4,7})/g; while ((m = re2.exec(html))) out.push(parseInt(m[1], 10)); }
+      if (!out.length) {
+        const re3 = /(\d[\d\s\u00A0\u202F]{3,9})\s*₽/g;
+        while ((m = re3.exec(html))) { const v = parseInt(m[1].replace(/\D/g, ''), 10); if (v >= 1000 && v <= 2000000) out.push(v); }
+      }
+      const clean = out.filter(v => v >= 1000 && v <= 2000000).slice(0, 60);
+      if (clean.length >= 3) return clean;
+      lastErr = 'страница получена, но цен в ней не видно (' + clean.length + ')';
+    } catch (e) { lastErr = String((e && e.message) || e); }
+  }
+  throw new Error(lastErr);
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -1155,6 +1198,21 @@ const server = http.createServer((req, res) => {
   /* ---- Страницы ---- */
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return sendFile(res, 'index.html');
   if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-72' });
+
+  /* ---- Авито-агент: GET /api/avito-price?q=модель ---- */
+  if (req.method === 'GET' && url.pathname === '/api/avito-price') {
+    const q = String(url.searchParams.get('q') || '').trim().slice(0, 120);
+    if (!q) return sendJson(res, 400, { ok: false, error: 'пустой запрос' });
+    (async () => {
+      try {
+        const prices = await avitoMarketPrices(q);
+        sendJson(res, 200, { ok: true, prices });
+      } catch (e) {
+        sendJson(res, 200, { ok: false, error: String((e && e.message) || e) });
+      }
+    })();
+    return;
+  }
 
   /* ---- Автонастройка нового компа: открыл систему с сервера — она сама
      получила адрес API и ключ. Включается переменной AUTO_SETUP=1. ---- */

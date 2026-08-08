@@ -5830,10 +5830,12 @@ function whNameNorm(s){
 }
 const WH_MODEL_MODS=new Set(['pro','max','ultra','plus','mini','lite','se','fe','air','note','prime']);
 /* Русские написания брендов → каталожные (для поиска: «айфон» находит iPhone) */
-const RU_BRAND_ALIASES={'айфон':'iphone','эпл':'apple','эппл':'apple','самсунг':'samsung','сяоми':'xiaomi','ксяоми':'xiaomi','ксиаоми':'xiaomi','ксиоми':'xiaomi','редми':'redmi','макбук':'macbook','айпад':'ipad','аирподс':'airpods','эирподс':'airpods','айрподс':'airpods','аирподсы':'airpods','дайсон':'dyson','вотч':'watch','уотч':'watch','гэлакси':'galaxy','галакси':'galaxy','плейстейшн':'playstation','плейстейшен':'playstation','пиксель':'pixel','хонор':'honor','хуавей':'huawei','про':'pro','макс':'max','плюс':'plus','мини':'mini','ультра':'ultra'};
+const RU_BRAND_ALIASES={'айфон':'iphone','эпл':'apple','эппл':'apple','самсунг':'samsung','сяоми':'xiaomi','ксяоми':'xiaomi','ксиаоми':'xiaomi','ксиоми':'xiaomi','редми':'redmi','макбук':'macbook','айпад':'ipad','аирподс':'airpods','эирподс':'airpods','айрподс':'airpods','аирподсы':'airpods','дайсон':'dyson','вотч':'watch','уотч':'watch','гэлакси':'galaxy','галакси':'galaxy','плейстейшн':'playstation','плейстейшен':'playstation','пиксель':'pixel','хонор':'honor','хуавей':'huawei','флип':'flip','фолд':'fold','нот':'note','ноте':'note','поко':'poco','эйр':'air','аир':'air','се':'se','фе':'fe','про':'pro','макс':'max','плюс':'plus','мини':'mini','ультра':'ultra'};
 function searchTokens(q){
   return String(q||'').toLowerCase().trim().split(/\s+/).filter(Boolean)
-    .map(t=>RU_BRAND_ALIASES[t]||t);
+    .map(t=>RU_BRAND_ALIASES[t]||t)
+    /* с24→s24, а56→a56, з флип→z flip, х7→x7, ф7→f7 — кириллица перед цифрой */
+    .map(t=>t.replace(/^с(?=\d)/,'s').replace(/^а(?=\d)/,'a').replace(/^з(?=\d)/,'z').replace(/^х(?=\d)/,'x').replace(/^ф(?=\d)/,'f'));
 }
 function modelMatches(name, q){
   const n=String(name||'').toLowerCase();
@@ -5861,17 +5863,78 @@ function avitoPricesFromText(txt){
   const avg=Math.round(clean.reduce((s2,v)=>s2+v,0)/clean.length);
   return {n:clean.length, dropped:out.length-clean.length, prices:clean, median, avg};
 }
+/* СПРАВОЧНИК МОДЕЛЕЙ (сборка 176): все iPhone / Samsung / Xiaomi со всеми
+   заводскими объёмами памяти. Менеджер всегда выбирает из списка — некорректное
+   написание модели исключено. Карточки сайта в подсказках идут первыми (с ценой),
+   справочник добивает то, чего на сайте нет. Актуальность: август 2026
+   (iPhone 17 / Galaxy S26 / Xiaomi 17 включены). */
+const REF_MODELS_SPEC=[
+ ['iPhone 7','32|128|256'],['iPhone 7 Plus','32|128|256'],
+ ['iPhone 8','64|128|256'],['iPhone 8 Plus','64|128|256'],
+ ['iPhone X','64|256'],['iPhone XR','64|128|256'],['iPhone XS','64|256|512'],['iPhone XS Max','64|256|512'],
+ ['iPhone SE 2020','64|128|256'],['iPhone SE 2022','64|128|256'],
+ ['iPhone 11','64|128|256'],['iPhone 11 Pro','64|256|512'],['iPhone 11 Pro Max','64|256|512'],
+ ['iPhone 12 mini','64|128|256'],['iPhone 12','64|128|256'],['iPhone 12 Pro','128|256|512'],['iPhone 12 Pro Max','128|256|512'],
+ ['iPhone 13 mini','128|256|512'],['iPhone 13','128|256|512'],['iPhone 13 Pro','128|256|512|1T'],['iPhone 13 Pro Max','128|256|512|1T'],
+ ['iPhone 14','128|256|512'],['iPhone 14 Plus','128|256|512'],['iPhone 14 Pro','128|256|512|1T'],['iPhone 14 Pro Max','128|256|512|1T'],
+ ['iPhone 15','128|256|512'],['iPhone 15 Plus','128|256|512'],['iPhone 15 Pro','128|256|512|1T'],['iPhone 15 Pro Max','256|512|1T'],
+ ['iPhone 16','128|256|512'],['iPhone 16 Plus','128|256|512'],['iPhone 16e','128|256|512'],['iPhone 16 Pro','128|256|512|1T'],['iPhone 16 Pro Max','256|512|1T'],
+ ['iPhone 17','256|512'],['iPhone Air','256|512|1T'],['iPhone 17 Pro','256|512|1T'],['iPhone 17 Pro Max','256|512|1T|2T'],
+ ['Samsung Galaxy S20','128'],['Samsung Galaxy S20+','128|256'],['Samsung Galaxy S20 Ultra','128|256|512'],['Samsung Galaxy S20 FE','128|256'],
+ ['Samsung Galaxy S21','128|256'],['Samsung Galaxy S21+','128|256'],['Samsung Galaxy S21 Ultra','128|256|512'],['Samsung Galaxy S21 FE','128|256'],
+ ['Samsung Galaxy S22','128|256'],['Samsung Galaxy S22+','128|256'],['Samsung Galaxy S22 Ultra','128|256|512|1T'],
+ ['Samsung Galaxy S23','128|256|512'],['Samsung Galaxy S23+','256|512'],['Samsung Galaxy S23 Ultra','256|512|1T'],['Samsung Galaxy S23 FE','128|256'],
+ ['Samsung Galaxy S24','128|256|512'],['Samsung Galaxy S24+','256|512'],['Samsung Galaxy S24 Ultra','256|512|1T'],['Samsung Galaxy S24 FE','128|256|512'],
+ ['Samsung Galaxy S25','128|256|512'],['Samsung Galaxy S25+','256|512'],['Samsung Galaxy S25 Ultra','256|512|1T'],['Samsung Galaxy S25 Edge','256|512'],['Samsung Galaxy S25 FE','128|256|512'],
+ ['Samsung Galaxy S26','256|512'],['Samsung Galaxy S26+','256|512'],['Samsung Galaxy S26 Ultra','256|512|1T'],
+ ['Samsung Galaxy Z Flip3','128|256'],['Samsung Galaxy Z Fold3','256|512'],
+ ['Samsung Galaxy Z Flip4','128|256|512'],['Samsung Galaxy Z Fold4','256|512|1T'],
+ ['Samsung Galaxy Z Flip5','256|512'],['Samsung Galaxy Z Fold5','256|512|1T'],
+ ['Samsung Galaxy Z Flip6','256|512'],['Samsung Galaxy Z Fold6','256|512|1T'],
+ ['Samsung Galaxy Z Flip7','256|512'],['Samsung Galaxy Z Flip7 FE','128|256'],['Samsung Galaxy Z Fold7','256|512|1T'],
+ ['Samsung Galaxy A15','128|256'],['Samsung Galaxy A16','128|256'],['Samsung Galaxy A25','128|256'],['Samsung Galaxy A26','128|256'],
+ ['Samsung Galaxy A35','128|256'],['Samsung Galaxy A36','128|256'],['Samsung Galaxy A55','128|256'],['Samsung Galaxy A56','128|256'],
+ ['Xiaomi 12','128|256'],['Xiaomi 12 Pro','256'],['Xiaomi 12T','128|256'],['Xiaomi 12T Pro','256'],
+ ['Xiaomi 13','128|256'],['Xiaomi 13 Pro','256|512'],['Xiaomi 13 Lite','128|256'],['Xiaomi 13T','256'],['Xiaomi 13T Pro','256|512|1T'],
+ ['Xiaomi 14','256|512'],['Xiaomi 14 Ultra','512'],['Xiaomi 14T','256|512'],['Xiaomi 14T Pro','256|512|1T'],
+ ['Xiaomi 15','256|512'],['Xiaomi 15 Ultra','512|1T'],['Xiaomi 15T','256|512'],['Xiaomi 15T Pro','256|512|1T'],
+ ['Xiaomi 17','256|512'],['Xiaomi 17 Pro','256|512|1T'],['Xiaomi 17 Pro Max','512|1T'],['Xiaomi 17 Ultra','512|1T'],
+ ['Xiaomi Redmi Note 11','64|128'],['Xiaomi Redmi Note 12','128|256'],
+ ['Xiaomi Redmi Note 13','128|256'],['Xiaomi Redmi Note 13 Pro','256|512'],['Xiaomi Redmi Note 13 Pro+','256|512'],
+ ['Xiaomi Redmi Note 14','128|256'],['Xiaomi Redmi Note 14 Pro','256|512'],['Xiaomi Redmi Note 14 Pro+','256|512'],
+ ['Xiaomi Redmi Note 15','128|256'],['Xiaomi Redmi Note 15 Pro','256|512'],['Xiaomi Redmi Note 15 Pro+','256|512'],
+ ['Xiaomi Redmi 12','128|256'],['Xiaomi Redmi 13','128|256'],['Xiaomi Redmi 14C','128|256'],['Xiaomi Redmi 15','128|256'],['Xiaomi Redmi 15C','128|256'],
+ ['Xiaomi POCO X6','256'],['Xiaomi POCO X6 Pro','256|512'],['Xiaomi POCO X7','256|512'],['Xiaomi POCO X7 Pro','256|512'],
+ ['Xiaomi POCO F6','256|512'],['Xiaomi POCO F6 Pro','256|512'],['Xiaomi POCO F7','256|512'],['Xiaomi POCO F7 Pro','256|512'],['Xiaomi POCO F7 Ultra','256|512'],
+ ['Xiaomi POCO M6 Pro','256|512'],['Xiaomi POCO M7 Pro','256']
+];
+let _refCatCache=null;
+function refCatalog(){
+  if(_refCatCache) return _refCatCache;
+  const out=[];
+  REF_MODELS_SPEC.forEach(r=>{
+    String(r[1]).split('|').forEach(v=>{
+      const lab=/T$/.test(v)?(v.replace('T','')+' ТБ'):(v+' ГБ');
+      out.push({name:r[0]+' '+lab, price:null, ref:true});
+    });
+  });
+  _refCatCache=out; return out;
+}
+/* единый источник подсказок: карточки сайта (первыми, с ценой) + справочник */
+function catalogAll(){
+  return (DATA.siteCatalog||[]).concat(refCatalog());
+}
 function attachCatalogSuggest(inp, box, opts){
   if(!inp||!box) return;
   const o=opts||{};
   const show=()=>{
     const q=(inp.value||'').trim();
     if(q.length<2){ box.innerHTML=''; return; }
-    const hits=(DATA.siteCatalog||[]).filter(p=>modelMatches(p.name, q)).slice(0,120);
+    const hits=catalogAll().filter(p=>modelMatches(p.name, q)).slice(0,120);
     box.innerHTML=hits.length?('<div style="max-height:280px;overflow:auto;">'+hits.map(p=>
       '<div class="hist-row" style="cursor:pointer;padding:7px 10px;" data-cat-pick="'+escAttr(p.name)+'">'+
       '<div class="h-main">'+escHtml(p.name)+'</div>'+
-      (o.withPrice?('<div class="h-sub mono">'+(p.price!=null?rub(p.price):'цена не указана')+'</div>'):'')+
+      (o.withPrice?('<div class="h-sub mono">'+(p.price!=null?rub(p.price):(p.ref?'справочник — цену впишите вручную':'цена не указана'))+'</div>'):'')+
       '</div>').join('')+'</div>'):'';
     box.querySelectorAll('[data-cat-pick]').forEach(el=>el.addEventListener('click',()=>{
       const nm=el.dataset.catPick;
@@ -6744,8 +6807,8 @@ function wireOrderFormEvents(){
       const box=sugBox(); if(!box) return;
       const q=(ocn.value||'').toLowerCase().trim();
       if(q.length<2){ box.innerHTML=''; return; }
-      const hits=(DATA.siteCatalog||[]).filter(p=>modelMatches(p.name, q)).slice(0,120);
-      box.innerHTML='<div style="max-height:300px;overflow:auto;">'+hits.map(p=>'<div class="hist-row" style="cursor:pointer;padding:7px 10px;" data-of-pick="'+escAttr(p.name)+'"><div class="h-main">'+escHtml(p.name)+'</div><div class="h-sub mono">'+(p.price!=null?rub(p.price):'цена не указана — впишите вручную')+'</div></div>').join('')+'</div>'+(hits.length>=120?'<div class="tsub" style="padding:6px 10px;">Показаны первые 120 — уточните запрос</div>':'');
+      const hits=catalogAll().filter(p=>modelMatches(p.name, q)).slice(0,120);
+      box.innerHTML='<div style="max-height:300px;overflow:auto;">'+hits.map(p=>'<div class="hist-row" style="cursor:pointer;padding:7px 10px;" data-of-pick="'+escAttr(p.name)+'"><div class="h-main">'+escHtml(p.name)+'</div><div class="h-sub mono">'+(p.price!=null?rub(p.price):(p.ref?'справочник моделей — цену впишите вручную':'цена не указана — впишите вручную'))+'</div></div>').join('')+'</div>'+(hits.length>=120?'<div class="tsub" style="padding:6px 10px;">Показаны первые 120 — уточните запрос</div>':'');
       box.querySelectorAll('[data-of-pick]').forEach(el=>el.addEventListener('click',()=>{
         OF.customName=el.dataset.ofPick;
         ocn.value=OF.customName;
@@ -9605,8 +9668,8 @@ function openInventoryModal(c){
   const showSug=()=>{
     const q=(mInp.value||'').toLowerCase().trim();
     if(q.length<2){ sug.innerHTML=''; return; }
-    const hits=(DATA.siteCatalog||[]).filter(p=>modelMatches(p.name, q)).slice(0,120);
-    sug.innerHTML='<div style="max-height:300px;overflow:auto;">'+hits.map(p=>'<div class="hist-row" style="cursor:pointer;padding:7px 10px;" data-inv-pick="'+escAttr(p.name)+'"><div class="h-main">'+escHtml(p.name)+'</div><div class="h-sub mono">'+(p.price!=null?rub(p.price):'цена не указана')+'</div></div>').join('')+'</div>';
+    const hits=catalogAll().filter(p=>modelMatches(p.name, q)).slice(0,120);
+    sug.innerHTML='<div style="max-height:300px;overflow:auto;">'+hits.map(p=>'<div class="hist-row" style="cursor:pointer;padding:7px 10px;" data-inv-pick="'+escAttr(p.name)+'"><div class="h-main">'+escHtml(p.name)+'</div><div class="h-sub mono">'+(p.price!=null?rub(p.price):(p.ref?'справочник':'цена не указана'))+'</div></div>').join('')+'</div>';
     sug.querySelectorAll('[data-inv-pick]').forEach(el=>el.addEventListener('click',()=>{
       INV.model=el.dataset.invPick;
       INV.price=invCatalogPrice(INV.model);
@@ -10050,10 +10113,11 @@ function openTradeinAcceptModal(c){
   body+='<div id="tiModelSug"></div>';
   body+='<div class="card" style="margin:8px 0;padding:10px 12px;">'+
     '<div class="kpi-label" style="font-size:12px;">📊 Оценка по Авито (~30 объявлений)</div>'+
-    '<div class="tsub" style="margin-top:3px;">1) Открой поиск → 2) на выдаче Ctrl+A, Ctrl+C → 3) вставь сюда → «Посчитать». Система вырежет цены и отбросит выбросы.</div>'+
+    '<div class="tsub" style="margin-top:3px;">Жми «🤖 Оценить автоматически» — сервер сам пробежит выдачу и посчитает (выбросы отбросит). Если Авито закроется антиботом — запасной путь: «Открыть Авито» → Ctrl+A, Ctrl+C → вставить → «Посчитать». Кнопка Авито — и чтобы лично удостовериться в цифрах.</div>'+
     '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">'+
-      '<button class="btn btn-sm" id="tiAvitoOpen">🔎 Открыть поиск Авито</button>'+
-      '<button class="btn btn-sm btn-primary" id="tiAvitoCalc">Посчитать</button>'+
+      '<button class="btn btn-sm btn-primary" id="tiAvitoAuto">🤖 Оценить автоматически</button>'+
+      '<button class="btn btn-sm" id="tiAvitoOpen">🔎 Открыть Авито (проверить лично)</button>'+
+      '<button class="btn btn-sm" id="tiAvitoCalc">Посчитать</button>'+
       '<span class="tsub" id="tiAvitoRes" style="align-self:center;">'+(TI.avitoEst?('медиана '+rub(TI.avitoEst.median)+' · средняя '+rub(TI.avitoEst.avg)+' · '+TI.avitoEst.n+' цен'):'')+'</span>'+
     '</div>'+
     '<textarea class="textarea-mini" id="tiAvitoPaste" rows="2" style="width:100%;margin-top:8px;" placeholder="Вставь сюда скопированную страницу выдачи Авито"></textarea>'+
@@ -10127,6 +10191,32 @@ function openTradeinAcceptModal(c){
     const tio=document.getElementById('tiOrder'); if(tio) TI.orderId=tio.value;
   }
   setTimeout(()=>{ try{
+    const aa=document.getElementById('tiAvitoAuto');
+    if(aa) aa.addEventListener('click', async ()=>{
+      syncTI();
+      const q=(TI.model||'').trim();
+      if(!q){ toast('Сначала укажите модель','error'); return; }
+      const res=document.getElementById('tiAvitoRes');
+      const t0=aa.textContent; aa.disabled=true; aa.textContent='🤖 Собираю цены…';
+      if(res) res.textContent='сервер пробегает выдачу Авито…';
+      try{
+        const abase=(typeof localSyncUrl==='function' && localSyncUrl()) || (/^https?:/.test(location.protocol)?location.origin:'');
+        if(!abase) throw new Error('нет связи с сервером системы');
+        const r=await fetch(abase+'/api/avito-price?q='+encodeURIComponent(q+' б/у'));
+        const j=await r.json();
+        if(!j.ok || !(j.prices||[]).length) throw new Error(j.error||'Авито не отдал цены');
+        const stat=avitoPricesFromText(j.prices.map(v=>v+' ₽').join('\n'));
+        if(!stat.median) throw new Error('нашлось меньше 3 цен');
+        TI.avitoEst={median:stat.median, avg:stat.avg, n:stat.n, at:DATA.today, auto:true};
+        if(res) res.textContent='медиана '+rub(stat.median)+' · средняя '+rub(stat.avg)+' · '+stat.n+' цен (автоматически)';
+        toast('Авито (автомат): медиана '+rub(stat.median)+', средняя '+rub(stat.avg)+' по '+stat.n+' ценам. «Открыть Авито» — проверить лично.','success');
+      }catch(e){
+        const why=String((e&&e.message)||e);
+        if(res) res.textContent='автомат не прошёл: '+why;
+        toast('Авито не пустил автомат ('+why+'). Запасной путь работает всегда: «Открыть Авито» → Ctrl+A, Ctrl+C → вставить сюда → «Посчитать».','error');
+      }
+      aa.disabled=false; aa.textContent=t0;
+    });
     const ao=document.getElementById('tiAvitoOpen');
     if(ao) ao.addEventListener('click', ()=>{
       syncTI();
@@ -22726,7 +22816,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-175 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-177 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
