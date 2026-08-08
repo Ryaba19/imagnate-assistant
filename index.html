@@ -15418,20 +15418,7 @@ function controlPanelHTML(){
       '</div></div></div>';
   }
 
-  /* --- 5. Боевой запуск базы (только владелец): очистить демо и запереть облако на боевую базу --- */
-  if(isBossRole()){
-    html+='<div class="section"><div class="section-head"><div class="section-title">🚀 Боевой запуск базы</div></div>'+
-      '<div class="placeholder-card" style="border-style:dashed;border-color:rgba(255,90,90,.4);background:rgba(255,90,90,.05);">'+
-      '<span class="badge b-cancel">Только владелец · необратимо</span>'+
-      '<b>Перевести систему в боевой режим</b>'+
-      '<p>Делается ОДИН раз — в день реальной приёмки. Сервер сам, авторитетно, очищает все демо-данные (заказы, склад, кассы, клиентов, сервис, заявки) и намертво запирает облако на паспорт этой базы: демо-снимки и снимки с чужим паспортом больше не принимаются ни с какого компьютера. После запуска система перезагрузится на чистую боевую базу, и всё, что вы внесёте дальше, будет храниться в БД и переживать смену версий.</p>'+
-      '<p style="color:var(--negative);margin:0;"><b>Отменить нельзя.</b> Убедитесь, что демо-примеры вам больше не нужны.</p>'+
-      '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;">'+
-        '<button class="btn btn-sm btn-danger" id="prodStartBtn">🚀 Боевой запуск</button>'+
-        '<button class="btn btn-sm" id="prodStatusBtn">Проверить статус</button>'+
-        '<span class="tsub" id="prodStatusLbl" style="opacity:.75;"></span>'+
-      '</div></div></div>';
-  }
+  /* Боевой запуск убран из интерфейса (решение 08.08): работаем на реальных данных без очистки. */
 
   return html;
 }
@@ -15737,18 +15724,6 @@ function wireControlPanel(c){
     DATA.tradeinRates.sell=Math.max(0, Math.min(50, parseFloat(document.getElementById('tiSellInp').value)||0));
     if(typeof lsSave==='function') lsSave();
     toast('Мотивация трейд-ина: выкуп '+DATA.tradeinRates.buy+'%, продажа '+DATA.tradeinRates.sell+'%','success');
-  });
-  const psb=document.getElementById('prodStartBtn');
-  if(psb) psb.addEventListener('click', ()=>productionStartDialog());
-  const pstb=document.getElementById('prodStatusBtn');
-  if(pstb) pstb.addEventListener('click', ()=>{
-    const lbl=document.getElementById('prodStatusLbl');
-    const cc=erpServerCreds();
-    if(!cc){ if(lbl) lbl.textContent='нет связи с сервером'; return; }
-    if(lbl) lbl.textContent='проверяю…';
-    fetch(cc.api+'/state-production',{headers:{'Authorization':'Bearer '+cc.token}})
-      .then(r=>r.json()).then(j=>{ if(lbl) lbl.textContent=(j&&j.production)?('боевой режим ВКЛЮЧЁН · паспорт '+(j.baseId||'—')):'боевой режим выключен (демо-данные принимаются)'; })
-      .catch(()=>{ if(lbl) lbl.textContent='ошибка связи'; });
   });
   c.querySelectorAll('[data-emp-del]').forEach(el=>el.addEventListener('click',()=>{
     if(!isBossRole()){ toast('Только владелец','error'); return; }
@@ -22340,7 +22315,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-148 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-150 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -25899,8 +25874,8 @@ function defaultNet(){
     storeDevices:{},    /* {storeId:[{id,name,ts,active}]} — устройства магазина для ЛК ВДМ */
     storePins:{},       /* {storeId:'123456'} — ПИН выхода, задаёт ВДМ */
     activeShift:null,   /* смена сотрудника на устройстве: {staffId, storeId, in} */
-    net:{login:'Zenvox', salt:'f0e1d2c3b4a5968778695a4b3c2d1e0f', passHash:'f8f0fec691c80579f6ad92721f2eef33fe61a8292fdec2e850309fd01d0747a5', iters:310000, email:'zenvox@mail.ru'},
-    imag:{login:'somethingspecial', salt:'a1b2c3d4e5f60718293a4b5c6d7e8f90', passHash:'9bf8f4dcd4793c02c79b8d60f40728b74598f94128283d98150b33c9a073161f', iters:310000, email:'i_magnate@mail.ru', companyId:'c1'},
+    net:{login:'Zenvox', salt:'f0e1d2c3b4a5968778695a4b3c2d1e0f', passHash:'7b530a5371d34ac2699d385d9f7ffce490dce4ec1532bf2fb1b41874c01e28e0', iters:310000, email:'zenvox@mail.ru'},
+    imag:{login:'somethingspecial', salt:'a1b2c3d4e5f60718293a4b5c6d7e8f90', passHash:'30ef945c6fa34ce1f2a60c41e4e4bede6fa90d597237eace66301d1974ac5e8d', iters:310000, email:'i_magnate@mail.ru', companyId:'c1'},
     session:null,
     storeCollections:{store_kashirka:['rc1'], store_lunnaya:['rc1']},
     storeRegion:{store_kashirka:'Москва', store_lunnaya:'Москва'},
@@ -28145,6 +28120,15 @@ function renderSc2Pcbuild(c){
 
 /* ── старт слоя ── */
 NET=loadNet()||defaultNet();
+/* СБОРКА 149: восстановление рабочих паролей единого входа (сшивка SC10 привезла
+   другие хэши, и вход отвалился). Однократно возвращаем прежние доступы;
+   дальнейшие смены пароля через систему сохраняются как обычно. */
+if(!NET._pwRestore149){
+  const _d=defaultNet();
+  NET.net=_d.net; NET.imag=_d.imag; NET.session=null;
+  NET._pwRestore149=true;
+  saveNet();
+}
 /* SC6: гарантируем поля конвейера + ОБНУЛЯЕМ старые демо-заказы легаси (решение владельца — чистый старт) */
 if(!Array.isArray(NET.zorders)) NET.zorders=[];
 if(!Array.isArray(NET.zGoodsMoves)) NET.zGoodsMoves=[];
