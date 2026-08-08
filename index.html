@@ -3693,6 +3693,7 @@ function connSystemHTML(){
     '<div class="drill-block-label" style="margin-top:16px;">3. Уведомления и настройки заказов</div>'+
     '<div class="tsub" style="margin-top:4px;">Telegram-уведомления (владелец и смена), письма клиентам, СМС, адрес в сообщении, разница карта/наличные, приём заявок с сайта.</div>'+
     '<button class="btn btn-sm" id="csOrderSettings" style="margin-top:8px;">⚙ Открыть настройки заказов и уведомлений</button>'+
+    '<button class="btn btn-sm" id="csPriceProbe" style="margin-top:8px;" title="Найти в карточках сайта поле цены по карте/рассрочке — чтобы безнал шёл с сайта, а не расчётом">🔍 Проверить поля цен сайта</button>'+
   '</div>';
 }
 function wireConnSystem(c){
@@ -3738,6 +3739,8 @@ function wireConnSystem(c){
   });
   const cos=document.getElementById('csOrderSettings');
   if(cos) cos.addEventListener('click', ()=>openOrderSettingsModal());
+  const cpp=document.getElementById('csPriceProbe');
+  if(cpp) cpp.addEventListener('click', ()=>sitePriceFieldProbe());
   const dt=document.getElementById('csDbTest');
   if(dt) dt.addEventListener('click', async ()=>{
     msg('csDbMsg','Проверяю…');
@@ -5924,6 +5927,20 @@ function refCatalog(){
 function catalogAll(){
   return (DATA.siteCatalog||[]).concat(refCatalog());
 }
+/* ДВЕ ЦЕНЫ САЙТА (180): наличные (current_priced) и безнал (по карте/рассрочку).
+   Если поле безнала найдено «Проверкой полей цен» — берём его с сайта;
+   иначе считаем: карта = нал × коэффициент (с карточек сайта: 1,18). */
+function siteCardK(){ const k=parseFloat((DATA.settings||{}).siteCardK); return (k>1&&k<3)?k:1.18; }
+function priceCardOf(p){
+  if(!p) return null;
+  if(p.priceCard!=null) return Math.round(p.priceCard);
+  return (p.price!=null)? Math.round(p.price*siteCardK()) : null;
+}
+function priceBothLabel(p){
+  if(!p||p.price==null) return null;
+  const c=priceCardOf(p);
+  return 'нал '+rub(p.price)+(c!=null?(' · карта '+rub(c)):'');
+}
 function attachCatalogSuggest(inp, box, opts){
   if(!inp||!box) return;
   const o=opts||{};
@@ -5934,7 +5951,7 @@ function attachCatalogSuggest(inp, box, opts){
     box.innerHTML=hits.length?('<div style="max-height:280px;overflow:auto;">'+hits.map(p=>
       '<div class="hist-row" style="cursor:pointer;padding:7px 10px;" data-cat-pick="'+escAttr(p.name)+'">'+
       '<div class="h-main">'+escHtml(p.name)+'</div>'+
-      (o.withPrice?('<div class="h-sub mono">'+(p.price!=null?rub(p.price):(p.ref?'справочник — цену впишите вручную':'цена не указана'))+'</div>'):'')+
+      (o.withPrice?('<div class="h-sub mono">'+(p.price!=null?priceBothLabel(p):(p.ref?'справочник — цену впишите вручную':'цена не указана'))+'</div>'):'')+
       '</div>').join('')+'</div>'):'';
     box.querySelectorAll('[data-cat-pick]').forEach(el=>el.addEventListener('click',()=>{
       const nm=el.dataset.catPick;
@@ -6717,7 +6734,7 @@ function orderFormBodyHTML(){
   const total=OF.items.reduce((s,it)=>s+it.price,0);
   let h='<div class="drill-block-label">Клиент</div><div class="field-grid">'+
     '<div class="field"><label>ФИО *</label><input class="input-mini" id="ofName" style="width:100%;" value="'+escAttr(OF.name)+'"></div>'+
-    '<div class="field"><label>Телефон *</label><input class="input-mini" id="ofPhone" style="width:100%;" placeholder="+7 900 000-00-00" inputmode="tel" maxlength="16" value="'+escAttr(OF.phone)+'"></div>'+
+    '<div class="field"><label>Телефон *</label><input class="input-mini" id="ofPhone" style="width:100%;" placeholder="+7 900 000-00-00" inputmode="tel" maxlength="16" value="'+escAttr(OF.phone)+'"><div id="ofClientCheck"></div></div>'+
   '</div><div class="field" style="margin-bottom:10px;"><label>E-mail</label><input class="input-mini" id="ofEmail" style="width:100%;" value="'+escAttr(OF.email)+'"></div>'+
   '<div class="toggle-row" style="margin-bottom:16px;"><div class="toggle-switch '+(OF.consent?'on':'')+'" id="ofConsent"></div>Согласие получать информацию о магазине</div>';
 
@@ -6768,7 +6785,29 @@ function wireOrderFormEvents(){
   root.querySelector('#ofConsent').addEventListener('click', ()=>{ OF.consent=!OF.consent; refreshOrderForm(); });
   root.querySelector('#ofMethod').addEventListener('change', refreshOrderForm);
   const phoneInp=root.querySelector('#ofPhone');
-  if(phoneInp) phoneInp.addEventListener('input', ()=>formatRuPhoneInput(phoneInp));
+  if(phoneInp){
+    phoneInp.addEventListener('input', ()=>formatRuPhoneInput(phoneInp));
+    /* ПРОВЕРКА КЛИЕНТА (181): номер сразу прогоняется по всей истории */
+    const updClientCheck=()=>{
+      const box=root.querySelector('#ofClientCheck'); if(!box) return;
+      if(normPhone(phoneInp.value).length<10){ box.innerHTML=''; return; }
+      const ci=clientInfo(phoneInp.value);
+      let h='';
+      if(ci.vip){
+        h='<div style="margin-top:6px;padding:6px 10px;border-radius:8px;background:rgba(255,190,60,.13);border:1px solid rgba(255,190,60,.45);font-size:12.5px;">★ <b>ПОСТОЯННЫЙ клиент</b> — покупок: '+ci.count+' на '+rub(ci.total)+(ci.repairs?(' (в т.ч. ремонтов: '+ci.repairs+')'):'')+'</div>';
+      } else if(ci.count>0){
+        h='<div style="margin-top:6px;padding:6px 10px;border-radius:8px;background:rgba(90,200,120,.10);border:1px solid rgba(90,200,120,.35);font-size:12.5px;">✓ Уже покупал: '+ci.count+' на '+rub(ci.total)+(ci.repairs?(' · ремонтов: '+ci.repairs):'')+'. До «Постоянного»: 3 покупки или 300 000 ₽.</div>';
+      } else {
+        h='<div class="tsub" style="margin-top:6px;font-size:12px;">Новый клиент — покупок по этому номеру не найдено</div>';
+      }
+      if(ci.active && ci.active.length){
+        h+='<div class="tsub" style="margin-top:4px;font-size:12px;">⚠ У клиента уже есть активный заказ: №'+ci.active.map(o=>o.id).join(', №')+' — проверьте, не дубль ли это</div>';
+      }
+      box.innerHTML=h;
+    };
+    phoneInp.addEventListener('input', updClientCheck);
+    setTimeout(updClientCheck, 60);
+  }
   root.querySelectorAll('[data-pick]').forEach(btn=>btn.addEventListener('click', ()=>{
     OF.pickerMode = OF.pickerMode===btn.dataset.pick? null : btn.dataset.pick;
     refreshOrderForm();
@@ -6808,13 +6847,19 @@ function wireOrderFormEvents(){
       const q=(ocn.value||'').toLowerCase().trim();
       if(q.length<2){ box.innerHTML=''; return; }
       const hits=catalogAll().filter(p=>modelMatches(p.name, q)).slice(0,120);
-      box.innerHTML='<div style="max-height:300px;overflow:auto;">'+hits.map(p=>'<div class="hist-row" style="cursor:pointer;padding:7px 10px;" data-of-pick="'+escAttr(p.name)+'"><div class="h-main">'+escHtml(p.name)+'</div><div class="h-sub mono">'+(p.price!=null?rub(p.price):(p.ref?'справочник моделей — цену впишите вручную':'цена не указана — впишите вручную'))+'</div></div>').join('')+'</div>'+(hits.length>=120?'<div class="tsub" style="padding:6px 10px;">Показаны первые 120 — уточните запрос</div>':'');
+      box.innerHTML='<div style="max-height:300px;overflow:auto;">'+hits.map(p=>'<div class="hist-row" style="cursor:pointer;padding:7px 10px;" data-of-pick="'+escAttr(p.name)+'"><div class="h-main">'+escHtml(p.name)+'</div><div class="h-sub mono">'+(p.price!=null?priceBothLabel(p):(p.ref?'справочник моделей — цену впишите вручную':'цена не указана — впишите вручную'))+'</div></div>').join('')+'</div>'+(hits.length>=120?'<div class="tsub" style="padding:6px 10px;">Показаны первые 120 — уточните запрос</div>':'');
       box.querySelectorAll('[data-of-pick]').forEach(el=>el.addEventListener('click',()=>{
         OF.customName=el.dataset.ofPick;
         ocn.value=OF.customName;
         const pr=(DATA.siteCatalog||[]).find(p=>(p.name||'')===OF.customName);
         const priceInp=root.querySelector('#ofCustomPrice');
-        if(pr && pr.price!=null && priceInp){ priceInp.value=Math.round(pr.price); OF.customPrice=String(Math.round(pr.price)); }
+        /* ДВЕ ЦЕНЫ (180): какая цена — решает способ оплаты заказа */
+        const pay=((document.getElementById('ofPayment')||{}).value)||OF.payment||'Наличные';
+        const useCard=/карта|qr|рассроч/i.test(String(pay));
+        const pv=pr? (useCard? priceCardOf(pr) : (pr.price!=null?Math.round(pr.price):null)) : null;
+        if(pv!=null && priceInp){ priceInp.value=pv; OF.customPrice=String(pv);
+          try{ toast(useCard?('Цена по карте/рассрочке: '+rub(pv)+' (наличными было бы '+rub(Math.round(pr.price))+')'):('Цена наличными: '+rub(pv)+' (по карте — '+rub(priceCardOf(pr))+')'),'info'); }catch(e){}
+        }
         box.innerHTML='';
         if(priceInp && !priceInp.value) priceInp.focus();
       }));
@@ -8068,6 +8113,7 @@ function openIssueModal(id){
         if(!bu) return;
         bu.soldAt=DATA.today; bu.soldPrice=it.price; bu.status='sold';
         bu.soldTo={name:o.name||'', phone:o.phone||''};
+        bu.soldOrderId=o.id;   /* продан через заказ — в истории клиента не дублируется */
         ensureTradeinData();
         const tiMargin=(it.price||0)-(bu.purchase||0);
         if(tiMargin>0){
@@ -9669,7 +9715,7 @@ function openInventoryModal(c){
     const q=(mInp.value||'').toLowerCase().trim();
     if(q.length<2){ sug.innerHTML=''; return; }
     const hits=catalogAll().filter(p=>modelMatches(p.name, q)).slice(0,120);
-    sug.innerHTML='<div style="max-height:300px;overflow:auto;">'+hits.map(p=>'<div class="hist-row" style="cursor:pointer;padding:7px 10px;" data-inv-pick="'+escAttr(p.name)+'"><div class="h-main">'+escHtml(p.name)+'</div><div class="h-sub mono">'+(p.price!=null?rub(p.price):(p.ref?'справочник':'цена не указана'))+'</div></div>').join('')+'</div>';
+    sug.innerHTML='<div style="max-height:300px;overflow:auto;">'+hits.map(p=>'<div class="hist-row" style="cursor:pointer;padding:7px 10px;" data-inv-pick="'+escAttr(p.name)+'"><div class="h-main">'+escHtml(p.name)+'</div><div class="h-sub mono">'+(p.price!=null?priceBothLabel(p):(p.ref?'справочник':'цена не указана'))+'</div></div>').join('')+'</div>';
     sug.querySelectorAll('[data-inv-pick]').forEach(el=>el.addEventListener('click',()=>{
       INV.model=el.dataset.invPick;
       INV.price=invCatalogPrice(INV.model);
@@ -18395,7 +18441,7 @@ async function siteCatalogAutoBuild(){
       let j=null;
       if(useFields){
         try{
-          j=await strapiReq('/api/produkties?status=draft&fields[0]=documentId&fields[1]=current_priced&fields[2]=nazvanie&fields[3]=slug&sort=id:asc&pagination[page]='+pg+'&pagination[pageSize]=100');
+          j=await strapiReq('/api/produkties?status=draft&fields[0]=documentId&fields[1]=current_priced&fields[2]=nazvanie&fields[3]=slug'+((DATA.settings&&DATA.settings.siteCardField)?('&fields[4]='+DATA.settings.siteCardField):'')+'&sort=id:asc&pagination[page]='+pg+'&pagination[pageSize]=100');
         }catch(e){ useFields=false; }   /* поле называется иначе — берём карточки целиком */
       }
       if(!useFields){
@@ -18425,6 +18471,38 @@ setInterval(()=>{ try{ siteCatalogAutoBuild(); }catch(e){} }, 300000);
 /* ТИХАЯ АВТОПОДТЯЖКА ЦЕН (29.07-53): раз в час забираем розничные цены
    с сайта и обновляем карточки каталога — инвентаризация всегда с ценами. */
 let _ppBusy=false;
+/* ПРОВЕРКА ПОЛЕЙ ЦЕН (180): берём 3 свежие карточки сайта ЦЕЛИКОМ и ищем
+   числовое поле, которое стабильно ≈ current_priced × K (K 1,05–1,35).
+   Нашли — запоминаем имя поля и точный коэффициент; безнал идёт с сайта. */
+async function sitePriceFieldProbe(){
+  try{
+    toast('Смотрю карточки сайта…','info');
+    const j=await strapiReq('/api/produkties?sort=id:desc&pagination[pageSize]=3');
+    const items=(j.data||[]).map(raw=>raw.attributes?Object.assign({id:raw.id},raw.attributes):raw);
+    if(!items.length){ toast('Сайт не отдал карточек — проверьте подключение','error'); return; }
+    const numeric={};
+    items.forEach(it=>{ Object.keys(it).forEach(k=>{ const v=it[k];
+      if(typeof v==='number' && v>=1000 && v<=3000000) (numeric[k]=numeric[k]||[]).push(v); }); });
+    let found=null, kAvg=null;
+    Object.keys(numeric).forEach(k=>{
+      if(k==='current_priced') return;
+      const ks=items.map(it=>(typeof it[k]==='number'&&typeof it.current_priced==='number'&&it.current_priced>0)? it[k]/it.current_priced : null).filter(x=>x!=null);
+      if(ks.length>=2 && ks.every(x=>x>1.05&&x<1.35) && (Math.max(...ks)-Math.min(...ks))<0.02){
+        found=k; kAvg=ks.reduce((a,x)=>a+x,0)/ks.length;
+      }
+    });
+    if(found){
+      (DATA.settings=DATA.settings||{}).siteCardField=found;
+      DATA.settings.siteCardK=Math.round(kAvg*1000)/1000;
+      try{ lsSave(); }catch(e){}
+      try{ if(typeof cloudMarkDirty==='function') cloudMarkDirty(); }catch(e){}
+      toast('Нашёл поле безнала: «'+found+'» (≈ нал × '+DATA.settings.siteCardK+'). Теперь цена по карте берётся прямо с сайта — нажмите «Получить цены с сайта» в «Обновлении цен», чтобы подтянуть её во все карточки.','success');
+    } else {
+      toast('Отдельного поля безнала в карточках сайта не видно (числовые поля: '+(Object.keys(numeric).join(', ')||'нет')+'). Работает расчёт: карта = нал × '+siteCardK()+'.','info');
+    }
+    console.log('[поля цен сайта]', numeric, '→', found||'не найдено');
+  }catch(e){ toast('Не удалось проверить поля цен: '+(e&&e.message||e)+'. Проверьте подключение к сайту в «Подключениях».','error'); }
+}
 async function dbPullPricesAuto(){
   if(!window._importGateOpen) return 0;
   if(_ppBusy) return 0;
@@ -18435,7 +18513,7 @@ async function dbPullPricesAuto(){
     _ppBusy=true;
     let page=1, pageCount=1; const arr=[];
     while(page<=pageCount && page<=40){
-      const j=await strapiReq('/api/produkties?fields[0]=documentId&fields[1]=current_priced&pagination[page]='+page+'&pagination[pageSize]=100');
+      const j=await strapiReq('/api/produkties?fields[0]=documentId&fields[1]=current_priced'+((DATA.settings&&DATA.settings.siteCardField)?('&fields[2]='+DATA.settings.siteCardField):'')+'&pagination[page]='+page+'&pagination[pageSize]=100');
       (j.data||[]).forEach(x=>arr.push(x));
       pageCount=(j.meta&&j.meta.pagination&&j.meta.pagination.pageCount)||1;
       page++;
@@ -18448,6 +18526,8 @@ async function dbPullPricesAuto(){
       if(card && x.current_priced!=null){
         const np=Math.round(parseFloat(x.current_priced));
         if(np && card.price!==np){ card.price=np; updated++; }
+        const f2=(DATA.settings||{}).siteCardField;
+        if(f2 && x[f2]!=null){ const nc=Math.round(parseFloat(x[f2])); if(nc && card.priceCard!==nc){ card.priceCard=nc; updated++; } }
       }
     });
     DATA._priceAutoAtMs=Date.now();
@@ -18468,7 +18548,7 @@ async function dbPullPrices(c){
   try{
     let page=1, pageCount=1, arr=[];
     while(page<=pageCount && page<=40){
-      const j=await strapiReq('/api/produkties?fields[0]=documentId&fields[1]=current_priced&pagination[page]='+page+'&pagination[pageSize]=100');
+      const j=await strapiReq('/api/produkties?fields[0]=documentId&fields[1]=current_priced'+((DATA.settings&&DATA.settings.siteCardField)?('&fields[2]='+DATA.settings.siteCardField):'')+'&pagination[page]='+page+'&pagination[pageSize]=100');
       (j.data||[]).forEach(x=>arr.push(x));
       pageCount=(j.meta&&j.meta.pagination&&j.meta.pagination.pageCount)||1;
       page++;
@@ -18479,6 +18559,8 @@ async function dbPullPrices(c){
     arr.forEach(x=>{
       const card=byDoc.get(x.documentId)||byId.get(x.id);
       if(card && x.current_priced!=null){ card.price=Math.round(parseFloat(x.current_priced)); updated++; }
+      { const f2=(DATA.settings||{}).siteCardField;
+        if(card && f2 && x[f2]!=null){ const nc=Math.round(parseFloat(x[f2])); if(nc) card.priceCard=nc; } }
     });
     DATA.siteCatalogVersion=(DATA.siteCatalogVersion||0)+1;
     DATA.siteCatalogSyncedAt=DATA.today+' '+nowTime();
@@ -18542,6 +18624,8 @@ function mapSiteApiItems(arr){
       slug: it.slug||null,
       name: it.nazvanie || it.name || ('Без названия #'+(it.id??'')),
       price: (typeof it.current_priced==='number')? it.current_priced : (parseInt(it.current_priced,10)||null),
+      priceCard: (function(){ const f=(DATA.settings||{}).siteCardField; if(!f) return null; const v=it[f];
+        return (typeof v==='number'&&v>0)? Math.round(v) : (parseInt(v,10)||null); })(),
       source: 'site_api',
       importedAt: DATA.today+' '+nowTime(),
     };
@@ -22816,7 +22900,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-178 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-181 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -23000,14 +23084,31 @@ function clientCheckHTML(l, small){
 }
 
 function clientInfo(contact){
+  /* ЕДИНАЯ ПРОВЕРКА КЛИЕНТА (181): считаем ВСЁ, что клиент у нас оставил.
+     ПОСТОЯННЫЙ = от 3 покупок ИЛИ от 300 000 ₽ (критерий владельца). */
   const p=normPhone(contact);
-  if(p.length<10) return {found:false,vip:false,total:0,count:0,customer:null,orders:[]};
+  if(p.length<10) return {found:false,vip:false,total:0,count:0,repairs:0,customer:null,orders:[],active:[]};
   const cust=(DATA.customers||[]).find(c=>(c.phones||[]).some(ph=>normPhone(ph)===p));
-  const orders=(DATA.orders||[]).filter(o=>normPhone(o.phone)===p && o.status!=='cancel');
-  let total=orders.reduce((s,o)=>{ try{ const v=orderPayablePrice(o); return s+(isFinite(v)?v:0); }catch(e){ return s; } },0);
-  let count=orders.length;
+  const all=(DATA.orders||[]).filter(o=>normPhone(o.phone)===p && o.status!=='cancel');
+  const done=all.filter(o=>o.status==='done');
+  const active=all.filter(o=>o.status!=='done');
+  let total=done.reduce((s,o)=>{ try{ const v=orderPayablePrice(o); return s+(isFinite(v)?v:0); }catch(e){ return s; } },0);
+  let count=done.length;
+  /* б/у, проданные этому номеру напрямую (через заказ — уже в заказах, не дублируем) */
+  try{
+    const bu=((DATA.warehouse&&DATA.warehouse.tradein)||[]).filter(u=>u.status==='sold' && !u.soldOrderId && u.soldTo && normPhone(u.soldTo.phone)===p);
+    count+=bu.length; total+=bu.reduce((s,u)=>s+(u.soldPrice||u.price||0),0);
+  }catch(e){}
+  /* оплаченные ремонты */
+  let repairs=0;
+  try{
+    const reps=(DATA.service||[]).filter(t=>normPhone(t.phone)===p && ['done','archive'].includes(t.status));
+    repairs=reps.length;
+    count+=reps.length;
+    total+=reps.reduce((s,t)=>s+(t.paidAmount!=null?t.paidAmount:((t.cost!=null?t.cost:((t.costLabor||0)+(t.costParts||0)))||0)),0);
+  }catch(e){}
   if(cust && cust.totalSpent!=null){ total=Math.max(total, cust.totalSpent); count=Math.max(count, cust.purchaseCount||0); }
-  return {found:!!cust||count>0, vip:(total>=1000000 && count>3), total:total, count:count, customer:cust||null, orders:orders};
+  return {found:!!cust||count>0||active.length>0, vip:(count>=3 || total>=300000), total:total, count:count, repairs:repairs, customer:cust||null, orders:done, active:active};
 }
 
 function clientMarkHTML(l){
@@ -23424,7 +23525,7 @@ function openClientProfileModal(leadId, c){
     (ci.customer&&ci.customer.email?field('Email', ci.customer.email):'')+
   '</div>';
   if(!ci.vip){
-    body+='<div class="tsub" style="margin-top:6px;">До статуса «Постоянный»: выкуп от 1 000 000 ₽ и больше 3 покупок.</div>';
+    body+='<div class="tsub" style="margin-top:6px;">Постоянным клиент становится с 3-й покупки или при выкупе от 300 000 ₽ (считаются заказы, б/у и ремонты).</div>';
   }
   if(ci.orders.length){
     body+='<div class="drill-block-label" style="margin-top:12px;">Заказы</div>'+
@@ -27711,7 +27812,7 @@ function zvShowLogin(){
   if(!w){
     w=document.createElement('div');
     w.id='zvLogin';
-    w.style.cssText='position:fixed;inset:0;z-index:99999;background:#0b0e13;display:flex;align-items:center;justify-content:center;padding:20px;';
+    w.style.cssText='position:fixed;inset:0;z-index:100002;background:#0b0e13;display:flex;align-items:center;justify-content:center;padding:20px;';
     document.body.appendChild(w);
   }
   w.style.display='flex';
@@ -29135,7 +29236,7 @@ function devPinPrompt(kind){
 function empShowLogin(){
   let w=document.getElementById('empLogin');
   if(!w){ w=document.createElement('div'); w.id='empLogin';
-    w.style.cssText='position:fixed;inset:0;z-index:99999;background:#0b0e13;display:flex;align-items:center;justify-content:center;padding:20px;';
+    w.style.cssText='position:fixed;inset:0;z-index:100002;background:#0b0e13;display:flex;align-items:center;justify-content:center;padding:20px;';
     document.body.appendChild(w); }
   w.style.display='flex';
   w.innerHTML='<div class="zv-card"><div class="zv-word">ZENVOX</div><div class="zv-sub">Вход сотрудника</div>'+
@@ -29416,7 +29517,7 @@ function vdmShowRegistration(inviteId){
 function vdmShowLogin(){
   let w=document.getElementById('vdmLogin');
   if(!w){ w=document.createElement('div'); w.id='vdmLogin';
-    w.style.cssText='position:fixed;inset:0;z-index:99999;background:#0b0e13;display:flex;align-items:center;justify-content:center;padding:20px;';
+    w.style.cssText='position:fixed;inset:0;z-index:100002;background:#0b0e13;display:flex;align-items:center;justify-content:center;padding:20px;';
     document.body.appendChild(w); }
   w.style.display='flex';
   w.innerHTML='<div class="zv-card"><div class="zv-word">ZENVOX</div><div class="zv-sub">Личный кабинет владельца</div>'+
@@ -29500,6 +29601,16 @@ function vdmShowCabinet(){
   w.querySelector('#vcOut').addEventListener('click',()=>{ NET.ownerSession=null; saveNet(); w.style.display='none'; zvShowLogin(); });
 }
 
+/* ВХОД ПОСЛЕ ОБНОВЛЕНИЯ (179): новая сборка — единый вход обязателен.
+   Сессии входа гаснут, окно Zenvox показывается всегда; авторизация самого
+   устройства (код владельца) при этом НЕ слетает. */
+try{
+  const bt=(typeof BUILD_TAG!=='undefined')?String(BUILD_TAG):'';
+  if(bt && NET.sessionBuild!==bt){
+    NET.session=null; NET.ownerSession=null; NET.staffSession=null;
+    NET.sessionBuild=bt; saveNet();
+  }
+}catch(e){}
 if(NET.staffSession){ empStartAutoLogoutWatch(); }
 if(NET.ownerSession){ vdmShowCabinet(); }
 if(NET.deviceSession && deviceIsAlive()){ deviceEnsurePinBar(); deviceStartWatch(); }
