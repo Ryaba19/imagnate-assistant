@@ -22315,7 +22315,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-150 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-152 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -24640,9 +24640,11 @@ setInterval(async()=>{
         try{ erpBaseIdAdopt(applied); }catch(e){}
         try{ sessionStorage.setItem('erp_pull_info', JSON.stringify({by:j.savedBy||'', atMs:j.savedAtMs||0, merged:window._mergeAdded||0})); }catch(e){}
         try{ localStorage.setItem(LS_FULL_KEY, JSON.stringify(applied)); }catch(e){}
-        window._skipAutosave=true;
-        console.log(foreign?'Фоновая сверка: в облаке главная база — принимаю её':'Фоновая сверка: в облаке свежее — обновляюсь');
-        location.reload();
+        /* ФИКС 08.08: НЕ перезагружаем спящую вкладку — браузер душит её таймеры,
+           и страница зависает тёмным экраном. Помечаем; перезагрузимся при
+           возврате пользователя на вкладку (см. обработчик видимости ниже). */
+        window._pendingCloudReload=true;
+        console.log(foreign?'Фоновая сверка: в облаке главная база — приму её при возврате на вкладку':'Фоновая сверка: в облаке свежее — обновлюсь при возврате на вкладку');
       }
     }
   }catch(e){}
@@ -25135,6 +25137,15 @@ function scheduleRebuildAsk(){
 setInterval(fullSave, 4000);
 window.addEventListener('beforeunload', fullSave);
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') fullSave(); });
+/* Возврат на вкладку: если фоновая сверка приготовила свежий снимок облака —
+   перезагружаемся сейчас, в активном состоянии (грузится мгновенно и без зависаний). */
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && window._pendingCloudReload){
+    window._pendingCloudReload=false;
+    window._skipAutosave=true;   /* не даём затереть свежий снимок старой памятью при выгрузке */
+    location.reload();
+  }
+});
 
 /* Кнопка сброса: вернуть демо-данные */
 window._erp_clearStorage=function(){ window._skipAutosave=true; try{ localStorage.removeItem(LS_KEY); localStorage.removeItem(LS_FULL_KEY); }catch(e){} location.reload(); };
@@ -25875,7 +25886,7 @@ function defaultNet(){
     storePins:{},       /* {storeId:'123456'} — ПИН выхода, задаёт ВДМ */
     activeShift:null,   /* смена сотрудника на устройстве: {staffId, storeId, in} */
     net:{login:'Zenvox', salt:'f0e1d2c3b4a5968778695a4b3c2d1e0f', passHash:'7b530a5371d34ac2699d385d9f7ffce490dce4ec1532bf2fb1b41874c01e28e0', iters:310000, email:'zenvox@mail.ru'},
-    imag:{login:'somethingspecial', salt:'a1b2c3d4e5f60718293a4b5c6d7e8f90', passHash:'30ef945c6fa34ce1f2a60c41e4e4bede6fa90d597237eace66301d1974ac5e8d', iters:310000, email:'i_magnate@mail.ru', companyId:'c1'},
+    imag:{login:'somethingspecial', salt:'a1b2c3d4e5f60718293a4b5c6d7e8f90', passHash:'99e8db8927063665bed31ffd6d125dfc3d442c8f72cfdd67f904647c0addf538', iters:310000, email:'i_magnate@mail.ru', companyId:'c1'},
     session:null,
     storeCollections:{store_kashirka:['rc1'], store_lunnaya:['rc1']},
     storeRegion:{store_kashirka:'Москва', store_lunnaya:'Москва'},
@@ -28123,10 +28134,10 @@ NET=loadNet()||defaultNet();
 /* СБОРКА 149: восстановление рабочих паролей единого входа (сшивка SC10 привезла
    другие хэши, и вход отвалился). Однократно возвращаем прежние доступы;
    дальнейшие смены пароля через систему сохраняются как обычно. */
-if(!NET._pwRestore149){
+if(!NET._pwRestore151){
   const _d=defaultNet();
   NET.net=_d.net; NET.imag=_d.imag; NET.session=null;
-  NET._pwRestore149=true;
+  NET._pwRestore151=true;
   saveNet();
 }
 /* SC6: гарантируем поля конвейера + ОБНУЛЯЕМ старые демо-заказы легаси (решение владельца — чистый старт) */
