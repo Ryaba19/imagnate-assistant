@@ -304,6 +304,9 @@ function sendFile(res, file) {
 
 /* ---------- Telegram-уведомления ---------- */
 const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+/* ДВА БОТА (198): владельческий бот — деньги/безопасность/контроль.
+   Не задан — всё идёт через основного (менеджерского) бота, как раньше. */
+const TG_OWNER_TOKEN = process.env.TG_OWNER_BOT_TOKEN || '';
 const TG_CHATS = (process.env.TELEGRAM_CHAT_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
 
 async function tgSend(text, extraChats) {
@@ -312,12 +315,28 @@ async function tgSend(text, extraChats) {
   const extra = Array.isArray(extraChats)
     ? extraChats.map(x => String(x).trim()).filter(x => /^-?\d{4,20}$/.test(x)).slice(0, 20)
     : [];
-  const chats = [...new Set([...TG_CHATS, ...extra])];
-  if (!chats.length) return { error: 'TELEGRAM_CHAT_IDS не задан в Environment' };
+  /* ДВА БОТА (198): stream 'owner' → владельческий бот (или общий, если не задан);
+     stream 'staff' → сменные чаты через менеджерского бота, а копия владельцу —
+     всегда через ЕГО бота. По умолчанию — owner (все старые вызовы = контроль). */
+  const stream = arguments.length > 2 && arguments[2] === 'staff' ? 'staff' : 'owner';
+  const ownerBot = TG_OWNER_TOKEN || TG_TOKEN;
+  const jobs = [];
+  if (stream === 'staff') {
+    /* 200: текучка — ТОЛЬКО смене; владелец видит заявки/ремонты в ERP */
+    extra.forEach(chat => jobs.push({ chat, bot: TG_TOKEN }));
+  } else {
+    [...new Set([...TG_CHATS, ...extra])].forEach(chat => jobs.push({ chat, bot: ownerBot }));
+  }
+  const seen = new Set();
+  const chats = jobs.filter(j => { const k = j.bot.slice(0, 12) + '|' + j.chat; if (seen.has(k)) return false; seen.add(k); return true; });
+  if (!chats.length) return stream === 'staff'
+    ? { ok: true, skipped: 'у смены нет подключённых чатов' }
+    : { error: 'TELEGRAM_CHAT_IDS не задан в Environment' };
   const results = [];
-  for (const chat of chats) {
+  for (const job of chats) {
+    const chat = job.chat;
     try {
-      const r = await fetch('https://api.telegram.org/bot' + TG_TOKEN + '/sendMessage', {
+      const r = await fetch('https://api.telegram.org/bot' + job.bot + '/sendMessage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: chat, text: String(text).slice(0, 4000) })
@@ -694,7 +713,10 @@ async function tgPollSet(set) {
     if (await chStore({ key: 'tg' + set.key + '_' + u.update_id, store: set.store, channel: 'telegram', chatId: cid, dir: 'in',
       name: name || 'Клиент Telegram',
       contact: (m.from && m.from.username) ? ('tg: @' + m.from.username) : '',
-      item: '', text: String(text).slice(0, 2000), tsMs: (m.date || 0) * 1000 })) added++;
+      item: '', text: String(text).slice(0, 2000), tsMs: (m.date || 0) * 1000 })) {
+      added++;
+      autoGreetMaybe(set.store, cid, (m.date || 0) * 1000).catch(() => {});   /* 194 */
+    }
   }
   if (maxU > cur) await kvSet(kvKey, maxU);
   return added;
@@ -1149,6 +1171,44 @@ console.log('[будильник] самопинг каждые 10 минут: '
 setTimeout(() => { orderWatchTick().catch(() => {}); }, 8000);
 
 
+/* ---- АВТООТВЕТЧИК БОТА (194): мгновенное приветствие новым обращениям ---- */
+const AG_DEFAULT={ on:false,
+  day:'Здравствуйте! Получили ваш вопрос — менеджер уже подключается, ответим в течение пары минут 🙌',
+  night:'Здравствуйте! Мы на связи ежедневно с 10:00 до 21:00 — ответим сразу после открытия. Можете уже сейчас написать, что вас интересует 🙌',
+  from:10, to:21 };
+async function agConfig(){
+  try{ const raw=await kvGet('autogreet'); if(raw){ const j=JSON.parse(raw); return Object.assign({}, AG_DEFAULT, j); } }catch(e){}
+  return Object.assign({}, AG_DEFAULT);
+}
+async function chatLastTsBefore(channel, chatId, beforeMs){
+  try{
+    if(pool){
+      const r=await pool.query('SELECT max(ts_ms) AS t FROM channel_msgs WHERE channel=$1 AND chat_id=$2 AND ts_ms < $3',
+        [channel, String(chatId), beforeMs]);
+      return Number((r.rows[0]||{}).t)||0;
+    }
+    return chFile().filter(x=>x.channel===channel && String(x.chatId)===String(chatId) && (x.tsMs||0)<beforeMs)
+      .reduce((m,x)=>Math.max(m, x.tsMs||0), 0);
+  }catch(e){ return 0; }
+}
+async function autoGreetMaybe(store, chatId, msgTsMs){
+  try{
+    const cfg=await agConfig();
+    if(!cfg.on) return;
+    const ts=msgTsMs||Date.now();
+    const last=await chatLastTsBefore('telegram', chatId, ts);
+    if(last && (ts-last) < 12*3600*1000) return;   /* диалог уже идёт — не встреваем */
+    const hourMsk=new Date(Date.now()+3*3600*1000).getUTCHours();
+    const inHours=(cfg.from<=cfg.to)? (hourMsk>=cfg.from && hourMsk<cfg.to) : (hourMsk>=cfg.from || hourMsk<cfg.to);
+    const txt=String(inHours? cfg.day : cfg.night).slice(0,900);
+    if(!txt) return;
+    await channelSend('telegram', store, chatId, txt);
+    await chStore({ key:'out_greet_'+chatId+'_'+Date.now(), store, channel:'telegram', chatId:String(chatId), dir:'out',
+      name:'', contact:'', item:'', text:txt, tsMs:Date.now() });
+    console.log('[автоответчик] приветствие в чат '+chatId+(inHours?' (день)':' (ночь)'));
+  }catch(e){ console.warn('[автоответчик]', e.message); }
+}
+
 /* ---- ТГ РАБОЧИЙ АККАУНТ (193): системный вход в рабочий Telegram.
    Сервер = «ещё одно устройство» аккаунта (StringSession в channel_kv).
    Контакты записной книжки — личное: не сохраняются и в CRM не попадают. ---- */
@@ -1250,7 +1310,28 @@ const server = http.createServer((req, res) => {
 
   /* ---- Страницы ---- */
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return sendFile(res, 'index.html');
-  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-72' });
+  if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-72', ownerBot: !!TG_OWNER_TOKEN });
+
+  /* ---- Автоответчик бота: настройка (194) ---- */
+  if (req.method === 'GET' && url.pathname === '/api/autogreet') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return (async () => { sendJson(res, 200, Object.assign({ ok: true }, await agConfig())); })();
+  }
+  if (req.method === 'POST' && url.pathname === '/api/autogreet') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return readBody(req, async b => {
+      const cfg = {
+        on: !!b.on,
+        day: String(b.day || AG_DEFAULT.day).slice(0, 900),
+        night: String(b.night || AG_DEFAULT.night).slice(0, 900),
+        from: Math.min(23, Math.max(0, parseInt(b.from) || 10)),
+        to: Math.min(24, Math.max(1, parseInt(b.to) || 21)),
+      };
+      await kvSet('autogreet', JSON.stringify(cfg));
+      console.log('[автоответчик] настройка: ' + (cfg.on ? 'ВКЛ' : 'выкл') + ' ' + cfg.from + '-' + cfg.to);
+      sendJson(res, 200, Object.assign({ ok: true }, cfg));
+    });
+  }
 
   /* ---- ТГ рабочий аккаунт: статус / вход по коду / выход (193) ---- */
   if (req.method === 'GET' && url.pathname === '/api/tguser/status') {
@@ -1617,7 +1698,14 @@ const server = http.createServer((req, res) => {
     if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
     return readBody(req, async b => {
       if (!b.text) return sendJson(res, 400, { error: 'Нужен text' });
-      const r = await tgSend(b.text, b.chatIds);
+      /* 199: два открытых компа шлют одно и то же — дубль отсекаем (2 мин) */
+      global._notifRecent = global._notifRecent || new Map();
+      const nk = String(b.text).slice(0, 200);
+      const nnow = Date.now();
+      for (const [kk, tt] of global._notifRecent) { if (nnow - tt > 120000) global._notifRecent.delete(kk); }
+      if (global._notifRecent.has(nk)) return sendJson(res, 200, { ok: true, dedup: true });
+      global._notifRecent.set(nk, nnow);
+      const r = await tgSend(b.text, b.chatIds, b.stream === 'staff' ? 'staff' : 'owner');
       console.log('[telegram]', b.text.slice(0, 80), JSON.stringify(r).slice(0, 200));
       sendJson(res, r.ok ? 200 : 500, r);
     });
@@ -2043,7 +2131,10 @@ const server = http.createServer((req, res) => {
               chatId: cid, dir: 'in', name: name || 'Клиент Telegram',
               contact: (m.from && m.from.username) ? ('tg: @' + m.from.username) : '',
               item: '', text: String(text).slice(0, 2000), tsMs: (m.date || 0) * 1000 });
-            if (isNew) console.log('[вебхук telegram] сообщение из чата ' + cid);
+            if (isNew) {
+              console.log('[вебхук telegram] сообщение из чата ' + cid);
+              autoGreetMaybe(set.store, cid, (m.date || 0) * 1000).catch(() => {});   /* 194 */
+            }
           }
         }
       } catch (e) { console.error('[вебхук telegram]', e.message); }
@@ -2125,6 +2216,35 @@ const server = http.createServer((req, res) => {
   }
 
   /* ---- Каналы воронки: ответ клиенту в его канал (по токену) ---- */
+  /* ---- Instagram: универсальный приёмник (агрегатор/мост POST-ит сюда) (196) ---- */
+  if (req.method === 'GET' && url.pathname === '/api/hooks/instagram') {
+    return sendJson(res, 200, { ok: true, ready: true, hint: 'POST сюда сообщения Instagram: {from, name, text} или {messages:[...]}' });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/hooks/instagram') {
+    return readBody(req, async b => {
+      try {
+        const list = Array.isArray(b.messages) ? b.messages : (Array.isArray(b) ? b : [b]);
+        let saved = 0;
+        for (const m of list) {
+          if (!m || typeof m !== 'object') continue;
+          const from = String(m.from || m.username || m.chatId || m.chat_id || m.sender || m.author || '').trim().replace(/^@/, '');
+          const text = String(m.text || m.message || m.body || (m.content && (m.content.text || m.content.body)) || '').trim();
+          if (!from || !text) continue;
+          const dir = (m.dir === 'out' || m.direction === 'out' || m.fromMe === true || m.outgoing === true) ? 'out' : 'in';
+          const name = String(m.name || m.senderName || m.fullName || '').slice(0, 80);
+          const id = String(m.id || m.messageId || (from + '_' + (m.timestamp || m.tsMs || Date.now())));
+          const ok = await chStore({
+            key: 'ig_' + id, store: String(m.store || '') || DEFAULT_STORE, channel: 'instagram',
+            chatId: from, dir, name: dir === 'in' ? (name || ('@' + from)) : '', contact: '@' + from, item: '',
+            text: text.slice(0, 2000), tsMs: Number(m.tsMs || m.timestamp) || Date.now()
+          });
+          if (ok) saved++;
+        }
+        console.log('[instagram] принято сообщений: ' + saved);
+        sendJson(res, 200, { ok: true, saved });
+      } catch (e) { sendJson(res, 500, { error: String(e.message || e).slice(0, 200) }); }
+    });
+  }
   /* ---- WhatsApp: проверка вебхука (Meta) ---- */
   if (req.method === 'GET' && url.pathname === '/api/hooks/whatsapp') {
     const ch = url.searchParams.get('hub.challenge');

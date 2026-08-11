@@ -3121,6 +3121,7 @@ function tgNotify(text, extraChatIds){
     window._tgSent.add(key);
     const body={text:String(text).slice(0,3500)};
     if(Array.isArray(extraChatIds) && extraChatIds.length) body.chatIds=extraChatIds.slice(0,20);
+    if(window._tgStream==='staff') body.stream='staff';   /* ДВА БОТА (198) */
     fetch(c.api+'/notify',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.token},
       body:JSON.stringify(body)}).catch(function(){});
   }catch(e){}
@@ -3146,10 +3147,12 @@ function shiftTgChatIds(){
 function tgStaffChat(){ const v=DATA.settings && DATA.settings.tgStaffChat; return v?String(v).trim():null; }
 function tgOwnerChat(){ const v=DATA.settings && DATA.settings.tgOwnerChat; return v?String(v).trim():null; }
 function tgNotifyShift(text){
+  /* ДВА БОТА (198): текучка смены — через менеджерского бота; владелец получит копию в своего */
   const extra=shiftTgChatIds();
   const g=tgStaffChat();
   if(g) extra.push(g);
-  tgNotify(text, extra);
+  window._tgStream='staff';
+  try{ tgNotify(text, extra); } finally { window._tgStream=null; }
 }
 function tgNotifyOwner(text){
   const g=tgOwnerChat();
@@ -3491,9 +3494,11 @@ function adminTaskList(){
     if(fb.length-forgot.length>0) tasks.push({icon:'💬', text:'Разобрать обратную связь — новых: '+(fb.length-forgot.length), page:'manage'});
   }catch(e){}
   try{
-    const noPin=pinAllEmployees().filter(e=>e&&e.name&&!e.pinHash);
-    if(noPin.length) tasks.push({icon:'🛂', text:'Задать PIN сотрудникам: '+noPin.map(e=>e.name).join(', '), page:'manage'});
-    if(!pinModeOn()) tasks.push({icon:'⚠️', text:'PIN-режим ВЫКЛЮЧЕН — попросите владельца включить (Управление)', page:'manage'});
+    if(!window.ZENVOX_GATE){   /* 201: под Zenvox PIN выведен из эксплуатации — входы по логину-паролю */
+      const noPin=pinAllEmployees().filter(e=>e&&e.name&&!e.pinHash);
+      if(noPin.length) tasks.push({icon:'🛂', text:'Задать PIN сотрудникам: '+noPin.map(e=>e.name).join(', '), page:'manage'});
+      if(!pinModeOn()) tasks.push({icon:'⚠️', text:'PIN-режим ВЫКЛЮЧЕН — попросите владельца включить (Управление)', page:'manage'});
+    }
   }catch(e){}
   try{
     const s=window._chSrvStatus||{};
@@ -6592,6 +6597,9 @@ function openOrderSettingsModal(){
     '<div class="field" style="margin:6px 0;"><label>Группа владельца (chat_id) — закупы, незакрытые заказы, контроль</label>'+
       '<input class="input-mini" id="setTgOwner" style="width:100%;" placeholder="пусто — всё идёт в личку владельца (TELEGRAM_CHAT_IDS на сервере)" value="'+escAttr(DATA.settings.tgOwnerChat||'')+'"></div>'+
     '<p class="tsub">Как настроить: создайте группу в Telegram, добавьте туда бота @iMagnate_Asistentbot, затем добавьте в группу @getmyid_bot (или перешлите любое сообщение из группы боту @userinfobot) — он покажет chat_id вида −100…, вставьте его сюда. Личка владельца получает все уведомления в любом случае.</p>'+
+    '<div class="drill-divider"></div><div class="drill-block-label">Два бота: владельческий и менеджерский (198)</div>'+
+    '<p class="tsub" id="ownerBotStatus" style="line-height:1.6;">Проверяю владельческого бота…</p>'+
+    '<p class="tsub" style="line-height:1.6;">Как включить: BotFather → /newbot → скопировать токен → на Render в Environment добавить <b>TG_OWNER_BOT_TOKEN</b> → Save. После этого деньги, сейф, недостачи, закуп и коды пойдут через владельческого бота (нажмите у него Start), а нынешний бот останется менеджерским: клиенты + текучка смены. Пока токен не задан — всё работает по-старому через одного бота.</p>'+
     (tech?
       '<div class="drill-divider"></div><div class="drill-block-label">Локальный сервер данных (база на компьютере владельца)</div>'+
       '<div class="field"><label>Адрес локального сервера</label><input class="input-mini" id="setLocalApi" style="width:100%;" placeholder="http://192.168.1.10:8787 (пусто = автоматически)" value="'+escAttr(DATA.settings.localApiUrl||'')+'"></div>'
@@ -6617,6 +6625,17 @@ function openOrderSettingsModal(){
         [{label:'Удалить демо и загрузить реальные данные', cls:'btn-danger', action:()=>{ cleanStartImport(); }}]);
     });
   },0);
+  /* ДВА БОТА (198): показать, настроен ли владельческий бот на сервере */
+  setTimeout(async ()=>{
+    const el=document.getElementById('ownerBotStatus'); if(!el) return;
+    try{
+      const c=erpServerCreds(); if(!c){ el.innerHTML='Сервер не подключён'; return; }
+      const j=await (await fetch(c.api+'/health')).json();
+      el.innerHTML=j.ownerBot
+        ? '✅ <b>Владельческий бот настроен</b> — деньги, сейф, недостачи и коды идут через него; нынешний бот — менеджерский (клиенты + текучка смены).'
+        : '⚪ Владельческий бот пока не задан (TG_OWNER_BOT_TOKEN на Render) — все уведомления идут через одного бота, как раньше.';
+    }catch(e){ el.innerHTML='Не удалось проверить (нет связи с сервером)'; }
+  }, 200);
   openModal('Настройки заказов', '', body, [{label:'Сохранить и проверить', cls:'btn-primary', action:()=>{
     const v=parseInt(document.getElementById('setLeadDays').value);
     if(isNaN(v)||v<0){ toast('Введите корректное число дней', 'error'); return; }
@@ -10017,7 +10036,7 @@ function renderWarehouse(c){
     (STATE.whFilters.tab==='tech'?'<button class="btn btn-sm" id="whMatrixBtn">'+ic('gear')+' Матрица «всегда на складе»</button>':'')+
     (STATE.whFilters.tab==='tradein'?'<button class="btn btn-sm btn-primary" id="whTradeinBtn">'+ic('plus')+' Принять б/у (трейд-ин / выкуп)</button>':'')+
     ((isBossRole()||['senior','seller'].includes(STATE.role))?'<button class="btn btn-sm btn-primary" id="whInventoryBtn">📦 Инвентаризация</button>':'')+
-    (isBossRole()?'<button class="btn btn-sm" id="whClearBtn" title="Убрать демо-товары перед реальной инвентаризацией">🧹 Очистить склад</button>':'')+
+    (isBossRole()?'<button class="btn btn-sm" id="whClearBtn" title="Очистить ТОЛЬКО открытую вкладку — остальные блоки склада не трогаются">🧹 Очистить: '+(WH_TABS[STATE.whFilters.tab]||'вкладку')+'</button>':'')+
     (function(){ try{ const l=JSON.parse(localStorage.getItem('erp_wh_lost')||'[]'); return (isBossRole()&&l.length)?'<button class="btn btn-sm btn-primary" id="whRestoreBtn" style="border-color:var(--warning);">♻ Вернуть пропавшие сканы ('+l.length+')</button>':''; }catch(e){ return ''; } })()+
     '<button class="btn btn-sm btn-primary" id="whReceiveBtn" style="margin-left:8px;">'+ic('truck')+' Принять поставку</button>'+
     '<input class="input-mini" id="whSearch" placeholder="Поиск по модели / IMEI" value="'+STATE.whFilters.q+'" style="width:240px;margin-left:8px;"></div>';
@@ -10156,16 +10175,24 @@ function renderWarehouse(c){
   });
   const whClr=document.getElementById('whClearBtn');
   if(whClr) whClr.addEventListener('click', ()=>{
-    const cnt=['tech','tradein','accessories','parts'].reduce((s,k)=>s+((DATA.warehouse[k]||[]).length),0);
-    if(!cnt){ toast('Склад уже пуст','info'); return; }
-    openModal('🧹 Очистить склад — вы уверены?','',
-      '<div class="tsub" style="line-height:1.7;">Будут удалены ВСЕ позиции со всех вкладок склада этой точки: <b>'+cnt+' шт</b> (техника, трейд-ин, аксессуары, запчасти).<br><br>'+
-      'Заказы, клиенты, кассы и всё остальное не трогаются. Используйте перед реальной инвентаризацией, чтобы демо-товары не мешались с настоящими.<br><br><b>Отменить будет нельзя.</b></div>',
-      [{label:'Очистить склад ('+cnt+' шт)', cls:'btn-danger', action:()=>{
-        ['tech','tradein','accessories','parts'].forEach(k=>{ if(DATA.warehouse[k]) DATA.warehouse[k]=[]; });
+    /* ПО-БЛОЧНО (197): чистим ТОЛЬКО открытую вкладку; резервы и проданные — неприкосновенны */
+    const tab=STATE.whFilters.tab;
+    const tabLabel=WH_TABS[tab]||tab;
+    const list=DATA.warehouse[tab]||[];
+    if(!list.length){ toast('Вкладка «'+tabLabel+'» уже пуста','info'); return; }
+    const keep=list.filter(it=>['reserved','sold'].includes(it.status));
+    const del=list.length-keep.length;
+    if(!del){ toast('На вкладке «'+tabLabel+'» только резервы и проданные — удалять нечего','info'); return; }
+    openModal('🧹 Очистить вкладку «'+tabLabel+'» — вы уверены?','',
+      '<div class="tsub" style="line-height:1.7;">Будут удалены позиции ТОЛЬКО этой вкладки: <b>'+del+' шт</b>.<br>'+
+      (keep.length?('Останутся нетронутыми: <b>'+keep.length+'</b> (зарезервированы под заказы или проданы — их удалять нельзя).<br>'):'')+
+      '<br>Остальные блоки склада ('+Object.keys(WH_TABS).filter(k=>k!==tab).map(k=>WH_TABS[k]).join(', ')+') не трогаются. Заказы, клиенты, кассы — тоже.<br><br><b>Отменить будет нельзя.</b></div>',
+      [{label:'Очистить «'+tabLabel+'» ('+del+' шт)', cls:'btn-danger', action:()=>{
+        DATA.warehouse[tab]=keep;
         try{ fullSave(); }catch(e){}
+        try{ cloudPushNow(); }catch(e){}
         closeModal();
-        toast('Склад очищен — можно сканировать реальный товар (📦 Инвентаризация)','success');
+        toast('Вкладка «'+tabLabel+'» очищена: удалено '+del+(keep.length?(', сохранено '+keep.length+' (резервы/проданные)'):'')+'. Остальной склад не тронут.','success');
         renderWarehouse(c);
       }},
       {label:'Отмена', cls:'', action:closeModal}]);
@@ -11197,6 +11224,7 @@ function renderFinance(c){
         '<div class="tsub">'+t.date+' · '+escHtml(t.comment||'без комментария')+' · отправил(а): '+escHtml(t.by)+'</div></div>'+
         '<div style="display:flex;gap:10px;align-items:center;"><div class="t-value mono">'+rub(t.amount)+'</div>'+
         '<button class="btn btn-sm btn-primary" data-tr-confirm="'+t.id+'">'+ic('check')+' Подтвердить получение</button>'+
+        '<button class="btn btn-sm" data-tr-short="'+t.id+'" style="border-color:var(--warning);color:var(--warning);">⚠ Получил меньше</button>'+
         '<button class="btn btn-sm btn-danger" data-tr-cancel="'+t.id+'">Вернуть</button></div></div>';
     });
     html+='</div>';
@@ -11266,6 +11294,31 @@ function renderFinance(c){
     t.status='done'; t.confirmedAt=DATA.today+' '+nowTime(); t.confirmedBy=ROLES[STATE.role].label;
     DATA.financeOps.unshift({date:DATA.today, type:'Перемещение', amount:t.amount, comment:t.fromLabel+' → '+t.toLabel+(t.comment?' · '+t.comment:''), who:t.confirmedBy});
     renderFinance(c); toast('Получение подтверждено: '+rub(t.amount)+' → '+t.toLabel, 'success');
+  }));
+  c.querySelectorAll('[data-tr-short]').forEach(el=>el.addEventListener('click', ()=>{
+    const t=DATA.moneyTransfers.find(x=>x.id===parseInt(el.dataset.trShort)); if(!t) return;
+    const body='<div class="total-strip" style="margin-bottom:12px;"><div class="t-label">Отправлено ('+escHtml(t.fromLabel)+')</div><div class="t-value mono">'+rub(t.amount)+'</div></div>'+
+      '<div class="field" style="margin-bottom:10px;"><label>Фактически получено, ₽</label><input class="input-mini" id="trShortActual" type="number" min="0" max="'+t.amount+'" style="width:100%;"></div>'+
+      '<div class="field"><label>Комментарий (обязательно) — чего не хватает</label><input class="input-mini" id="trShortWhy" style="width:100%;" placeholder="Например: не хватает 5 000, пересчитал дважды"></div>';
+    openModal('⚠ Получено меньше отправленного', escHtml(t.fromLabel)+' → '+escHtml(t.toLabel), body, [{label:'Зафиксировать', cls:'btn-danger', action:()=>{
+      const actual=Math.round(parseFloat(document.getElementById('trShortActual').value));
+      const why=document.getElementById('trShortWhy').value.trim();
+      if(isNaN(actual)||actual<0||actual>=t.amount){ toast('Сумма должна быть меньше отправленной (иначе жмите «Подтвердить получение»)','error'); return; }
+      if(!why){ toast('Комментарий обязателен — это уйдёт руководству','error'); return; }
+      const diff=t.amount-actual;
+      const to=moneyPlace(t.toKey);
+      if(to && actual>0) to.set(to.get()+actual);
+      t.status='done'; t.actual=actual; t.shortage=diff; t.shortageWhy=why;
+      t.confirmedAt=DATA.today+' '+nowTime(); t.confirmedBy=(typeof currentEmployeeName==='function'?currentEmployeeName():'')||ROLES[STATE.role].label;
+      DATA.financeOps.unshift({date:DATA.today, type:'⚠ Недостача при передаче', amount:diff,
+        comment:t.fromLabel+' → '+t.toLabel+' · отправлено '+rub(t.amount)+', получено '+rub(actual)+' · '+why, who:t.confirmedBy});
+      pushNotif('Владелец','⚠ НЕДОСТАЧА ПРИ ПЕРЕДАЧЕ: '+t.fromLabel+' → '+t.toLabel+'. Отправлено '+rub(t.amount)+', получено '+rub(actual)+' (−'+rub(diff)+'). Отправлял(а): '+(t.by||'—')+', принял(а): '+t.confirmedBy+'. Комментарий: '+why);
+      try{ tgNotifyOwner('⚠ НЕДОСТАЧА ПРИ ПЕРЕДАЧЕ ДЕНЕГ: −'+rub(diff)+' ('+t.fromLabel+' → '+t.toLabel+'). '+why); }catch(e){}
+      try{ lsSave(); }catch(e){}
+      try{ cloudPushNow(); }catch(e){}
+      closeModal(); renderFinance(c);
+      toast('Зафиксировано: получено '+rub(actual)+', недостача '+rub(diff)+' — руководство уведомлено','error');
+    }}]);
   }));
   c.querySelectorAll('[data-tr-cancel]').forEach(el=>el.addEventListener('click', ()=>{
     const t=DATA.moneyTransfers.find(x=>x.id===parseInt(el.dataset.trCancel));
@@ -11351,6 +11404,7 @@ function openMoneyTransferModal(c){
 const CHANNELS={
   avito:    {label:'Авито',    color:'#00AAFF', short:'AV'},
   tguser:   {label:'Телеграм (рабочий)', color:'#2AABEE', short:'TGр'},
+  instagram:{label:'Instagram', color:'#E1306C', short:'IG'},
   vk:       {label:'ВКонтакте',color:'#0077FF', short:'ВК'},
   telegram: {label:'Telegram', color:'#2AABEE', short:'TG'},
   whatsapp: {label:'WhatsApp', color:'#25D366', short:'WA'},
@@ -11536,6 +11590,36 @@ function wireTgUserCard(){
     tgUserStatusRefresh();
   });
 }
+/* АВТООТВЕТЧИК (194): загрузка и сохранение настройки */
+async function agWire(){
+  const tgl=document.getElementById('agTgl');
+  if(!tgl) return;
+  try{
+    const cfg=await tgUserApi('/autogreet');
+    if(cfg && cfg.ok!==false){
+      if(cfg.on) tgl.classList.add('on');
+      const d=document.getElementById('agDay'), n=document.getElementById('agNight');
+      const f=document.getElementById('agFrom'), t=document.getElementById('agTo');
+      if(d) d.value=cfg.day||''; if(n) n.value=cfg.night||'';
+      if(f) f.value=cfg.from!=null?cfg.from:10; if(t) t.value=cfg.to!=null?cfg.to:21;
+    }
+  }catch(e){}
+  tgl.addEventListener('click', ()=>tgl.classList.toggle('on'));
+  const sv=document.getElementById('agSave');
+  if(sv) sv.addEventListener('click', async ()=>{
+    try{
+      const j=await tgUserApi('/autogreet',{
+        on: tgl.classList.contains('on'),
+        day: (document.getElementById('agDay')||{}).value||'',
+        night: (document.getElementById('agNight')||{}).value||'',
+        from: (document.getElementById('agFrom')||{}).value,
+        to: (document.getElementById('agTo')||{}).value,
+      });
+      if(j && j.ok) toast(j.on?'Автоответчик ВКЛЮЧЕН — бот приветствует новые обращения':'Автоответчик выключен','success');
+      else toast((j&&j.error)||'Не удалось сохранить','error');
+    }catch(e){ toast('Ошибка: '+(e.message||e),'error'); }
+  });
+}
 function renderIntegrationsTab(){
   const isOwner=isBossRole()||STATE.role==='admin';   /* подключениями управляет и админ */
   const srv=window._chSrvStatus||null;
@@ -11565,10 +11649,27 @@ function renderIntegrationsTab(){
   html+='<div class="grid grid-2" style="grid-template-columns:1fr;gap:12px;">';
   html+=tgUserCardHTML();   /* 193: рабочий аккаунт — первой карточкой */
 
-  ['avito','telegram','vk','max','whatsapp'].forEach(ch=>{
+  ['avito','telegram','vk','max','whatsapp','instagram'].forEach(ch=>{
     const meta=CHANNELS[ch];
     const leadsCount=Object.values(STORE_DATA).reduce((s,d)=>s+((d.leads||[]).filter(l=>l.channel===ch && l.chatKey).length),0);
 
+    if(ch==='instagram'){
+      const hookUrl=(creds? creds.api : '(подключите сервер)')+'/hooks/instagram';
+      html+='<div class="card" style="opacity:.85;">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">'+
+          '<div style="display:flex;align-items:center;gap:10px;">'+
+            '<span class="ch-badge" style="background:'+meta.color+'22;color:'+meta.color+';border-color:'+meta.color+'55;font-size:12px;padding:4px 8px;">'+meta.short+'</span>'+
+            '<div class="tname" style="font-size:14.5px;">'+meta.label+'</div>'+
+          '</div>'+
+          '<span class="badge '+(leadsCount?'b-done':'b-grey')+'">'+(leadsCount?('Приёмник работает · заявок: '+leadsCount):'Приёмник готов')+'</span>'+
+        '</div>'+
+        '<div class="tsub" style="margin-top:8px;line-height:1.55;">Официального API директа для российского бизнеса у Meta практически нет (нужна верификация). Рабочие пути:<br>'+
+        '1) <b>Сервис-агрегатор</b> (Wazzup, Umnico, Chat2Desk — от ~2 000 ₽/мес): подключаете к нему Инстаграм и настраиваете пересылку вебхуком на адрес ниже — заявки будут падать в воронку.<br>'+
+        '2) <b>Ссылка в шапке профиля</b> на Telegram-бота — бесплатно и надёжно: трафик из Инстаграма приходит в канал, который уже подключён.<br>'+
+        'Адрес приёмника: <span class="mono" style="user-select:all;">'+escHtml(hookUrl)+'</span></div>'+
+      '</div>';
+      return;
+    }
     if(ch==='whatsapp'){
       html+='<div class="card" style="opacity:.75;">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">'+
@@ -11626,6 +11727,21 @@ function renderIntegrationsTab(){
         '<button class="btn btn-sm" data-setup-ch="'+ch+'">Как подключить</button>'+
         (ch==='avito'?'<button class="btn btn-sm" data-avito-import="1">⇊ Импорт всей переписки</button>':'')+
       '</div>';
+      /* АВТООТВЕТЧИК (194): настройка в карточке Telegram */
+      if(ch==='telegram'){
+        html+='<div class="card" style="margin-top:10px;background:rgba(42,171,238,.05);border-color:#2AABEE44;">'+
+          '<div class="kpi-label">🤖 Автоответчик бота</div>'+
+          '<div class="toggle-row" style="margin:8px 0;"><div class="toggle-switch" id="agTgl"></div>Мгновенное приветствие новым обращениям (работает на сервере, даже когда ERP закрыта)</div>'+
+          '<div class="field"><label>Днём (в рабочие часы)</label><textarea class="textarea-mini" id="agDay" rows="2" style="width:100%;"></textarea></div>'+
+          '<div class="field" style="margin-top:6px;"><label>Вне рабочих часов</label><textarea class="textarea-mini" id="agNight" rows="2" style="width:100%;"></textarea></div>'+
+          '<div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap;" class="tsub">Рабочие часы (МСК): с '+
+            '<input class="input-mini" id="agFrom" type="number" min="0" max="23" style="width:70px;"> до '+
+            '<input class="input-mini" id="agTo" type="number" min="1" max="24" style="width:70px;">'+
+            '<button class="btn btn-sm btn-primary" id="agSave">Сохранить</button>'+
+          '</div>'+
+          '<div class="tsub" style="margin-top:6px;">Отвечает один раз на новое обращение — если переписки с этим клиентом не было последние 12 часов. В живой диалог не встревает.</div>'+
+        '</div>';
+      }
     }
     html+='</div>';
   });
@@ -12033,6 +12149,26 @@ function chIgnoreSweep(){
 }
 setTimeout(()=>{ try{ chIgnoreSweep(); }catch(e){} }, 3500);
 
+/* УВЕДОМЛЕНИЕ ЗАКРЕПЛЁННОМУ (199): клиент написал в закреплённую заявку —
+   бот №1 пингует именно этого сотрудника (имя клиента + соцсеть + превью) */
+function notifyOwnerOfLeadMsg(l, m){
+  try{
+    if(!l || !l.owner || l.archived || ['won','lost'].includes(l.stage)) return;
+    if(window._chOldImport) return;                                   /* импорт истории — тишина */
+    const ts=m.tsMs||Date.now();
+    if(Date.now()-ts > 10*60000) return;                              /* старое (догон) — не дёргаем */
+    if(l._msgNotifiedAt && Date.now()-l._msgNotifiedAt < 10*60000) return;   /* серия сообщений — один пинг */
+    const emp=(pinAllEmployees()||[]).find(e=>e && e.name===l.owner && e.tgChatId);
+    if(!emp) return;
+    l._msgNotifiedAt=Date.now();
+    const chLabel=((CHANNELS||{})[l.channel]||{}).label||l.channel;
+    window._tgStream='staff';
+    try{
+      tgNotify('💬 Новое сообщение от вашего клиента\n'+(l.name||'Клиент')+' · '+chLabel+
+        '\n«'+String(m.text||'').slice(0,90)+'»\nОтветьте из CRM: Заявки → диалог', [String(emp.tgChatId)]);
+    } finally { window._tgStream=null; }
+  }catch(e){}
+}
 function importChannelMessages(list){
   const home=chHomeStore();
   home.leads=home.leads||[];
@@ -12135,6 +12271,7 @@ function importChannelMessages(list){
     }
     if(m.item && !l.item) l.item=m.item;
     if((l.topic||'none')==='none'){ const g=channelGuessTopic(l.item, m.text); if(g!=='none') l.topic=g; }
+    notifyOwnerOfLeadMsg(l, m);   /* 199: пинг закреплённому сотруднику */
     appended++;
   });
   if(maxTs>(home.chCursorMs||0)) home.chCursorMs=maxTs;
@@ -12316,6 +12453,7 @@ function wireIntegrations(c){
   { const chi=document.getElementById('chHistImport');
     if(chi) chi.addEventListener('click', ()=>channelsHistoryImport(chi)); }
   try{ wireTgUserCard(); tgUserStatusRefresh(); }catch(e){}
+  try{ agWire(); }catch(e){}
   c.querySelectorAll('[data-ch-check]').forEach(el=>el.addEventListener('click',()=>{
     toast('Опрашиваю каналы через сервер…','info');
     channelsSyncNow(true).then(()=>{ try{ renderCrm(c); }catch(e){} });
@@ -16702,6 +16840,13 @@ function pinSettingsHTML(){
   const cfg=pinCfg();
   const emps=pinAllEmployees().filter(e=>e&&e.name);
   const withPin=emps.filter(e=>e.pinHash).length;
+  if(window.ZENVOX_GATE){
+    /* 201: PIN выведен из эксплуатации — доступы теперь через логины-пароли */
+    return '<div class="section"><div class="section-head"><div class="section-title">🔐 Доступы сотрудников</div></div>'+
+      '<div class="card"><div class="tsub" style="line-height:1.6;">PIN-система выведена из эксплуатации. У каждого сотрудника — <b>логин (псевдоним) и пароль</b>.<br><br>'+
+      'Заведение и смена паролей: <b>Управление сетью → Персонал</b> — блок «Завести сотрудника сразу (логин + пароль)». Система выдаёт временный пароль, при первом входе сотрудник меняет его на свой. Забыл пароль — «Забыли пароль?» на окне входа (новый временный придёт на почту).<br><br>'+
+      'Завершение смены на устройстве — паролем сотрудника, выход из системы — паролем магазина.</div></div></div>';
+  }
   let html='<div class="section"><div class="section-head"><div class="section-title">🔐 Входы по PIN</div></div>'+
     '<div class="card">'+
     '<div class="tsub" style="line-height:1.55;margin-bottom:10px;">Боевой режим доступа: при открытии системы каждый выбирает себя и вводит свой PIN. '+
@@ -23269,7 +23414,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-193 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-202 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -23446,8 +23591,44 @@ function checkCrmTimers(){
   updateBellBadge();
 }
 
+/* СОЦКЛИЕНТЫ (195): идентификатор клиента без телефона — ник/чат канала */
+function leadHandle(l){
+  const c=String((l&&l.contact)||'').trim().replace(/^tg:\s*/i,'');
+  if(c && c.indexOf('@')===0) return c.toLowerCase();
+  if(l && l.chatKey) return String(l.chatKey).toLowerCase();
+  return null;
+}
+function leadHandles(l){
+  const out=[];
+  const c=String((l&&l.contact)||'').trim().replace(/^tg:\s*/i,'');
+  if(c && c.indexOf('@')===0) out.push(c.toLowerCase());
+  if(l && l.chatKey) out.push(String(l.chatKey).toLowerCase());
+  return out;
+}
+function customerByLead(l){
+  const hs=leadHandles(l);
+  for(let i=0;i<hs.length;i++){ const f=customerBySocial(hs[i]); if(f) return f; }
+  return null;
+}
+function customerBySocial(handle){
+  if(!handle) return null;
+  return (DATA.customers||[]).find(c=>(c.socials||[]).some(sx=>sx && String(sx.handle||'').toLowerCase()===handle))||null;
+}
+/* Инфо о клиенте для ЗАЯВКИ: телефон → полная история; иначе — по соцпрофилю
+   (а если к соцпрофилю уже привязан номер — история подтягивается по нему) */
+function clientInfoByLead(l){
+  const p=normPhone(l&&l.contact);
+  if(p.length>=10) return clientInfo(l.contact);
+  if(l && l.phoneLinked && normPhone(l.phoneLinked).length>=10) return clientInfo(l.phoneLinked);
+  const h=leadHandle(l);
+  const cust=customerByLead(l);
+  if(cust && (cust.phones||[]).length && normPhone(cust.phones[0]).length>=10){
+    const ci=clientInfo(cust.phones[0]); ci.customer=cust; ci.found=true; return ci;
+  }
+  return {found:!!cust, vip:false, total:0, count:0, repairs:0, customer:cust, orders:[], active:[], social:h};
+}
 function clientCheckHTML(l, small){
-  const ci=clientInfo(l.contact);
+  const ci=clientInfoByLead(l);
   return '<span style="font-weight:800;'+(ci.found?'color:var(--positive);':'color:var(--negative);')+'" title="'+(ci.found?'Клиент найден в базе':'Клиента нет в базе')+'">'+(ci.found?'✓':'✗')+'</span>'+
     (ci.vip?' <span class="ld-vip"'+(small?' style="font-size:9.5px;padding:1px 6px;"':'')+'>★ Постоянный</span>':'');
 }
@@ -23481,7 +23662,7 @@ function clientInfo(contact){
 }
 
 function clientMarkHTML(l){
-  const ci=clientInfo(l.contact);
+  const ci=clientInfoByLead(l);
   return '<span class="cl-mark '+(ci.found?'ok':'no')+'" title="'+(ci.found?'Клиент в базе':'Клиента нет в базе')+'">'+(ci.found?'✓':'✕')+'</span>'+
     (ci.vip?' <span class="ld-vip" style="font-size:11px;padding:1px 7px;" title="Постоянный клиент">★</span>':'');
 }
@@ -23634,12 +23815,35 @@ setTimeout(()=>{ try{ const r=customersRebuildFromOrders(); if(r.created) consol
 setInterval(()=>{ try{ customersRebuildFromOrders(); }catch(e){} }, 300000);
 function crmEnsureCustomer(l, viaLabel){
   const p=normPhone(l.contact);
-  if(p.length<10) return null;
+  const h=leadHandle(l);
+  if(p.length<10){
+    /* СОЦКЛИЕНТ (195): закрепляем по профилю канала */
+    if(!h) return null;
+    const exSoc=customerByLead(l);
+    if(exSoc) return exSoc;
+    const nid2=(DATA.customers||[]).reduce((m,c)=>Math.max(m, typeof c.id==='number'?c.id:0),0)+1;
+    const sc={id:nid2, name:String(l.name||'Без имени').slice(0,80), email:'', phones:[],
+      socials:leadHandles(l).map(hh=>({channel:l.channel, handle:hh})), consent:false,
+      source:'CRM · '+(((CHANNELS||{})[l.channel]||{}).label||l.channel)+(viaLabel?' ('+viaLabel+')':''), orders:[]};
+    DATA.customers.push(sc);
+    l.notes.unshift({date:DATA.today, text:'Клиент закреплён в базе по профилю канала ('+h+')'});
+    return sc;
+  }
+  /* телефон известен: если раньше был закреплён соцпрофиль — доклеиваем номер в ТУ ЖЕ карточку */
+  const exSoc2=customerByLead(l);
+  if(exSoc2){
+    if(!(exSoc2.phones||[]).some(ph=>normPhone(ph)===p)) (exSoc2.phones=exSoc2.phones||[]).push(String(l.contact).slice(0,30));
+    return exSoc2;
+  }
   const exists=(DATA.customers||[]).find(c=>(c.phones||[]).some(ph=>normPhone(ph)===p));
-  if(exists) return exists;
+  if(exists){
+    if(h && !(exists.socials||[]).some(sx=>String(sx.handle||'').toLowerCase()===h)) (exists.socials=exists.socials||[]).push({channel:l.channel, handle:h});
+    return exists;
+  }
   const nid=(DATA.customers||[]).reduce((m,c)=>Math.max(m, typeof c.id==='number'?c.id:0),0)+1;
   const cust={id:nid, name:String(l.name||'Без имени').slice(0,80), email:'',
-    phones:[String(l.contact).slice(0,30)], consent:false,
+    phones:[String(l.contact).slice(0,30)],
+    socials:(h?[{channel:l.channel, handle:h}]:[]), consent:false,
     source:'CRM · '+(((CHANNELS||{})[l.channel]||{}).label||l.channel)+(viaLabel?' ('+viaLabel+')':''),
     orders:[]};
   DATA.customers.push(cust);
@@ -23883,7 +24087,7 @@ function openCashOpModal(dir, c){
 
 function openClientProfileModal(leadId, c){
   const l=(DATA.leads||[]).find(x=>x.id===leadId); if(!l) return;
-  const ci=clientInfo(l.contact);
+  const ci=clientInfoByLead(l);
   let body='<div class="field-grid">'+
     field('Имя', (ci.customer?ci.customer.name:l.name))+
     field('Телефон', l.contact||'—')+
@@ -23892,7 +24096,15 @@ function openClientProfileModal(leadId, c){
     field('Покупок', String(ci.count))+
     field('Сумма выкупа', rub(ci.total))+
     (ci.customer&&ci.customer.email?field('Email', ci.customer.email):'')+
+    ((ci.customer&&(ci.customer.socials||[]).length)?field('Профиль канала', ci.customer.socials.map(sx=>escHtml(sx.handle)).join(', ')):'')+
   '</div>';
+  /* ПРИВЯЗКА ТЕЛЕФОНА (195): соцпрофиль объединяется с историей покупок */
+  if(normPhone(l.contact).length<10 && !(ci.customer&&(ci.customer.phones||[]).length)){
+    body+='<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">'+
+      '<input class="input-mini" id="cpPhone" placeholder="+7 900 000-00-00" inputmode="tel" style="width:190px;">'+
+      '<button class="btn btn-sm btn-primary" id="cpPhoneSave">➕ Привязать телефон</button></div>'+
+      '<div class="tsub" style="margin-top:4px;">Узнали номер клиента — привяжите: соцпрофиль объединится с историей покупок магазина</div>';
+  }
   if(!ci.vip){
     body+='<div class="tsub" style="margin-top:6px;">Постоянным клиент становится с 3-й покупки или при выкупе от 300 000 ₽ (считаются заказы, б/у и ремонты).</div>';
   }
@@ -23910,6 +24122,23 @@ function openClientProfileModal(leadId, c){
       l.notes.slice(0,10).map(n=>'<div class="hist-row"><div><div class="h-main" style="font-size:12.5px;">'+escHtml(n.text)+'</div><div class="h-sub mono">'+n.date+'</div></div></div>').join('');
   }
   openModal('👤 Профиль клиента', clientCheckHTML(l, true), body, []);
+  setTimeout(()=>{
+    const b=document.getElementById('cpPhoneSave');
+    if(!b) return;
+    b.addEventListener('click', ()=>{
+      const ph=(document.getElementById('cpPhone').value||'').trim();
+      if(normPhone(ph).length<10){ toast('Укажите номер полностью','error'); return; }
+      let cust=(clientInfoByLead(l)||{}).customer || crmEnsureCustomer(l,'профиль');
+      if(!cust){ toast('Не удалось создать карточку клиента','error'); return; }
+      if(!(cust.phones||[]).some(x=>normPhone(x)===normPhone(ph))) (cust.phones=cust.phones||[]).push(ph);
+      l.phoneLinked=ph;
+      (l.notes=l.notes||[]).unshift({date:DATA.today, text:'Привязан телефон '+ph+' — история покупок объединена'});
+      try{ fullSave(); }catch(e){}
+      try{ cloudPushNow(); }catch(e){}
+      toast('Телефон привязан — теперь видна вся история покупок клиента','success');
+      openClientProfileModal(leadId, c);
+    });
+  }, 60);
 }
 
 function openEmployeeModal(empId, c){
@@ -24057,7 +24286,7 @@ function openLeadDialog(id, c){
   const me=taskMe();
   const manager=crmIsManager();
   const ch=CHANNELS[l.channel]||CHANNELS.phone;
-  const ci=clientInfo(l.contact);
+  const ci=clientInfoByLead(l);
   const stage=stageById(l.stage);
   const idx=CRM_CHAIN.indexOf(l.stage);
   l.unread=0;
@@ -27767,6 +27996,39 @@ function ownerStores(ownerId){
   return ids.map(id=>({id:id, store:(NET.customStores||[]).find(s=>s.id===id), profile:NET.storeProfiles[id]})).filter(x=>x.store);
 }
 
+/* БЫСТРОЕ ЗАВЕДЕНИЕ (201): владелец создаёт учётку сразу — без письма и анкеты */
+async function empQuickAdd(siteId, fio, alias, email, role, ownPass){
+  fio=String(fio||'').trim(); alias=String(alias||'').trim(); email=String(email||'').trim();
+  ownPass=String(ownPass||'');
+  if(ownPass && ownPass.length<6) return {ok:false, err:'Пароль — минимум 6 символов'};
+  if(!fio) return {ok:false, err:'Укажите ФИО'};
+  if(!/^[a-zа-яё0-9_.-]{3,24}$/i.test(alias)) return {ok:false, err:'Псевдоним: 3–24 символа (буквы, цифры, точка, дефис)'};
+  if(NET.staff2.some(x=>x.active && x.alias.toLowerCase()===alias.toLowerCase())) return {ok:false, err:'Псевдоним занят'};
+  if(email && NET.staff2.some(x=>x.active && x.email.toLowerCase()===email.toLowerCase())) return {ok:false, err:'Почта уже используется'};
+  if(!HIRE_ROLES.includes(role)) return {ok:false, err:'Выберите роль'};
+  const pass=ownPass||zvStaffPass(); const salt=zvSalt();
+  const emp={id:'e2_'+Date.now(), siteId:siteId, alias:alias, email:email, fio:fio, birth:'', phone:'', role:role,
+    salt:salt, passHash:await zvHashHex(pass, salt, 310000), iters:310000, tempPass:!ownPass, active:true, lastRecover:0};
+  NET.staff2.push(emp); saveNet();
+  return {ok:true, alias:alias, pass:pass, emp:emp};
+}
+/* СМЕНА ДОСТУПА (202): владелец меняет псевдоним и выдаёт новый пароль */
+async function empSetAccess(staffId, newAlias, newPass){
+  const emp=NET.staff2.find(x=>x.id===staffId);
+  if(!emp) return {ok:false, err:'Сотрудник не найден'};
+  newAlias=String(newAlias||'').trim();
+  if(newAlias && newAlias.toLowerCase()!==emp.alias.toLowerCase()){
+    if(!/^[a-zа-яё0-9_.-]{3,24}$/i.test(newAlias)) return {ok:false, err:'Псевдоним: 3–24 символа (буквы, цифры, точка, дефис)'};
+    if(NET.staff2.some(x=>x.active && x.id!==emp.id && x.alias.toLowerCase()===newAlias.toLowerCase())) return {ok:false, err:'Псевдоним занят'};
+    emp.alias=newAlias;
+  }
+  let pass=String(newPass||'');
+  if(pass && pass.length<6) return {ok:false, err:'Пароль — минимум 6 символов'};
+  if(!pass) pass=zvStaffPass();
+  emp.salt=zvSalt(); emp.passHash=await zvHashHex(pass, emp.salt, 310000); emp.iters=310000; emp.tempPass=false;
+  saveNet();
+  return {ok:true, alias:emp.alias, pass:pass};
+}
 /* ── МОДУЛЬ СОТРУДНИКОВ: приглашение → анкета → модерация → вход ── */
 function empInvite(siteId, email){
   email=String(email||'').trim();
@@ -29380,9 +29642,23 @@ function renderEmpAdmin(c, onlySiteId){
     }).join('')+'</tbody></table>';
   html+='</div>';
 
+  /* БЫСТРОЕ ЗАВЕДЕНИЕ (201): логин+пароль сразу, без письма */
+  html+='<div class="card" style="margin-bottom:16px;border-color:var(--accent);">'+
+    '<div class="section-title">Завести сотрудника сразу (логин + пароль)</div>'+
+    '<div class="tsub">Без письма и анкеты: вы создаёте учётку, система выдаёт временный пароль — передайте его сотруднику лично, при первом входе он сменит его на свой.</div>'+
+    '<div class="sc2-row" style="flex-wrap:wrap;">'+
+      '<select class="sc2-inp" id="empQSite">'+sites.map(x=>'<option value="'+x.id+'">'+eh(x.name)+'</option>').join('')+'</select>'+
+      '<input class="sc2-inp" id="empQFio" placeholder="ФИО (Денис …)">'+
+      '<input class="sc2-inp" id="empQAlias" placeholder="Псевдоним для входа">'+
+      '<input class="sc2-inp" id="empQEmail" placeholder="Почта (необязательно)">'+
+      '<input class="sc2-inp" id="empQPass" placeholder="Пароль (пусто — сгенерировать)">'+
+      '<select class="sc2-inp" id="empQRole">'+HIRE_ROLES.map(r=>'<option'+(r==='Сборщик (точка сбора)'?'':'')+'>'+eh(r)+'</option>').join('')+'</select>'+
+      '<button class="btn btn-primary" id="empQBtn">Создать</button>'+
+    '</div><div class="tsub sc2-bad" id="empQErr" style="margin-top:6px;"></div><div id="empQOut"></div>'+
+  '</div>';
   /* Пригласить сотрудника */
   html+='<div class="card" style="margin-bottom:16px;">'+
-    '<div class="section-title">Пригласить сотрудника</div>'+
+    '<div class="section-title">Пригласить сотрудника (по почте)</div>'+
     '<div class="tsub">На почту сотрудника уйдёт ссылка-анкета. После заполнения заявка придёт сюда на подтверждение.</div>'+
     '<div class="sc2-row">'+
       '<select class="sc2-inp" id="empInvSite">'+sites.map(x=>'<option value="'+x.id+'">'+eh(x.name)+'</option>').join('')+'</select>'+
@@ -29402,7 +29678,8 @@ function renderEmpAdmin(c, onlySiteId){
       return '<tr><td class="sc2-mono">'+eh(s.alias)+(s.tempPass?' <span class="tsub" style="font-size:10px;">врем. пароль</span>':'')+'</td>'+
         '<td>'+eh(s.fio)+'</td><td class="tsub">'+eh(s.role)+'</td><td class="tsub">'+eh(s.phone)+'</td>'+
         '<td class="tsub">'+eh(st?st.name:s.siteId)+'</td>'+
-        '<td><button class="btn" style="padding:3px 10px;font-size:12px;" data-empedit="'+s.id+'">Изменить</button></td></tr>';
+        '<td><button class="btn" style="padding:3px 10px;font-size:12px;" data-empedit="'+s.id+'">Изменить</button> '+
+        '<button class="btn" style="padding:3px 10px;font-size:12px;" data-empaccess="'+s.id+'" title="Сменить псевдоним и/или выдать новый пароль">🔑 Доступ</button></td></tr>';
     }).join('')+'</tbody></table>';
   html+='<div class="tsub" style="margin-top:6px;">Менять можно ФИО, дату, телефон, роль (с доп-подтверждением). Псевдоним и почту менять нельзя.</div></div>';
 
@@ -29439,6 +29716,22 @@ function renderEmpAdmin(c, onlySiteId){
       }});
   }));
   c.querySelectorAll('[data-empno]').forEach(el=>el.addEventListener('click',()=>{ empDecline(el.dataset.empno); toast('Заявка отклонена','info'); sc2Rerender(); }));
+  { const qb=c.querySelector('#empQBtn');
+    if(qb) qb.addEventListener('click', async ()=>{
+      const res=await empQuickAdd(
+        c.querySelector('#empQSite').value,
+        c.querySelector('#empQFio').value,
+        c.querySelector('#empQAlias').value,
+        c.querySelector('#empQEmail').value,
+        c.querySelector('#empQRole').value,
+        c.querySelector('#empQPass').value);
+      const errEl=c.querySelector('#empQErr');
+      if(!res.ok){ if(errEl) errEl.textContent=res.err; return; }
+      if(errEl) errEl.textContent='';
+      c.querySelector('#empQOut').innerHTML='<div class="zv-mail" style="margin-top:10px;">✅ Учётка создана — передайте сотруднику лично:\n\nПсевдоним: '+eh(res.alias)+'\nВременный пароль: '+eh(res.pass)+'\n\nВход: фиолетовое окно → «Вход сотрудника». При первом входе система попросит сменить пароль.</div>';
+      toast('Сотрудник заведён: '+res.alias+' ('+c.querySelector('#empQRole').value+')','success');
+    });
+  }
   c.querySelector('#empInvBtn').addEventListener('click',()=>{
     const res=empInvite(c.querySelector('#empInvSite').value, c.querySelector('#empInvEmail').value);
     if(!res.ok){ c.querySelector('#empInvErr').textContent=res.err; return; }
@@ -29448,6 +29741,20 @@ function renderEmpAdmin(c, onlySiteId){
     sc2Rerender();
   });
   c.querySelectorAll('[data-empedit]').forEach(el=>el.addEventListener('click',()=>empEditDialog(el.dataset.empedit)));
+  c.querySelectorAll('[data-empaccess]').forEach(el=>el.addEventListener('click',()=>{
+    const id=el.dataset.empaccess;
+    const emp=NET.staff2.find(x=>x.id===id); if(!emp) return;
+    zvAsk({title:'Псевдоним (логин)', hint:'Текущий: '+emp.alias+'. Введите новый или оставьте как есть.', value:emp.alias, okText:'Дальше',
+      onOk:(al)=>{
+        zvAsk({title:'Новый пароль', hint:'Минимум 6 символов. Пусто — система сгенерирует сама.\nВНИМАНИЕ: пароль будет заменён в любом случае.', placeholder:'пароль', okText:'Сохранить',
+          onOk:async (pw)=>{
+            const res=await empSetAccess(id, al, pw);
+            if(!res.ok){ toast(res.err,'error'); return; }
+            zvAlert({title:'Доступ обновлён', text:'Псевдоним: '+res.alias+'\nПароль: '+res.pass+'\n\nПередайте сотруднику лично. Старый пароль больше не действует.'});
+            sc2Rerender();
+          }});
+      }});
+  }));
   c.querySelectorAll('[data-wwsave]').forEach(el=>el.addEventListener('click',()=>{
     const sid=el.dataset.wwsave;
     const from=c.querySelector('[data-wwfrom="'+sid+'"]').value, to=c.querySelector('[data-wwto="'+sid+'"]').value;
@@ -29718,13 +30025,24 @@ function deviceEnsurePinBar(){
   bar.querySelector('#devExitSys').addEventListener('click',()=>devPinPrompt('system'));
 }
 function devPinPrompt(kind){
-  const sid=NET.deviceSession.storeId;
-  if(!NET.storePins[sid]){ toast('ПИН выхода ещё не задан владельцем магазина (в его личном кабинете)','error'); return; }
-  zvAsk({title:(kind==='shift'?'Завершение смены':'Выход из системы'), hint:(kind==='shift'?'Введите ПИН для завершения смены (6 цифр).':'Введите ПИН для выхода из системы (6 цифр).'), placeholder:'••••••',
-    onOk:(pin)=>{
-      if(!storeCheckPin(sid, pin)){ toast('Неверный ПИН','error'); return; }
-      if(kind==='shift'){ empCloseShift(false); toast('Смена завершена. Устройство готово к входу следующего сотрудника.','success'); empShowLogin(); }
-      else { deviceLogoutFull(); location.reload(); }
+  /* БЕЗ PIN (201): смену закрывает сотрудник СВОИМ паролем; выход из системы — паролем магазина */
+  zvAsk({title:(kind==='shift'?'Завершение смены':'Выход из системы'),
+    hint:(kind==='shift'?'Введите ВАШ пароль сотрудника.':'Введите пароль магазина (единый вход).'),
+    placeholder:'Пароль',
+    onOk:async (pw)=>{
+      if(!pw) return;
+      if(kind==='shift'){
+        const ses=NET.staffSession;
+        const emp=ses && NET.staff2.find(x=>x.id===ses.staffId);
+        if(!emp){ toast('Смена не открыта','error'); return; }
+        const ok=(await zvHashHex(pw, emp.salt, emp.iters||310000))===emp.passHash;
+        if(!ok){ toast('Неверный пароль','error'); return; }
+        empCloseShift(false); toast('Смена завершена. Устройство готово к входу следующего сотрудника.','success'); empShowLogin();
+      } else {
+        const ok2=NET.imag && NET.imag.login && await zvVerifyAuth(NET.imag, NET.imag.login, pw);
+        if(!ok2){ toast('Неверный пароль магазина','error'); return; }
+        deviceLogoutFull(); location.reload();
+      }
     }});
 }
 
