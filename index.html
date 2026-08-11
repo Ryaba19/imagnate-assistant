@@ -2737,7 +2737,10 @@ function pinCfg(){
   d.settings=d.settings||{};
   return d.settings;
 }
-function pinModeOn(){ try{ return !!pinCfg().pinMode; }catch(e){ return false; } }
+function pinModeOn(){
+  if(window.ZENVOX_GATE) return false;   /* ФИКС 190: под единым входом Zenvox старый PIN-режим выключен */
+  try{ return !!pinCfg().pinMode; }catch(e){ return false; }
+}
 function pinAllEmployees(){
   /* сотрудники общие для точек — берём из главной */
   const d=(typeof chHomeStore==='function'?chHomeStore():DATA)||DATA;
@@ -2896,6 +2899,11 @@ function deviceAuthShow(saveCreds, base){
   setTimeout(()=>inp.focus(), 100);
 }
 function pinLockShow(){
+  if(window.ZENVOX_GATE){
+    /* ФИКС 190: блокировка по простою под Zenvox = выход + НОВОЕ окно входа (мост в слой) */
+    try{ if(typeof window.zvIdleLock==='function') window.zvIdleLock(); }catch(e){}
+    return;
+  }
   if(document.getElementById('pinLock')) return;
   pinSessionSave(null);
   const emps=pinAllEmployees().filter(e=>e&&e.name);
@@ -3042,8 +3050,10 @@ function pinLockShow(){
 ['pointerdown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev, ()=>{ window._pinLastAct=Date.now(); }, {passive:true, capture:true}));
 setInterval(()=>{
   try{
-    if(!pinModeOn()) return;
+    if(!pinModeOn() && !window.ZENVOX_GATE) return;   /* 190: под Zenvox автолок жив, но открывает НОВОЕ окно */
     if(document.getElementById('pinLock')) return;
+    const zvw=document.getElementById('zvLogin');
+    if(zvw && getComputedStyle(zvw).display!=='none') return;   /* окно входа уже на экране */
     const min=pinCfg().pinLockMin==null?10:pinCfg().pinLockMin;
     if(min>0 && Date.now()-window._pinLastAct>min*60000) pinLockShow();
   }catch(e){}
@@ -3694,6 +3704,7 @@ function connSystemHTML(){
     '<div class="tsub" style="margin-top:4px;">Telegram-уведомления (владелец и смена), письма клиентам, СМС, адрес в сообщении, разница карта/наличные, приём заявок с сайта.</div>'+
     '<button class="btn btn-sm" id="csOrderSettings" style="margin-top:8px;">⚙ Открыть настройки заказов и уведомлений</button>'+
     '<button class="btn btn-sm" id="csPriceProbe" style="margin-top:8px;" title="Найти в карточках сайта поле цены по карте/рассрочке — чтобы безнал шёл с сайта, а не расчётом">🔍 Проверить поля цен сайта</button>'+
+    '<button class="btn btn-sm" id="csFullHistory" style="margin-top:8px;" title="Разово затянуть ВСЕ заказы и ремонты сайта за всё время — история покупок клиентов станет полной. Дубли не создаются.">⇊ Импорт всей истории заказов</button>'+
   '</div>';
 }
 function wireConnSystem(c){
@@ -3741,6 +3752,11 @@ function wireConnSystem(c){
   if(cos) cos.addEventListener('click', ()=>openOrderSettingsModal());
   const cpp=document.getElementById('csPriceProbe');
   if(cpp) cpp.addEventListener('click', ()=>sitePriceFieldProbe());
+  const cfh=document.getElementById('csFullHistory');
+  if(cfh) cfh.addEventListener('click', ()=>{
+    cfh.disabled=true;
+    Promise.resolve(siteFullHistoryImport(cfh)).finally(()=>{ cfh.disabled=false; });
+  });
   const dt=document.getElementById('csDbTest');
   if(dt) dt.addEventListener('click', async ()=>{
     msg('csDbMsg','Проверяю…');
@@ -3761,6 +3777,7 @@ function renderConnections(c){
         '<div id="devListBox"><div class="tsub" style="margin-top:8px;">Загружаю список с сервера…</div></div></div>'
       : '<div class="card" style="margin-top:12px;"><div class="tsub">🖥 Авторизованные компьютеры и подтверждение новых устройств — только у владельца: коды подтверждения приходят ему.</div></div>');
   wireConnSystem(c);
+  try{ wireTgUserCard(); tgUserStatusRefresh(); }catch(e){}
   wireIntegrations(c);
   if(ownerOnly) loadDeviceList();
 }
@@ -4449,6 +4466,7 @@ function renderDashboard(c){
     if(k==='money'){
       let body='<div class="drill-block-label">Все места хранения денег</div>';
       DATA.assets.cashByStore.forEach(x=>{ body+='<div class="ledger-row"><div class="l-name">Касса — '+escHtml(x.store)+'</div><div class="l-val mono">'+rub(x.amount)+'</div></div>'; });
+      if(((DATA.assets.safe||{}).amount||0)>0) body+='<div class="ledger-row"><div class="l-name">🔒 Сейф — '+escHtml(DATA.storeName||'точка')+'</div><div class="l-val mono">'+rub(DATA.assets.safe.amount)+'</div></div>';
       body+='<div class="ledger-row"><div class="l-name">Безнал / счёт</div><div class="l-val mono">'+rub(DATA.assets.cashless)+'</div></div>';
       DATA.employees.filter(e=>e.role==='Курьер').forEach(e=>{ const w=courierWallet(e.id); if(w>0) body+='<div class="ledger-row"><div class="l-name">Кошелёк курьера — '+escHtml(e.name)+'</div><div class="l-val mono">'+rub(w)+'</div></div>'; });
       if(inTransitCash>0) body+='<div class="ledger-row"><div class="l-name">Наличные в пути (заказы у курьеров)</div><div class="l-val mono">'+rub(inTransitCash)+'</div></div>';
@@ -11035,6 +11053,10 @@ function moneyPlaces(){
   const p=[];
   DATA.assets.cashByStore.forEach((x,i)=>p.push({key:'cash'+i, label:'Касса — '+x.store,
     get:()=>x.amount, set:v=>{x.amount=v;}}));
+  /* СЕЙФ (188): деньги смены хранятся тут до инкассации */
+  const sf=(DATA.assets.safe=DATA.assets.safe||{amount:0});
+  p.push({key:'safe', label:'Сейф — '+(DATA.storeName||'точка'),
+    get:()=>sf.amount||0, set:v=>{sf.amount=v;}});
   p.push({key:'cashless', label:'Безнал / счёт', noConfirm:true,
     get:()=>DATA.assets.cashless, set:v=>{DATA.assets.cashless=v;}});
   /* «Точка сбора» убрана из карты денег по решению владельца (24.07) */
@@ -11154,10 +11176,11 @@ function renderFinance(c){
   ensureLoansData();
   const places=moneyPlaces();
   const total=places.reduce((s,p)=>s+p.get(),0);
-  const pendingT=DATA.moneyTransfers.filter(t=>t.status==='pending');
+  const pendingT=DATA.moneyTransfers.filter(t=>t.status==='pending' && t.toKey!=='safe');   /* сейф подтверждается своей карточкой пересчёта (188) */
 
   let html='<div class="toolbar"><div class="chip-tabs"><div class="chip-tab active">Карта денег</div></div><div class="topbar-spacer"></div>'+
     '<button class="btn btn-primary" id="newTransferBtn">'+ic('plus')+' Перемещение денег</button></div>';
+  html+=safeSectionHTML(false);   /* СЕЙФ (188): ожидающие пересчёты видны владельцу */
 
   /* Карта мест */
   html+='<div class="grid grid-4" style="margin-bottom:8px;">'+
@@ -11232,6 +11255,7 @@ function renderFinance(c){
 
   /* — обработчики — */
   document.getElementById('newTransferBtn').addEventListener('click', ()=>openMoneyTransferModal(c));
+  wireSafeSection(c);   /* СЕЙФ (188) */
   const nlBtn=document.getElementById('newLoanBtn');
   if(nlBtn) nlBtn.addEventListener('click', ()=>openNewLoanModal(c));
   c.querySelectorAll('[data-loan-repay]').forEach(el=>el.addEventListener('click', ()=>openRepayLoanModal(parseInt(el.dataset.loanRepay), c)));
@@ -11326,6 +11350,7 @@ function openMoneyTransferModal(c){
 ============================================================ */
 const CHANNELS={
   avito:    {label:'Авито',    color:'#00AAFF', short:'AV'},
+  tguser:   {label:'Телеграм (рабочий)', color:'#2AABEE', short:'TGр'},
   vk:       {label:'ВКонтакте',color:'#0077FF', short:'ВК'},
   telegram: {label:'Telegram', color:'#2AABEE', short:'TG'},
   whatsapp: {label:'WhatsApp', color:'#25D366', short:'WA'},
@@ -11421,6 +11446,96 @@ function connectedChannels(){
   return (DATA.integrations||[]).filter(i=>i.status==='connected').map(i=>i.channel);
 }
 
+/* ТГ РАБОЧИЙ АККАУНТ (193): карточка подключения по коду */
+function tgUserCardHTML(){
+  const st=window._tgUserStatus||null;
+  const creds=erpServerCreds();
+  let inner;
+  if(!creds) inner='<span class="badge b-grey">Нет связи с сервером</span>';
+  else if(!st) inner='<span class="badge b-grey">Проверяется…</span>';
+  else if(st.module===false) inner='<span class="badge b-cancel">Библиотека не установлена</span>'+
+    '<div class="tsub" style="margin-top:8px;">Залейте на Render файл <b>package.json</b> из архива сборки (рядом с server.js) и передеплойте — библиотека Телеграма поставится сама.</div>';
+  else if(!st.configured) inner='<span class="badge b-grey">Нет ключей на сервере</span>'+
+    '<div class="tsub" style="margin-top:8px;line-height:1.55;">1) Зайдите на <b>my.telegram.org</b> под РАБОЧИМ номером → API development tools → создайте приложение (название любое).<br>'+
+    '2) В Render → Environment добавьте <b>TG_API_ID</b> (App api_id) и <b>TG_API_HASH</b> (App api_hash) → Save.</div>';
+  else if(st.state==='on') inner='<span class="badge b-done">Подключён'+(st.me?(': '+escHtml(st.me.username?('@'+st.me.username):('+'+(st.me.phone||'')))):'')+'</span>'+
+    '<div class="tsub" style="margin-top:8px;">Личка рабочего аккаунта падает в воронку. Контакты записной книжки — личное, в CRM не попадают. Ответ из диалога CRM уходит от имени аккаунта. Ошибся фильтр — кнопка «🚫 Не клиент» в диалоге.</div>'+
+    '<div style="margin-top:10px;"><button class="btn btn-sm btn-danger" id="tguLogout">Отключить аккаунт</button></div>';
+  else {
+    inner='<span class="badge b-progress">Требуется вход</span>'+
+      (st.error?('<div class="tsub" style="color:var(--negative);margin-top:6px;">'+escHtml(st.error)+'</div>'):'')+
+      '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">'+
+        '<input class="input-mini" id="tguPhone" placeholder="+79XXXXXXXXX" style="width:180px;" value="'+escAttr(window._tguPhone||'')+'">'+
+        '<button class="btn btn-sm btn-primary" id="tguSendPhone">Получить код</button>'+
+      '</div>'+
+      (window._tguCodeSent?('<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">'+
+        '<input class="input-mini" id="tguCode" placeholder="Код из Telegram" style="width:180px;">'+
+        '<button class="btn btn-sm btn-primary" id="tguSendCode">Подтвердить</button>'+
+      '</div><div class="tsub" style="margin-top:4px;">Код придёт в само приложение Telegram на рабочем номере (не по SMS)</div>'):'')+
+      ((st.need2fa||window._tguNeed2fa)?('<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">'+
+        '<input class="input-mini" id="tguPass" type="password" placeholder="Пароль двухэтапки" style="width:180px;">'+
+        '<button class="btn btn-sm btn-primary" id="tguSendPass">Войти</button></div>'):'');
+  }
+  return '<div class="card" id="tguCard" style="border-color:#2AABEE55;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">'+
+      '<div style="display:flex;align-items:center;gap:10px;">'+
+        '<span class="ch-badge" style="background:#2AABEE22;color:#2AABEE;border-color:#2AABEE55;font-size:12px;padding:4px 8px;">TGр</span>'+
+        '<div><div class="tname" style="font-size:14.5px;">Телеграм — рабочий аккаунт</div>'+
+        '<div class="tsub">клиенты пишут на рабочий номер · контакты = личное</div></div>'+
+      '</div></div>'+
+    '<div style="margin-top:10px;">'+inner+'</div></div>';
+}
+async function tgUserApi(path, body){
+  const creds=erpServerCreds(); if(!creds) throw new Error('нет сервера');
+  const r=await fetch(creds.api+path,{method:body?'POST':'GET',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+creds.token},
+    body:body?JSON.stringify(body):undefined});
+  return await r.json();
+}
+async function tgUserStatusRefresh(){
+  try{ window._tgUserStatus=await tgUserApi('/tguser/status'); }catch(e){ window._tgUserStatus=null; }
+  const el=document.getElementById('tguCard');
+  if(el){ el.outerHTML=tgUserCardHTML(); wireTgUserCard(); }
+}
+function wireTgUserCard(){
+  const q=id=>document.getElementById(id);
+  if(q('tguSendPhone')) q('tguSendPhone').addEventListener('click', async ()=>{
+    const ph=(q('tguPhone').value||'').replace(/[\s()-]/g,'');
+    if(!/^\+?\d{10,15}$/.test(ph)){ toast('Номер в формате +79XXXXXXXXX','error'); return; }
+    window._tguPhone=ph;
+    try{
+      const j=await tgUserApi('/tguser/login',{phone:ph});
+      if(j.ok){ window._tguCodeSent=true; toast('Код отправлен в Telegram — смотрите сообщение от Telegram на рабочем номере','success'); }
+      else toast(j.error||'Не удалось отправить код','error');
+    }catch(e){ toast('Ошибка: '+(e.message||e),'error'); }
+    tgUserStatusRefresh();
+  });
+  if(q('tguSendCode')) q('tguSendCode').addEventListener('click', async ()=>{
+    const code=(q('tguCode').value||'').trim();
+    if(!code){ toast('Введите код из Telegram','error'); return; }
+    try{
+      const j=await tgUserApi('/tguser/code',{code});
+      if(j.done){ window._tguCodeSent=false; toast('Рабочий Телеграм подключён! Личка пойдёт в воронку.','success'); }
+      else if(j.need2fa){ window._tguNeed2fa=true; toast('Включена двухэтапная защита — введите пароль','info'); }
+      else if(j.error) toast(j.error,'error');
+    }catch(e){ toast('Ошибка: '+(e.message||e),'error'); }
+    setTimeout(tgUserStatusRefresh, 800);
+  });
+  if(q('tguSendPass')) q('tguSendPass').addEventListener('click', async ()=>{
+    const p=(q('tguPass').value||'');
+    if(!p){ toast('Введите пароль','error'); return; }
+    try{
+      const j=await tgUserApi('/tguser/password',{password:p});
+      if(j.done){ window._tguNeed2fa=false; window._tguCodeSent=false; toast('Рабочий Телеграм подключён!','success'); }
+      else if(j.error) toast(j.error,'error');
+    }catch(e){ toast('Ошибка: '+(e.message||e),'error'); }
+    setTimeout(tgUserStatusRefresh, 800);
+  });
+  if(q('tguLogout')) q('tguLogout').addEventListener('click', async ()=>{
+    try{ await tgUserApi('/tguser/logout',{}); toast('Рабочий аккаунт отключён','info'); }catch(e){}
+    tgUserStatusRefresh();
+  });
+}
 function renderIntegrationsTab(){
   const isOwner=isBossRole()||STATE.role==='admin';   /* подключениями управляет и админ */
   const srv=window._chSrvStatus||null;
@@ -11438,6 +11553,7 @@ function renderIntegrationsTab(){
         ? 'Сервер подключён — статусы ниже настоящие.'
         : '<span style="color:var(--negative);">Сервер не подключён.</span> Адрес зашит в систему — нажмите кнопку и введите свой PIN, компьютер подключится сам.')+
       (creds?'':'<div style="margin-top:10px;"><button class="btn btn-primary btn-sm" id="chDevAuth">🔑 Подключить этот компьютер по PIN</button></div>')+
+      '<br><br><button class="btn btn-sm" id="chHistImport" title="Разово затянуть весь архив переписок с сервера: свежие диалоги — на доску, старые — в архив воронки. Дубли не создаются.">⇊ Импорт истории переписок</button>'+
       '<br><br>⏱ <b>Автопроверка всех интеграций — каждые 15 секунд</b> (сайт, Strapi, каналы; раз в 10 минут — полная сверка и догон истории). Последняя: <span class="mono" id="hbStamp">'+(window._hbLastAt?(String(window._hbLastAt.getHours()).padStart(2,'0')+':'+String(window._hbLastAt.getMinutes()).padStart(2,'0')+':'+String(window._hbLastAt.getSeconds()).padStart(2,'0')):'ещё не было')+'</span>'+
     '</div></div>';
 
@@ -11447,6 +11563,7 @@ function renderIntegrationsTab(){
   }
 
   html+='<div class="grid grid-2" style="grid-template-columns:1fr;gap:12px;">';
+  html+=tgUserCardHTML();   /* 193: рабочий аккаунт — первой карточкой */
 
   ['avito','telegram','vk','max','whatsapp'].forEach(ch=>{
     const meta=CHANNELS[ch];
@@ -11824,6 +11941,8 @@ function channelGuessTopic(item, text){
   if(/ремонт|почин|разбит|не включает|не работает|замен(а|ить) (экрана|дисплея|батаре|аккум|стекла)/.test(t)) return 'repair';
   if(/трейд|trade|обмен|сдать (телефон|техник)|выкуп/.test(t)) return 'tradein';
   if(item) return 'device';
+  /* 193: в личке рабочего ТГ нет объявления — узнаём покупателя по словам */
+  if(/сколько стоит|цена|цену|наличи|купить|заказать|есть ли|почём|доставк/.test(t)) return 'device';
   return 'none';
 }
 function chHomeStore(){ return STORE_DATA['store_lunnaya'] || STORE_DATA[Object.keys(STORE_DATA)[0]] || DATA; }   /* главная точка — Лунная 4 */
@@ -11850,6 +11969,31 @@ async function channelsSyncNow(manual, catchup){
     return n;
   }catch(e){ if(manual) toast('Нет связи с сервером: '+e.message,'error'); return 0; }
   finally{ _chBusy=false; }
+}
+
+/* ИМПОРТ ИСТОРИИ ПЕРЕПИСОК (192): весь архив каналов с сервера — разово.
+   Свежие диалоги оживают как обычно, старые ложатся в архив воронки. */
+async function channelsHistoryImport(btn){
+  const creds=erpServerCreds();
+  if(!creds){ toast('Сервер не подключён','error'); return; }
+  const t0=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='⇊ Тяну весь архив переписок…'; }
+  window._chOldImport=true;
+  try{
+    const r=await fetch(creds.api+'/channels/poll',{method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+creds.token},
+      body:JSON.stringify({sinceMs:0, deep:true, all:true})});
+    const j=await r.json();
+    if(!j || !j.ok) throw new Error((j&&j.error)||'нет ответа');
+    const n=importChannelMessages(j.messages||[]);
+    try{ fullSave(); }catch(e){}
+    try{ cloudPushNow(); }catch(e){}
+    toast('История переписок затянута: сообщений в архиве '+((j.messages||[]).length)+', новых записей в воронке '+n+'. Старые диалоги — во вкладке «Архив», свежие — на доске.','success');
+    try{ if(STATE.page==='crm') renderCrm(document.getElementById('pageContent')); }catch(e){}
+  }catch(e){
+    toast('Импорт истории переписок не удался: '+((e&&e.message)||e)+'. Если сервер ещё на старой версии — залейте server.js из сборки 192.','error');
+  }
+  finally{ window._chOldImport=false; if(btn){ btn.disabled=false; btn.textContent=t0||'⇊ Импорт истории переписок'; } }
 }
 
 /* РАБОЧИЕ АККАУНТЫ: их сообщения — не клиенты, в воронку не падают.
@@ -11935,8 +12079,11 @@ function importChannelMessages(list){
     }
     if(!l){
       /* старое сообщение (архив/догон) — не повод создавать заявку:
-         переписка хранится на сервере и подтянется, если клиент напишет снова */
-      if(m.tsMs && m.tsMs < Date.now()-7*86400000) return;   /* видим все диалоги за неделю */
+         переписка хранится на сервере и подтянется, если клиент напишет снова.
+         ИСКЛЮЧЕНИЕ (192): режим «импорт истории» — старые диалоги создаются
+         сразу в архив воронки, тихо. */
+      const oldMsg=(m.tsMs && m.tsMs < Date.now()-7*86400000);
+      if(oldMsg && !window._chOldImport) return;   /* видим все диалоги за неделю */
       /* ЗАЯВКИ-ЗОМБИ (фикс 08.08): по этому чату заявка уже закрывалась.
          Старые сообщения не воскрешают её и не плодят дубль. Действительно
          новое сообщение (свежее всей известной переписки) переоткрывает
@@ -11963,6 +12110,12 @@ function importChannelMessages(list){
         contact:(m.contact||'').trim(), topic:channelGuessTopic(m.item, m.text), item:m.item||'', stage:'new', owner:null,
         createdAt:DATA.today, lastTouch:DATA.today, msgs:[], unread:0,
         notes:[{date:DATA.today, text:'Заявка пришла из канала '+((CHANNELS[m.channel]||{}).label||m.channel)}]};
+      if(oldMsg && window._chOldImport){
+        /* история: сразу закрытая карточка в архиве, никого не дёргаем */
+        l.stage='lost'; l.archived=true; l.lostReason='История переписки (импорт)';
+        l.tgNotified=true; l.unread=0;
+        (l.notes=l.notes||[]).unshift({date:DATA.today, text:'Затянута импортом истории переписок'});
+      }
       target.leads.unshift(l);
       added++;
       channelHistoryMerge(l);   /* подтянуть в диалог всю прошлую переписку этого чата из архива на сервере */
@@ -12016,6 +12169,10 @@ function tgWatchNewChannelLeads(){
       (d.leads||[]).forEach(l=>{
         if(!l.chatKey || l.tgNotified) return;
         l.tgNotified=true;
+        /* ФИКС 189: догон истории — не повод будить бота. Оповещаем только
+           о действительно свежем обращении (последнее сообщение < 10 минут). */
+        const lastTs=Math.max(0, ...((l.msgs||[]).map(x=>x.tsMs||0)));
+        if(lastTs && lastTs < Date.now()-10*60000) return;
         tgNotifyShift('Поступила новая заявка ✅\nКанал: '+((CHANNELS[l.channel]||{}).label||l.channel)+'\nДата: '+(l.createdAt||DATA.today)+' '+nowTime());
       });
     });
@@ -12156,6 +12313,9 @@ function wireIntegrations(c){
     renderPage();
   }));
   c.querySelectorAll('[data-setup-ch]').forEach(el=>el.addEventListener('click',()=>openChannelSetupModal(el.dataset.setupCh, c)));
+  { const chi=document.getElementById('chHistImport');
+    if(chi) chi.addEventListener('click', ()=>channelsHistoryImport(chi)); }
+  try{ wireTgUserCard(); tgUserStatusRefresh(); }catch(e){}
   c.querySelectorAll('[data-ch-check]').forEach(el=>el.addEventListener('click',()=>{
     toast('Опрашиваю каналы через сервер…','info');
     channelsSyncNow(true).then(()=>{ try{ renderCrm(c); }catch(e){} });
@@ -18366,6 +18526,87 @@ setInterval(()=>{ try{ strapiFullHistoryImport(); }catch(e){} }, 300000);
    даже если система уже «знакома» с сайтом (курсор стоит). Дедуп по externalId.
    Флаг ставится только после успешного прохода — до тех пор пробуем каждый пульс. */
 let _bf46Busy=false;
+/* Маппинг ремонта сайта → сервисная заявка ERP (общий для догрузки и полного импорта) */
+function mapRemontToService(z, sid){
+  const ext='strapi_r_'+z.id;
+  const rst=String(z.order_status||'new').toLowerCase();
+  const rDone=/^done$|complete|vypoln|выполн/.test(rst);
+  const rRej=/reject|otkaz|отказ|cancel/.test(rst);
+  const created=(z.createdAt? String(z.createdAt).slice(0,10).split('-').reverse().join('.') : DATA.today);
+  return {
+    id:sid, externalId:ext, tgNotified:true,
+    device:String(z.phone_model||'Устройство с сайта').slice(0,90),
+    client:sanStr(z.name||'Без имени').slice(0,80),
+    phone:String(z.phone||'—').slice(0,30),
+    issue:String(z.comment||'Заявка с сайта').slice(0,500),
+    clientWords:z.comment?('«'+String(z.comment).slice(0,300)+'»'):'',
+    agreedWorks:String(z.work_plan||'').slice(0,300),
+    devicePassword:String(z.phone_password||'').slice(0,60),
+    imei:'', accountRemoved:'no',
+    condition:{body:[],display:[],power:[],wifi:[],bt:[]},
+    conditionExtras:z.phone_status?('Состояние со слов клиента: '+String(z.phone_status).slice(0,200)):'',
+    costLabor:0, costParts:0, cost:(parseFloat(String(z.summary||'').replace(/\s/g,''))||null),
+    estDays:'', due:null, master:null, urgency:'normal',
+    status:rDone?'done':(rRej?'archive':siteRepairStatusToErp(rst)), accepted:created,
+    history:[{date:created+' 12:00', text:rDone?'Выполнен (статус сайта)':(rRej?'Отказ (статус сайта)':'Заявка на ремонт с сайта')}],
+    parts:[],
+  };
+}
+/* ПОЛНЫЙ ИМПОРТ ИСТОРИИ (191): все заказы и ремонты сайта, постранично.
+   Дубли отсекаются по externalId — повторный запуск безопасен. */
+let _fullHistBusy=false;
+async function siteFullHistoryImport(btn){
+  if(_fullHistBusy) return;
+  if(!apiToken()){ toast('Сайт не подключён: нет токена (Подключения)','error'); return; }
+  _fullHistBusy=true;
+  const H=chHomeStore();
+  const t0=btn?btn.textContent:'';
+  let imported=0, checked=0;
+  try{
+    let pg=1, pc=1;
+    while(pg<=pc && pg<=60){
+      if(btn) btn.textContent='⇊ Заказы: страница '+pg+(pc>1?(' из '+pc):'')+'…';
+      const j0=await strapiReq('/api/zakazies?status=draft&sort=id:asc&pagination[page]='+pg+'&pagination[pageSize]=100&populate=*');
+      pc=(j0.meta&&j0.meta.pagination&&j0.meta.pagination.pageCount)||1;
+      (j0.data||[]).forEach(z=>{
+        checked++;
+        const ext='strapi_'+z.id;
+        if((H.orders||[]).some(o=>o.externalId===ext)) return;
+        const oid=Math.max(10000,...H.orders.map(o=>typeof o.id==='number'?o.id:0))+1;
+        const o=mapZakazToOrder(z, oid, false);
+        o.tgNotified=true;   /* история — бота не будим */
+        H.orders.push(o);
+        try{ customerUpsertFromOrder(o); }catch(e){}
+        if(z.id>(H.siteLastZakazId||0)) H.siteLastZakazId=z.id;
+        imported++;
+      });
+      pg++;
+    }
+    let rp=1, rpc=1;
+    while(rp<=rpc && rp<=30){
+      if(btn) btn.textContent='⇊ Ремонты: страница '+rp+(rpc>1?(' из '+rpc):'')+'…';
+      const jr=await strapiReq('/api/remonts?status=draft&sort=id:asc&pagination[page]='+rp+'&pagination[pageSize]=100');
+      rpc=(jr.meta&&jr.meta.pagination&&jr.meta.pagination.pageCount)||1;
+      (jr.data||[]).forEach(z=>{
+        checked++;
+        const ext='strapi_r_'+z.id;
+        if((H.service||[]).some(t=>t.externalId===ext)) return;
+        const sid=((H.service||[]).length?Math.max(...H.service.map(t=>t.id)):3000)+1;
+        H.service.push(mapRemontToService(z, sid));
+        if(z.id>(H.siteLastRemontId||0)) H.siteLastRemontId=z.id;
+        imported++;
+      });
+      rp++;
+    }
+    try{ fullSave(); }catch(e){}
+    try{ cloudPushNow(); }catch(e){}
+    toast('История сайта затянута: новых записей '+imported+' (проверено '+checked+'). Теперь проверка клиента по номеру видит всю историю покупок.','success');
+    try{ if(['orders','service'].includes(STATE.page)) renderPage(); }catch(e){}
+  }catch(e){
+    toast('Импорт истории прервался: '+((e&&e.message)||e)+'. Уже затянуто '+imported+' — нажмите ещё раз, продолжит без дублей.','error');
+  }
+  finally{ _fullHistBusy=false; if(btn) btn.textContent=t0||'⇊ Импорт всей истории заказов'; }
+}
 async function strapiBackfill14d(){
   if(_bf46Busy) return 0;
   const H=chHomeStore();
@@ -18409,25 +18650,7 @@ async function strapiBackfill14d(){
         const rst=String(z.order_status||'new').toLowerCase();
         const rDone=/^done$|complete|vypoln|выполн/.test(rst);
         const rRej=/reject|otkaz|отказ|cancel/.test(rst);
-        const created=(z.createdAt? String(z.createdAt).slice(0,10).split('-').reverse().join('.') : DATA.today);
-        H.service.unshift({
-          id:sid, externalId:ext, tgNotified:true,
-          device:String(z.phone_model||'Устройство с сайта').slice(0,90),
-          client:sanStr(z.name||'Без имени').slice(0,80),
-          phone:String(z.phone||'—').slice(0,30),
-          issue:String(z.comment||'Заявка с сайта').slice(0,500),
-          clientWords:z.comment?('«'+String(z.comment).slice(0,300)+'»'):'',
-          agreedWorks:String(z.work_plan||'').slice(0,300),
-          devicePassword:String(z.phone_password||'').slice(0,60),
-          imei:'', accountRemoved:'no',
-          condition:{body:[],display:[],power:[],wifi:[],bt:[]},
-          conditionExtras:z.phone_status?('Состояние со слов клиента: '+String(z.phone_status).slice(0,200)):'',
-          costLabor:0, costParts:0, cost:(parseFloat(String(z.summary||'').replace(/\s/g,''))||null),
-          estDays:'', due:null, master:null, urgency:'normal',
-          status:rDone?'done':(rRej?'archive':siteRepairStatusToErp(rst)), accepted:created,
-          history:[{date:created+' 12:00', text:rDone?'Выполнен (статус сайта)':(rRej?'Отказ (статус сайта)':'Заявка на ремонт с сайта')}],
-          parts:[],
-        });
+        H.service.unshift(mapRemontToService(z, sid));
         if(z.id>(H.siteLastRemontId||0)) H.siteLastRemontId=z.id;
         imported++;
       });
@@ -23046,7 +23269,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-187 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-193 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -23921,6 +24144,19 @@ function openLeadDialog(id, c){
      Взять себе -> Общение · В ожидание (с дедлайном) · Подтвердить (к заказу)
      · вернуть назад по смыслу · автовозврат по таймеру 12:00. */
   const actions=[];
+  /* НЕ КЛИЕНТ (193): личная переписка — в архив, собеседник в игнор навсегда */
+  if(l.chatKey && !['won','lost'].includes(l.stage)){
+    actions.push({label:'🚫 Не клиент', action:()=>{
+      const tag=(l.contact||l.name||'').trim();
+      if(tag){ const ig=chIgnoreList(); if(!ig.some(x=>String(x).toLowerCase()===tag.toLowerCase())) ig.push(tag); }
+      l.stage='lost'; l.archived=true; l.lostReason='Не клиент (личная переписка)'; l.unread=0;
+      (l.notes=l.notes||[]).unshift({date:DATA.today, text:'Помечен «Не клиент» — сообщения этого собеседника больше не создают заявок'});
+      try{ fullSave(); }catch(e){}
+      try{ cloudPushNow(); }catch(e){}
+      closeModal(); refreshCrm(c);
+      toast('Помечено: не клиент. Его сообщения больше не будут создавать заявки.','success');
+    }});
+  }
   if((l.stage==='working'||l.stage==='waiting') && (manager || l.owner===me)){
     actions.push({label:'📅 Назначить дату и время ответа', action:()=>openLeadCallbackModal(l.id, c)});
   }
@@ -24607,12 +24843,120 @@ function renderCashboxEmployee(c){
       '<button class="btn btn-primary" id="cashInBtn">+ Внести в кассу</button>'+
       '<button class="btn btn-ghost" id="magnerBtn" title="Подключить счётчик купюр Magner">🧾 Счётчик</button>'+
     '</div></div></div>';
+  /* СЕЙФ (188) */
+  html+=safeSectionHTML(true);
   html+='<div class="section"><div class="section-title" style="margin-bottom:12px;">Мои операции</div>'+
     cashOpsJournalHTML(DATA.cashOps.filter(o=>o.by===me).slice(0,20))+'</div>';
   c.innerHTML=html;
   document.getElementById('cashOutBtn').addEventListener('click',()=>openCashOpModal('out', c));
   document.getElementById('cashInBtn').addEventListener('click',()=>openCashOpModal('in', c));
   document.getElementById('magnerBtn').addEventListener('click', openMagnerModal);
+  wireSafeSection(c);
+}
+
+/* СЕЙФ (188): общий блок для кассовой страницы и «Финансов» владельца */
+function safeSectionHTML(withHeader){
+  const safeAmt=((DATA.assets.safe||{}).amount)||0;
+  const pendSafe=(DATA.moneyTransfers||[]).filter(t=>t.status==='pending' && t.toKey==='safe');
+  return '<div class="section">'+(withHeader?
+    '<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;">'+
+    '<div><div class="kpi-label">🔒 Сейф точки</div>'+
+    '<div style="font-size:26px;font-weight:800;margin-top:6px;">'+rub(safeAmt)+'</div>'+
+    '<div class="tsub" style="margin-top:4px;">Наличные смен до инкассации. Изъятие — только руководством через «Перемещение денег»</div></div>'+
+    '<button class="btn btn-primary" id="shiftSafeBtn">🔒 Закрыть смену → сейф</button>'+
+  '</div>':'')+
+  pendSafe.map(t=>{
+    const meNow=(typeof currentEmployeeName==='function'?currentEmployeeName():'')||'';
+    const canConfirm=(t.assignee && t.assignee===meNow) || isBossRole();
+    return '<div class="card" style="margin-top:10px;border-color:var(--warning);">'+
+      '<div class="kpi-label">🔒 Пересчёт сейфа — в пути '+rub(t.amount)+'</div>'+
+      '<div class="tsub" style="margin-top:4px;">Смену закрыл(а) '+escHtml(t.by||'—')+' · '+t.date+' · ответственный за пересчёт: <b>'+escHtml(t.assignee||'не назначен')+'</b></div>'+
+      (canConfirm
+        ? '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">'+
+          '<button class="btn btn-sm btn-primary" data-safe-ok="'+t.id+'">✅ Принял — сумма сошлась</button>'+
+          '<button class="btn btn-sm btn-danger" data-safe-bad="'+t.id+'">⚠ Не сошлось</button></div>'
+        : '<div class="tsub" style="margin-top:8px;">Подтвердить может только ответственный или руководство</div>')+
+    '</div>';
+  }).join('')+'</div>';
+}
+function wireSafeSection(c){
+  const ssb=document.getElementById('shiftSafeBtn');
+  if(ssb) ssb.addEventListener('click', ()=>openShiftToSafeModal(c));
+  c.querySelectorAll('[data-safe-ok]').forEach(el=>el.addEventListener('click', ()=>{
+    const t=(DATA.moneyTransfers||[]).find(x=>x.id===parseInt(el.dataset.safeOk)); if(!t) return;
+    const sf=(DATA.assets.safe=DATA.assets.safe||{amount:0});
+    sf.amount=(sf.amount||0)+t.amount;
+    t.status='done'; t.confirmedAt=DATA.today+' '+nowTime(); t.confirmedBy=(typeof currentEmployeeName==='function'?currentEmployeeName():'');
+    (DATA.financeOps=DATA.financeOps||[]).unshift({date:DATA.today, type:'Сейф: пересчёт подтверждён', amount:t.amount, comment:'смена '+(t.by||'')+' · принял '+t.confirmedBy, who:t.confirmedBy});
+    try{ lsSave(); cloudPushNow(); }catch(e){}
+    renderFinance(c); toast('Пересчёт подтверждён: '+rub(t.amount)+' в сейфе','success');
+  }));
+  c.querySelectorAll('[data-safe-bad]').forEach(el=>el.addEventListener('click', ()=>{
+    const t=(DATA.moneyTransfers||[]).find(x=>x.id===parseInt(el.dataset.safeBad)); if(!t) return;
+    const body='<div class="total-strip" style="margin-bottom:12px;"><div class="t-label">Заявлено при закрытии смены</div><div class="t-value mono">'+rub(t.amount)+'</div></div>'+
+      '<div class="field" style="margin-bottom:10px;"><label>Фактически пересчитано, ₽</label><input class="input-mini" id="safeActual" type="number" min="0" style="width:100%;"></div>'+
+      '<div class="field"><label>Комментарий (обязательно) — что не сошлось</label><input class="input-mini" id="safeWhy" style="width:100%;" placeholder="Например: не хватает 2 000, купюра 5 000 порвана…"></div>';
+    openModal('⚠ Пересчёт не сошёлся', 'Сейф — '+escHtml(DATA.storeName||''), body, [{label:'Зафиксировать', cls:'btn-danger', action:()=>{
+      const actual=Math.round(parseFloat(document.getElementById('safeActual').value));
+      const why=document.getElementById('safeWhy').value.trim();
+      if(isNaN(actual)||actual<0){ toast('Укажите фактическую сумму','error'); return; }
+      if(!why){ toast('Комментарий обязателен — это уйдёт руководству','error'); return; }
+      const diff=actual-t.amount;
+      const sf=(DATA.assets.safe=DATA.assets.safe||{amount:0});
+      sf.amount=(sf.amount||0)+Math.max(0,actual);
+      t.status='done'; t.actual=actual; t.mismatch=true; t.mismatchWhy=why;
+      t.confirmedAt=DATA.today+' '+nowTime(); t.confirmedBy=(typeof currentEmployeeName==='function'?currentEmployeeName():'');
+      (DATA.financeOps=DATA.financeOps||[]).unshift({date:DATA.today, type:diff<0?'⚠ Недостача при пересчёте сейфа':'Излишек при пересчёте сейфа', amount:Math.abs(diff), comment:'смена '+(t.by||'')+' · '+why, who:t.confirmedBy});
+      pushNotif('Владелец','⚠ Пересчёт сейфа НЕ СОШЁЛСЯ ('+escHtml(DATA.storeName||'')+'): заявлено '+rub(t.amount)+', по факту '+rub(actual)+' ('+(diff>0?'+':'−')+rub(Math.abs(diff))+'). Смену закрыл(а): '+(t.by||'—')+'. Комментарий: '+why);
+      try{ tgNotifyOwner('⚠ ПЕРЕСЧЁТ СЕЙФА НЕ СОШЁЛСЯ: заявлено '+rub(t.amount)+', факт '+rub(actual)+'. '+(t.by||'')+' / '+why); }catch(e){}
+      try{ lsSave(); cloudPushNow(); }catch(e){}
+      closeModal(); renderFinance(c);
+      toast('Зафиксировано. Руководство уведомлено о расхождении '+(diff>0?'+':'−')+rub(Math.abs(diff)),'error');
+    }}]);
+  }));
+}
+/* ЗАКРЫТИЕ СМЕНЫ → СЕЙФ (188): пересчёт кассы, размен остаётся,
+   остальное уходит в сейф «в пути» до подтверждения ответственным */
+function openShiftToSafeModal(c){
+  const box=cashBoxRef();
+  const emps=(DATA.employees||[]).filter(e=>!e.support && e.name).map(e=>e.name);
+  if(!emps.includes('Владелец')) emps.push('Владелец');
+  const meNow=(typeof currentEmployeeName==='function'?currentEmployeeName():'');
+  const body='<div class="total-strip" style="margin-bottom:12px;"><div class="t-label">В кассе по системе</div><div class="t-value mono">'+rub(box.amount)+'</div></div>'+
+    '<div class="field" style="margin-bottom:10px;"><label>Фактически пересчитано, ₽</label><input class="input-mini" id="stsActual" type="number" min="0" style="width:100%;" value="'+box.amount+'"></div>'+
+    '<div class="field" style="margin-bottom:10px;"><label>Оставить размен в кассе, ₽</label><input class="input-mini" id="stsKeep" type="number" min="0" style="width:100%;" value="0"></div>'+
+    '<div class="field"><label>Ответственный за пересчёт сейфа</label><select class="select-mini" id="stsWho" style="width:100%;">'+
+      emps.map(n=>'<option value="'+escAttr(n)+'"'+(n!==meNow?'':' disabled')+'>'+escHtml(n)+(n===meNow?' (нельзя выбрать себя)':'')+'</option>').join('')+'</select></div>'+
+    '<p class="tsub" style="margin-top:8px;">Касса подписывается и относится в сейф под камеру. Деньги будут «в пути», пока ответственный не подтвердит пересчёт. Расхождение при закрытии сразу уйдёт руководству.</p>';
+  openModal('🔒 Закрыть смену → сейф', escHtml(box.store||''), body, [{label:'Закрыть смену', cls:'btn-primary', action:()=>{
+    const actual=Math.round(parseFloat(document.getElementById('stsActual').value));
+    const keep=Math.round(parseFloat(document.getElementById('stsKeep').value)||0);
+    const who=document.getElementById('stsWho').value;
+    if(isNaN(actual)||actual<0){ toast('Укажите фактическую сумму','error'); return; }
+    if(keep<0||keep>actual){ toast('Размен не может превышать пересчитанную сумму','error'); return; }
+    const move=actual-keep;
+    if(move<=0){ toast('В сейф нечего переносить — вся сумма остаётся разменом','error'); return; }
+    const sys=box.amount, diff=actual-sys;
+    if(diff!==0){
+      (DATA.financeOps=DATA.financeOps||[]).unshift({date:DATA.today, type:diff>0?'Излишек кассы':'⚠ Недостача кассы', amount:Math.abs(diff), comment:(box.store||'')+' · закрытие смены ('+(diff>0?'+':'−')+rub(Math.abs(diff))+')', who:meNow});
+      pushNotif('Владелец',(diff>0?'Излишек':'⚠ Недостача')+' кассы при закрытии смены «'+(box.store||'')+'»: '+rub(Math.abs(diff))+'. Закрыл(а): '+meNow);
+      try{ tgNotifyOwner((diff>0?'💰 Излишек':'⚠ Недостача')+' кассы при закрытии: '+rub(Math.abs(diff))+' ('+meNow+')'); }catch(e){}
+    }
+    box.amount=keep;   /* размен остаётся, остальное — в путь до сейфа */
+    if(!DATA.moneyTransfers) DATA.moneyTransfers=[];
+    const t={id:(DATA.moneyTransfers.length?Math.max(...DATA.moneyTransfers.map(x=>x.id)):0)+1,
+      fromKey:'cash0', toKey:'safe', fromLabel:'Касса — '+(box.store||''), toLabel:'Сейф — '+(DATA.storeName||''),
+      amount:move, comment:'Закрытие смены'+(keep?(' · размен в кассе '+rub(keep)):''),
+      status:'pending', assignee:who, date:DATA.today+' '+nowTime(), by:meNow};
+    DATA.moneyTransfers.unshift(t);
+    (DATA.cashOps=DATA.cashOps||[]).unshift({id:(DATA.cashOps.length?Math.max(...DATA.cashOps.map(x=>x.id)):0)+1,
+      date:DATA.today, time:nowTime(), by:meNow, dir:'out', amount:move, purpose:'Сейф — закрытие смены', comment:'ответственный за пересчёт: '+who, status:'done', store:STATE.activeStoreId});
+    notifyEmployee(who, '🔒 Вам назначен пересчёт сейфа: '+rub(move)+' ('+(box.store||'')+'). Подтвердите в «Финансах»: «Принял — сумма сошлась».');
+    pushNotif('Владелец','Смена закрыта ('+(box.store||'')+'): '+rub(move)+' → сейф, размен '+rub(keep)+'. Пересчёт: '+who+'.');
+    try{ lsSave(); cloudPushNow(); }catch(e){}
+    closeModal(); renderFinance(c);
+    toast('Смена закрыта: '+rub(move)+' → сейф (в пути), размен '+rub(keep)+'. Пересчёт подтвердит: '+who,'success');
+  }}]);
 }
 
 function renderPromos(c){
@@ -26019,6 +26363,11 @@ setInterval(()=>{ try{ tgWatchNewChannelLeads(); }catch(e){} }, 12000);
    Поздняя декларация переопределяет старую версию pinLockShow.
 ============================================================ */
 function pinLockShow(){
+  if(window.ZENVOX_GATE){
+    /* ФИКС 190: блокировка по простою под Zenvox = выход + НОВОЕ окно входа (мост в слой) */
+    try{ if(typeof window.zvIdleLock==='function') window.zvIdleLock(); }catch(e){}
+    return;
+  }
   if(document.getElementById('pinLock')) return;
   pinSessionSave(null);
   const ov=document.createElement('div');
@@ -29762,6 +30111,17 @@ if(NET.ownerSession){ vdmShowCabinet(); }
 if(NET.deviceSession && deviceIsAlive()){ deviceEnsurePinBar(); deviceStartWatch(); }
 if(NET.session && NET.session.deviceId){ zvStartDeviceWatch(); }
 if(NET.session){ zvApplySession(); } else { zvShowLogin(); }
+/* МОСТ (190): автолок базы по простою вызывает единый вход Zenvox */
+window.zvIdleLock=function(){
+  try{ NET.session=null; NET.staffSession=null; saveNet(); }catch(e){}
+  try{ zvShowLogin(); }catch(e){}
+};
+/* СТРАХОВКА (190): если старое PIN-окно базы каким-то путём появилось —
+   сносим и показываем единый вход Zenvox */
+setInterval(function(){ try{
+  var pl=document.getElementById('pinLock');
+  if(pl){ pl.remove(); NET.session=null; NET.staffSession=null; saveNet(); zvShowLogin(); }
+}catch(e){} }, 5000);
 try{ toast('Zenvox '+SC2_BUILD+' загружена','success'); }catch(e){}
 })();
 </script>

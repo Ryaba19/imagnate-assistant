@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "pg": "^8.16.3",
-    "nodemailer": "^6.9.14"
+    "nodemailer": "^6.9.14",
+    "telegram": "^2.22.2"
   }
 }

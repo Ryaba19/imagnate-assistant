@@ -959,6 +959,7 @@ async function registerWebhooks() {
   if (envSets(CH_ENV_NAMES.vk).length) chState.vk.webhook = process.env.VK_CONFIRMATION ? 'приёмник готов' : 'нужен VK_CONFIRMATION';
 }
 async function channelSend(ch, store, chatId, text) {
+  if (ch === 'tguser') return tgUserSend(chatId, text);   /* 193: рабочий аккаунт */
   const sets = envSets(CH_ENV_NAMES[ch]);
   if (!sets.length) throw new Error('Ключи канала не заданы на сервере');
   const set = sets.find(s => s.store === store) || sets[0];
@@ -1147,6 +1148,101 @@ setInterval(() => {
 console.log('[будильник] самопинг каждые 10 минут: ' + EXT_URL + '/api/health');
 setTimeout(() => { orderWatchTick().catch(() => {}); }, 8000);
 
+
+/* ---- ТГ РАБОЧИЙ АККАУНТ (193): системный вход в рабочий Telegram.
+   Сервер = «ещё одно устройство» аккаунта (StringSession в channel_kv).
+   Контакты записной книжки — личное: не сохраняются и в CRM не попадают. ---- */
+let TgLib=null, TgEvents=null, TgSessions=null;
+try{ TgLib=require('telegram'); TgEvents=require('telegram/events'); TgSessions=require('telegram/sessions'); }
+catch(e){ console.log('[тг-аккаунт] библиотека telegram не установлена — залейте package.json из сборки 193'); }
+const tgUser={ client:null, state:'off', error:null, me:null, pending:null };
+function tgUserConfigured(){ return !!(TgLib && process.env.TG_API_ID && process.env.TG_API_HASH); }
+function tgUserNewClient(sess){
+  return new TgLib.TelegramClient(new TgSessions.StringSession(sess||''),
+    parseInt(process.env.TG_API_ID), String(process.env.TG_API_HASH), { connectionRetries: 3 });
+}
+async function tgUserAttach(client){
+  tgUser.client=client; tgUser.state='on'; tgUser.error=null;
+  try{ const me=await client.getMe(); tgUser.me={ username: me.username||'', phone: me.phone||'' }; }catch(e){}
+  client.addEventHandler(async ev=>{
+    try{
+      const m=ev.message; if(!m) return;
+      let peer=null; try{ peer=await m.getChat(); }catch(e){}
+      if(!peer || peer.className!=='User' || peer.bot || peer.self) return;   /* только личка с людьми */
+      if(peer.contact || peer.mutualContact) return;                          /* контакты = личное */
+      const cid=String(peer.id);
+      const name=([peer.firstName, peer.lastName].filter(Boolean).join(' ')||peer.username||('+'+(peer.phone||''))).slice(0,80);
+      await chStore({ key:'tguser_'+cid+'_'+m.id, store: DEFAULT_STORE, channel:'tguser', chatId: cid,
+        dir: m.out?'out':'in', name: m.out?'':name,
+        contact: peer.username?('@'+peer.username):(peer.phone?('+'+peer.phone):''),
+        item:'', text: String(m.message||'').slice(0,2000), tsMs: ((m.date||0)*1000) || Date.now() });
+    }catch(e){ console.warn('[тг-аккаунт] событие:', e.message); }
+  }, new TgEvents.NewMessage({}));
+  console.log('[тг-аккаунт] подключён: '+((tgUser.me&&(tgUser.me.username||tgUser.me.phone))||'?'));
+}
+async function tgUserBoot(){
+  if(!tgUserConfigured()){ tgUser.state = TgLib? 'no_keys':'no_module'; return; }
+  try{
+    const sess=await kvGet('tguser_session');
+    if(!sess){ tgUser.state='need_login'; return; }
+    const client=tgUserNewClient(sess);
+    await client.connect();
+    if(!(await client.isUserAuthorized())){ tgUser.state='need_login'; return; }
+    await tgUserAttach(client);
+  }catch(e){ tgUser.state='error'; tgUser.error=String(e.message||e).slice(0,200); }
+}
+async function tgUserSend(chatId, text){
+  if(!tgUser.client || tgUser.state!=='on') throw new Error('Рабочий Телеграм не подключён (Интеграции)');
+  try{ await tgUser.client.sendMessage(Number(chatId), { message: text }); }
+  catch(e){
+    try{ await tgUser.client.getDialogs({ limit: 100 }); await tgUser.client.sendMessage(Number(chatId), { message: text }); }
+    catch(e2){ throw new Error('Телеграм: '+String(e2.message||e2).slice(0,150)); }
+  }
+}
+function tgUserSleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+
+/* ---- АВИТО-АГЕНТ (сборка 177): сервер сам достаёт цены с выдачи Авито.
+   Антибот Авито может закрыть доступ облачному IP — тогда честная ошибка,
+   у клиента остаётся ручной путь (вставить выдачу → «Посчитать»). ---- */
+async function avitoMarketPrices(q) {
+  const urls = [
+    'https://m.avito.ru/rossiya?q=' + encodeURIComponent(q),
+    'https://www.avito.ru/rossiya?q=' + encodeURIComponent(q)
+  ];
+  let lastErr = 'Авито не ответил';
+  for (const u of urls) {
+    try {
+      const ctl = new AbortController();
+      const tm = setTimeout(() => ctl.abort(), 12000);
+      const r = await fetch(u, {
+        signal: ctl.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'ru-RU,ru;q=0.9'
+        }
+      });
+      clearTimeout(tm);
+      if (!r.ok) { lastErr = 'Авито ответил кодом ' + r.status + (r.status === 403 ? ' (антибот)' : ''); continue; }
+      const html = await r.text();
+      if (/h-captcha|hcaptcha|geetest|are you a robot|подтвердите, что вы не робот/i.test(html)) { lastErr = 'Авито показал проверку-антибот'; continue; }
+      const out = [];
+      let m;
+      const re1 = /"price"\s*:\s*\{[^{}]*?"value"\s*:\s*(\d{4,7})/g;
+      while ((m = re1.exec(html))) out.push(parseInt(m[1], 10));
+      if (!out.length) { const re2 = /"price"\s*:\s*(\d{4,7})/g; while ((m = re2.exec(html))) out.push(parseInt(m[1], 10)); }
+      if (!out.length) {
+        const re3 = /(\d[\d\s\u00A0\u202F]{3,9})\s*₽/g;
+        while ((m = re3.exec(html))) { const v = parseInt(m[1].replace(/\D/g, ''), 10); if (v >= 1000 && v <= 2000000) out.push(v); }
+      }
+      const clean = out.filter(v => v >= 1000 && v <= 2000000).slice(0, 60);
+      if (clean.length >= 3) return clean;
+      lastErr = 'страница получена, но цен в ней не видно (' + clean.length + ')';
+    } catch (e) { lastErr = String((e && e.message) || e); }
+  }
+  throw new Error(lastErr);
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -1155,6 +1251,83 @@ const server = http.createServer((req, res) => {
   /* ---- Страницы ---- */
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return sendFile(res, 'index.html');
   if (req.method === 'GET' && url.pathname === '/api/health') return sendJson(res, 200, { ok: true, db: pool ? 'postgres' : 'file', version: '29.07-72' });
+
+  /* ---- ТГ рабочий аккаунт: статус / вход по коду / выход (193) ---- */
+  if (req.method === 'GET' && url.pathname === '/api/tguser/status') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return sendJson(res, 200, { ok: true, module: !!TgLib, configured: tgUserConfigured(),
+      state: tgUser.state, me: tgUser.me, need2fa: !!(tgUser.pending && tgUser.pending.need2fa),
+      error: (tgUser.pending && tgUser.pending.err) || tgUser.error || null });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/tguser/login') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return readBody(req, async b => {
+      if (!tgUserConfigured()) return sendJson(res, 400, { error: TgLib ? 'Нет TG_API_ID / TG_API_HASH в Render Environment' : 'Библиотека telegram не установлена — залейте package.json из сборки' });
+      const phone = String(b.phone || '').replace(/[^\d+]/g, '');
+      if (!/^\+?\d{10,15}$/.test(phone)) return sendJson(res, 400, { error: 'Номер в формате +79XXXXXXXXX' });
+      try {
+        const client = tgUserNewClient('');
+        const pend = tgUser.pending = { phone, client, need2fa: false, done: false, err: null, resolveCode: null, resolvePass: null };
+        client.start({
+          phoneNumber: async () => phone,
+          phoneCode: async () => await new Promise(resv => { pend.resolveCode = resv; }),
+          password: async () => { pend.need2fa = true; return await new Promise(resv => { pend.resolvePass = resv; }); },
+          onError: (e) => { pend.err = String((e && e.message) || e).slice(0, 200); },
+        }).then(async () => {
+          try {
+            await kvSet('tguser_session', client.session.save());
+            pend.done = true; tgUser.pending = null;
+            await tgUserAttach(client);
+          } catch (e) { pend.err = String(e.message || e); }
+        }).catch(e => { pend.err = String((e && e.message) || e).slice(0, 200); });
+        sendJson(res, 200, { ok: true, hint: 'Код отправлен в Telegram на этот номер' });
+      } catch (e) { sendJson(res, 500, { error: String(e.message || e) }); }
+    });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/tguser/code') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return readBody(req, async b => {
+      const p = tgUser.pending;
+      if (!p || !p.resolveCode) return sendJson(res, 400, { error: 'Сначала запросите код (кнопка «Получить код»)' });
+      p.resolveCode(String(b.code || '').trim()); p.resolveCode = null;
+      await tgUserSleep(3000);
+      sendJson(res, 200, { ok: true, done: tgUser.state === 'on', need2fa: !!(tgUser.pending && tgUser.pending.need2fa), error: (tgUser.pending && tgUser.pending.err) || null });
+    });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/tguser/password') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return readBody(req, async b => {
+      const p = tgUser.pending;
+      if (!p || !p.resolvePass) return sendJson(res, 400, { error: 'Пароль сейчас не ожидается' });
+      p.resolvePass(String(b.password || '')); p.resolvePass = null;
+      await tgUserSleep(3000);
+      sendJson(res, 200, { ok: true, done: tgUser.state === 'on', error: (tgUser.pending && tgUser.pending.err) || null });
+    });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/tguser/logout') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return readBody(req, async () => {
+      try { if (tgUser.client) await tgUser.client.disconnect(); } catch (e) {}
+      tgUser.client = null; tgUser.state = 'need_login'; tgUser.me = null; tgUser.pending = null;
+      try { await kvSet('tguser_session', ''); } catch (e) {}
+      sendJson(res, 200, { ok: true });
+    });
+  }
+
+  /* ---- Авито-агент: GET /api/avito-price?q=модель ---- */
+  if (req.method === 'GET' && url.pathname === '/api/avito-price') {
+    const q = String(url.searchParams.get('q') || '').trim().slice(0, 120);
+    if (!q) return sendJson(res, 400, { ok: false, error: 'пустой запрос' });
+    (async () => {
+      try {
+        const prices = await avitoMarketPrices(q);
+        sendJson(res, 200, { ok: true, prices });
+      } catch (e) {
+        sendJson(res, 200, { ok: false, error: String((e && e.message) || e) });
+      }
+    })();
+    return;
+  }
 
   /* ---- Автонастройка нового компа: открыл систему с сервера — она сама
      получила адрес API и ключ. Включается переменной AUTO_SETUP=1. ---- */
@@ -1753,6 +1926,16 @@ const server = http.createServer((req, res) => {
   /* ---- Облачная база ERP: отдать снимок (по токену) ---- */
   if (req.method === 'GET' && url.pathname === '/api/state') {
     if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    if (url.searchParams.get('meta')) {
+      /* лёгкий опрос для живой синхронизации: только отметка, без тела базы */
+      return (async () => {
+        try {
+          const cur = await stateLoad();
+          if (!cur) return sendJson(res, 200, { ok: true, empty: true });
+          sendJson(res, 200, { ok: true, empty: false, savedAtMs: cur.savedAtMs || 0, savedBy: cur.savedBy || '', baseId: (cur.state && cur.state._baseId) || null });
+        } catch (e) { sendJson(res, 500, { error: e.message }); }
+      })();
+    }
     (async () => {
       try {
         const cur = await stateLoad();
@@ -1929,8 +2112,10 @@ const server = http.createServer((req, res) => {
     return readBody(req, async b => {
       try {
         await channelsPollAll(!!b.deep);
-        const sinceMs = Number(b.sinceMs) || (Date.now() - 7 * 86400000);
-        const msgs = await chList(sinceMs, 500);
+        /* 192: sinceMs=0 — честный «с самого начала», а не подмена на 7 дней */
+        const sinceRaw = Number(b.sinceMs);
+        const sinceMs = (isFinite(sinceRaw) && b.sinceMs != null) ? sinceRaw : (Date.now() - 7 * 86400000);
+        const msgs = await chList(sinceMs, b.all ? 20000 : 500);
         sendJson(res, 200, { ok: true, messages: msgs, status: chState });
       } catch (e) {
         console.error('[каналы] опрос:', e.message);
@@ -1979,7 +2164,7 @@ const server = http.createServer((req, res) => {
     return readBody(req, async b => {
       const ch = String(b.channel || ''), cid = String(b.chatId || ''), text = String(b.text || '').trim();
       const store = String(b.store || '') || DEFAULT_STORE;
-      if (!CH_SENDSET[ch]) return sendJson(res, 400, { error: 'Канал не поддерживается: ' + ch });
+      if (!CH_SENDSET[ch] && ch !== 'tguser') return sendJson(res, 400, { error: 'Канал не поддерживается: ' + ch });
       if (!cid || !text) return sendJson(res, 400, { error: 'Нужны chatId и text' });
       try {
         await channelSend(ch, store, cid, text);
@@ -2193,6 +2378,7 @@ dbInit()
     setInterval(() => { purgeTestLeads().catch(() => {}); }, 24 * 3600 * 1000);
     setInterval(() => { purgeWatchLocks(); }, 24 * 3600 * 1000);
     setTimeout(() => { registerWebhooks().catch(e => console.error('вебхуки:', e.message)); }, 5000);
+    setTimeout(() => { tgUserBoot().catch(e => console.error('[тг-аккаунт]', e.message)); }, 3000);
     setTimeout(() => { serverSideChecks(); }, 20000);
     setInterval(() => { serverSideChecks(); }, 5 * 60 * 1000);
     setInterval(() => { registerWebhooks().catch(e => console.error('вебхуки:', e.message)); }, 24 * 3600 * 1000);
