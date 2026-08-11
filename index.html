@@ -2513,7 +2513,9 @@ function renderSidebar(){
           ? '<div class="role-block"><div class="role-current">'+
               '<div class="role-avatar">'+role.short+'</div>'+
               '<div class="role-meta"><b>'+escHtml((window._zvStaffName||currentEmployeeName())||role.label)+'</b><span>'+role.label+'</span></div>'+
-            '</div></div>'
+            '</div>'+
+            '<button class="btn btn-sm" id="zvLogoutBtn" style="width:100%;margin-top:6px;">🚪 Выйти из учётки</button>'+
+          '</div>'
           : '<div class="role-block">'+
             '<div class="role-current">'+
               '<div class="role-avatar">'+role.short+'</div>'+
@@ -2533,6 +2535,11 @@ function renderSidebar(){
   if(rsel) rsel.addEventListener('change', e=>{ setRole(e.target.value); });
   const plb=document.getElementById('pinLockBtn');
   if(plb) plb.addEventListener('click', ()=>pinLockShow());
+  const zlb=document.getElementById('zvLogoutBtn');
+  if(zlb) zlb.addEventListener('click', ()=>{
+    if(typeof window.zvLogoutFull==='function') window.zvLogoutFull();
+    else { try{ location.reload(); }catch(e){} }
+  });
   const fbb=document.getElementById('feedbackBtn');
   if(fbb) fbb.addEventListener('click', openFeedbackModal);
   const dt=document.getElementById('densityToggle');
@@ -15968,6 +15975,39 @@ const NO_SHOW_FINE=6000;         // ₽ — штраф за неявку без 
 const BADGE_GRACE_MIN=120;       // 2 часа на «пикнуть» бейдж с начала смены
 const ABSENCE_GRACE_MIN=180;     // 3 часа после согласованного возвращения
 
+function ensureStaffSchedules(){
+  /* 216: сотрудники из учёток (флаг _zvStaff) получают рабочую карусель 2/2,
+     иначе календарь смен пустой. Делается один раз на сотрудника (_schedSeed216).
+     Продавцы/менеджеры — шахматкой (чётные/нечётные со сдвигом 2 дня), мастер —
+     свой цикл; владелец/директор — вне графика; курьер/сборщик — сдельно. */
+  try{
+    if(typeof STORE_DATA==='undefined') return;
+    const base=(typeof parseRuDate==='function') ? parseRuDate('04.08.2026') : null;
+    if(!base) return;
+    Object.values(STORE_DATA).forEach(d=>{
+      if(!d || !Array.isArray(d.employees)) return;
+      let sellerIdx=0;
+      d.employees.forEach(e=>{
+        if(!e || !e._zvStaff) return;                 // трогаем только учётки
+        const r=String(e.role||'').toLowerCase();
+        const isSeller=/менеджер|продавец|старший/.test(r);
+        const isMaster=/мастер/.test(r);
+        if(e._schedSeed216){ if(isSeller && !isMaster) sellerIdx++; return; }
+        if(/владелец|директор/.test(r)){ e.schedule=null; }            // вне графика
+        else if(/курьер|сборщик/.test(r)){ if(e.schedule && !e.schedule.cycle) e.schedule=null; } // сдельно
+        else if(isSeller || isMaster){
+          if(!e.schedule || !e.schedule.cycle){
+            const offset=isMaster?0:((sellerIdx%2)*2);
+            const st=new Date(base.getFullYear(), base.getMonth(), base.getDate()+offset);
+            e.schedule={cycle:'2/2', start:ruDateStr(st), period:4, work:2, hours:isMaster?'10:00\u201320:00':'10:00\u201321:00'};
+          }
+          if(isSeller && !isMaster) sellerIdx++;
+        }
+        e._schedSeed216=1;
+      });
+    });
+  }catch(e){ console.warn('ensureStaffSchedules', e); }
+}
 function ensureShiftData(){
   if(!DATA.shiftOverrides) DATA.shiftOverrides={};   // 'ДД.ММ.ГГГГ': {add:[id], remove:[id]}
   if(!DATA.shiftSwaps) DATA.shiftSwaps=[];           // заявки на обмен сменами
@@ -15978,6 +16018,7 @@ function ensureShiftData(){
   if(!DATA.shiftNorms) DATA.shiftNorms={};            // 'ДД.ММ.ГГГГ': {Менеджеры:2, Мастера:1, ...}
   Object.values(DATA.shiftNorms).forEach(n=>{ if(n && n['Продавцы']!=null){ n['Менеджеры']=n['Продавцы']; delete n['Продавцы']; } });
   if(!DATA.invites) DATA.invites=[];                  // приглашения сотрудников (макет)
+  try{ ensureStaffSchedules(); }catch(e){}
   DATA.employees.forEach(e=>{ if(e.schedule && !e.badgeCode) e.badgeCode='IMG-'+String(e.id).replace(/\D/g,'').padStart(4,'0'); });
 }
 /* Роль → нормовая категория для панели управления. */
@@ -23577,7 +23618,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-214 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-216 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -30816,6 +30857,12 @@ if(NET.session && NET.session.deviceId){ zvStartDeviceWatch(); }
 })();
 if(NET.session){ zvApplySession(); } else { zvShowLogin(); }
 /* МОСТ (190): автолок базы по простою вызывает единый вход Zenvox */
+/* ВЫХОД ИЗ УЧЁТКИ (215): завершаем сеанс пользователя, устройство остаётся
+   авторизованным — показывается окно входа Zenvox (без кода устройства). */
+window.zvLogoutFull=function(){
+  try{ NET.session=null; NET.staffSession=null; NET.ownerSession=null; saveNet(); }catch(e){}
+  try{ location.reload(); }catch(e){ try{ zvShowLogin(); }catch(_){} }
+};
 window.zvIdleLock=function(){
   try{ NET.session=null; NET.staffSession=null; saveNet(); }catch(e){}
   try{ zvShowLogin(); }catch(e){}
