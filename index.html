@@ -2016,11 +2016,11 @@ const STORE_DATA={};
    одиночные и полный набор. Владелец меняет в Управлении.
 ============================================================ */
 const STORE_MODULES={
-  devices:    {label:'📱 Устройства',  pages:['crm','orders','customers','purchase','pricing','deliveries','analytics','accounting','docs','connections'], whTabs:['tech','tradein']},
+  devices:    {label:'📱 Устройства',  pages:['crm','orders','customers','purchase','pricing','deliveries','analytics','accounting','docs'], whTabs:['tech','tradein']},
   accessories:{label:'🎧 Аксессуары',  pages:[], whTabs:['accessories']},
   service:    {label:'🔧 Сервис',      pages:['service'], whTabs:['parts']},
 };
-const STORE_BASE_PAGES=['dashboard','warehouse','team','manage','finance','expenses','tasks'];   /* есть у точки всегда */
+const STORE_BASE_PAGES=['dashboard','warehouse','team','manage','finance','expenses','tasks','connections'];   /* есть у точки всегда (211: connections — системная настройка, не зависит от направления точки) */
 function storeModulesOf(sid){
   try{
     const H=(typeof chHomeStore==='function'?chHomeStore():DATA)||DATA;
@@ -11014,7 +11014,7 @@ function purchaseActions(r){
   const storeFound=['new','sent','priced'].includes(r.status)
     ? ' <button class="btn btn-sm" data-pr-action="storefound" data-pr-id="'+r.id+'" title="Товар оказался на точке — закрыть заявку без сборщика">🏬 Нашли на точке</button>' : '';
   if(r.status==='new') return '<button class="btn btn-sm btn-primary" data-pr-action="send" data-pr-id="'+r.id+'">Отправить в точку сбора</button>'+storeFound;
-  if(r.status==='sent') return (role.canPriceCollection? '<button class="btn btn-sm btn-primary" data-pr-action="price" data-pr-id="'+r.id+'">Указать закупочную цену</button>' : '<span class="tsub">'+ic('alert')+' Ожидает цену от сборщика</span>')+storeFound;
+  if(r.status==='sent') return (role.canPriceCollection? '<button class="btn btn-sm btn-primary" data-pr-action="price" data-pr-id="'+r.id+'">✅ Выкупил (списать с точки сбора)</button>' : '<span class="tsub">'+ic('alert')+' Ожидает выкупа сборщиком</span>')+storeFound;
   if(r.status==='priced') return (role.canConfirmPurchase? '<button class="btn btn-sm btn-primary" data-pr-action="confirm" data-pr-id="'+r.id+'">Подтвердить закуп</button>' : '<span class="tsub">'+ic('alert')+' Ожидает подтверждения магазина</span>')+storeFound;
   return '<span class="tsub">'+ic('check')+' Закуп подтверждён</span>';
 }
@@ -11023,16 +11023,44 @@ function handlePurchaseAction(action, id){
   const r=DATA.purchaseRequests.find(x=>x.id===id);
   if(action==='send'){ r.status='sent'; toast('Заявка №'+id+' отправлена в точку сбора', 'info'); renderPurchase(document.getElementById('pageContent')); }
   else if(action==='price'){
-    let body='<div class="field"><label>Закупочная цена за единицу</label><input class="input-mini" id="priceInput" style="width:100%;" type="number" placeholder="Например, 84000"></div>';
-    openModal('Заявка №'+id, r.item, body, [{label:'Сохранить цену', cls:'btn-primary', action:()=>{
+    const qty=r.qty||1;
+    ensureCollectionData();
+    let body='<div class="tsub" style="margin-bottom:10px;line-height:1.6;">Выкуп аппарата на точке сбора. Введите цену закупки за единицу — с точки сбора спишутся наличные (перейдут в товарный остаток до отправки в магазин).</div>'+
+      '<div class="field-grid">'+field('Товар', r.item)+field('Количество', String(qty))+field('На точке сбора', rub(DATA.collection.cash||0))+'</div>'+
+      '<div class="field"><label>Закупочная цена за единицу, ₽</label><input class="input-mini" id="priceInput" style="width:100%;" type="number" placeholder="Например, 84000"></div>'+
+      '<div class="tsub" id="priceSum" style="margin-top:6px;"></div>';
+    openModal('✅ Выкупил — заявка №'+id, r.item, body, [{label:'Выкупил — списать с точки сбора', cls:'btn-primary', action:()=>{
       const v=parseFloat(document.getElementById('priceInput').value);
       if(!v||v<=0){ toast('Укажите корректную цену', 'error'); return; }
-      r.price=v; r.status='priced'; closeModal(); renderPurchase(document.getElementById('pageContent')); toast('Цена сохранена', 'success');
+      const cost=v*qty;
+      ensureCollectionData();
+      const k=DATA.collection;
+      if((k.cash||0) < cost){ toast('На точке сбора учтено '+rub(k.cash||0)+', выкуп на '+rub(cost)+'. Списываю — пополните точку сбора переводом «Магазин → Точка сбора».','error'); }
+      k.cash=(k.cash||0)-cost;
+      k.goods=(k.goods||0)+cost;
+      k.devicesBought=(k.devicesBought||0)+qty;
+      k.totalPurchases=(k.totalPurchases||0)+cost;
+      (k.history=k.history||[]).unshift({date:DATA.today, text:'Выкуплено: '+r.item+(qty>1?' ×'+qty:'')+' по '+rub(v)+' (наличные → товар)', amount:cost, dir:'out'});
+      if(DATA.assets && DATA.assets.collection){ DATA.assets.collection.cash=(DATA.assets.collection.cash||0)-cost; DATA.assets.collection.goods=(DATA.assets.collection.goods||0)+cost; }
+      r.price=v; r.buyoutCost=cost; r.status='priced';
+      try{ tgNotifyOwner('💰 Выкуп на точке сбора\n'+r.item+(qty>1?' ×'+qty:'')+' по '+rub(v)+' = '+rub(cost)+'\nСписано с точки сбора · остаток наличных '+rub(k.cash)+'\nСборщик: '+currentEmployeeName()); }catch(e){}
+      try{ fullSave(); cloudPushNow(); }catch(e){}
+      closeModal(); renderPurchase(document.getElementById('pageContent')); toast('Выкуплено. С точки сбора списано '+rub(cost)+'.', 'success');
     }}]);
+    setTimeout(()=>{ const inp=document.getElementById('priceInput'), sum=document.getElementById('priceSum'); if(inp&&sum){ const upd=()=>{ const v=parseFloat(inp.value)||0; sum.textContent=v>0?('Спишется с точки сбора: '+rub(v*qty)):''; }; inp.addEventListener('input',upd); inp.focus(); } },50);
   } else if(action==='confirm'){
     r.status='confirmed';
     const d=new Date(); d.setDate(d.getDate()+3);
     r.eta=d.toLocaleDateString('ru-RU');
+    /* товар уехал в магазин — снимаем товарный остаток с точки сбора */
+    if(r.buyoutCost){
+      ensureCollectionData();
+      const k=DATA.collection;
+      k.goods=Math.max(0,(k.goods||0)-r.buyoutCost);
+      (k.history=k.history||[]).unshift({date:DATA.today, text:'Отправлено в магазин: '+r.item, amount:r.buyoutCost, dir:'out'});
+      if(DATA.assets && DATA.assets.collection) DATA.assets.collection.goods=Math.max(0,(DATA.assets.collection.goods||0)-r.buyoutCost);
+    }
+    try{ fullSave(); cloudPushNow(); }catch(e){}
     renderPurchase(document.getElementById('pageContent'));
     toast('Закуп подтверждён. Ожидаемое поступление: '+r.eta, 'success');
   } else if(action==='storefound'){
@@ -11078,7 +11106,20 @@ function collectionByStore(){
   });
   return map;
 }
+function ensureCollectionData(){
+  if(!DATA.collection || typeof DATA.collection!=='object') DATA.collection={};
+  const k=DATA.collection;
+  if(k.cash==null) k.cash=0;
+  if(k.goods==null) k.goods=0;
+  if(k.devicesBought==null) k.devicesBought=0;
+  if(k.totalPurchases==null) k.totalPurchases=0;
+  if(!Array.isArray(k.history)) k.history=[];
+  if(!DATA.assets) DATA.assets={};
+  if(!DATA.assets.collection) DATA.assets.collection={cash:k.cash, goods:k.goods};
+  return k;
+}
 function renderCollection(c){
+  ensureCollectionData();
   const k=DATA.collection;
   const role=ROLES[STATE.role];
   let html='<div class="grid grid-4">';
@@ -16915,11 +16956,30 @@ function pinSettingsHTML(){
   const emps=pinAllEmployees().filter(e=>e&&e.name);
   const withPin=emps.filter(e=>e.pinHash).length;
   if(window.ZENVOX_GATE){
-    /* 201: PIN выведен из эксплуатации — доступы теперь через логины-пароли */
-    return '<div class="section"><div class="section-head"><div class="section-title">🔐 Доступы сотрудников</div></div>'+
-      '<div class="card"><div class="tsub" style="line-height:1.6;">PIN-система выведена из эксплуатации. У каждого сотрудника — <b>логин (псевдоним) и пароль</b>.<br><br>'+
-      'Заведение и смена паролей: <b>Управление сетью → Персонал</b> — блок «Завести сотрудника сразу (логин + пароль)». Система выдаёт временный пароль, при первом входе сотрудник меняет его на свой. Забыл пароль — «Забыли пароль?» на окне входа (новый временный придёт на почту).<br><br>'+
-      'Завершение смены на устройстве — паролем сотрудника, выход из системы — паролем магазина.</div></div></div>';
+    /* 213: панель смены паролей прямо в ERP. Владелец — всем; директор — своей точке (не директорам). */
+    const api=window.zvStaffAccessAPI;
+    const canPass=!!(api && api.canManage && api.canManage());
+    let ph='<div class="section"><div class="section-head"><div class="section-title">🔐 Доступы сотрудников</div></div>';
+    ph+='<div class="card"><div class="tsub" style="line-height:1.6;">У каждого сотрудника — <b>логин (псевдоним) и пароль</b>. '+
+      'Забыл пароль — «Забыли пароль?» на окне входа или смените здесь. Заведение новых учёток и смена логинов — <b>Управление сетью → Персонал</b>.</div>';
+    if(canPass){
+      const v=api._viewer();
+      const list=(api.list()||[]).slice().sort((a,z)=>String(a.fio||a.alias).localeCompare(String(z.fio||z.alias),'ru'));
+      ph+='<div class="drill-divider"></div><div class="drill-block-label">Сменить пароль сотруднику'+
+        (v.isOwner?'':' · ваша точка')+'</div>';
+      if(!list.length){
+        ph+='<div class="tsub">Пока нет сотрудников для смены пароля.</div>';
+      } else {
+        ph+=list.map(e=>'<div class="hist-row"><div><div class="h-main">'+escHtml(e.fio||e.alias)+'</div>'+
+          '<div class="h-sub">'+escHtml(e.role||'')+' · логин: <b>'+escHtml(e.alias)+'</b>'+
+          (e.tempPass?' · <span class="badge b-grey">временный пароль</span>':'')+'</div></div>'+
+          '<button class="btn btn-sm" data-zvpass="'+escHtml(e.id)+'" data-zvname="'+escHtml(e.fio||e.alias)+'">🔑 Сменить пароль</button></div>').join('');
+      }
+    } else {
+      ph+='<div class="tsub" style="margin-top:8px;">Смену паролей выполняет владелец или директор точки.</div>';
+    }
+    ph+='</div></div>';
+    return ph;
   }
   let html='<div class="section"><div class="section-head"><div class="section-title">🔐 Входы по PIN</div></div>'+
     '<div class="card">'+
@@ -16963,6 +17023,18 @@ function openPinSetModal(title, onSave, c){
   }}]);
   setTimeout(()=>{ const i=document.getElementById('pinNew1'); if(i) i.focus(); },50);
 }
+function openStaffPassModal(name, onSave){
+  const body='<div class="tsub" style="margin-bottom:8px;">Новый пароль для «'+escHtml(name)+'». Минимум 6 символов. Пусто — система придумает сама.</div>'+
+    '<div class="field"><label>Новый пароль</label><input class="input-mini" id="zvPassNew" type="text" autocomplete="off" placeholder="можно оставить пустым" style="width:100%;"></div>'+
+    '<div class="tsub" style="margin-top:6px;">Пароль хранится только в зашифрованном виде — восстановить нельзя, только заменить.</div>';
+  openModal('Сменить пароль','',body,[{label:'Сменить пароль', cls:'btn-primary', action:async()=>{
+    const pass=(document.getElementById('zvPassNew').value||'').trim();
+    if(pass && pass.length<6){ toast('Пароль — минимум 6 символов','error'); return; }
+    try{ await onSave(pass); }
+    catch(e){ toast('Не удалось сменить пароль: '+(e&&e.message||e),'error'); }
+  }}]);
+  setTimeout(()=>{ const i=document.getElementById('zvPassNew'); if(i) i.focus(); },50);
+}
 function wirePinSettings(c){
   const ob=document.getElementById('pinOwnerBtn');
   if(ob) ob.addEventListener('click', ()=>openPinSetModal('PIN владельца', async(pin)=>{
@@ -16986,6 +17058,18 @@ function wirePinSettings(c){
       e.pinHash=await sha256Hex('storecontrol|emp'+e.id+'|'+pin);
       toast('PIN для «'+e.name+'» сохранён','success');
     }, c);
+  }));
+  /* 213: смена пароля сотруднику через мост слоя */
+  c.querySelectorAll('[data-zvpass]').forEach(el=>el.addEventListener('click', ()=>{
+    const id=el.dataset.zvpass, nm=el.dataset.zvname||'сотрудник';
+    openStaffPassModal(nm, async(pass)=>{
+      const api=window.zvStaffAccessAPI;
+      if(!api||!api.setPass){ toast('Модуль доступов недоступен','error'); return; }
+      const res=await api.setPass(id, pass);
+      if(!res||!res.ok){ toast((res&&res.err)||'Не удалось сменить пароль','error'); return; }
+      closeModal();
+      openModal('Пароль обновлён','', '<div class="tsub" style="line-height:1.7;">Сотрудник: <b>'+escHtml(nm)+'</b><br>Логин: <b>'+escHtml(res.alias)+'</b><br>Новый пароль: <b class="mono">'+escHtml(res.pass)+'</b><br><br>Передайте лично. Старый пароль больше не действует.</div>', [{label:'Готово', cls:'btn-primary', action:()=>{ closeModal(); renderManage(c); }}]);
+    });
   }));
   const mi=document.getElementById('pinLockMinInp');
   if(mi) mi.addEventListener('change', ()=>{
@@ -23493,7 +23577,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-211 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-214 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -28265,6 +28349,43 @@ async function empSetAccess(staffId, newAlias, newPass){
   saveNet();
   return {ok:true, alias:emp.alias, pass:pass};
 }
+/* МОСТ ДОСТУПА (213): панель смены паролей внутри ERP.
+   Владелец меняет пароль всем (кроме владельца) с любой точки;
+   директор — только своей точке и только не-директорам. */
+window.zvStaffAccessAPI={
+  _viewer:function(){
+    var role='', site=null, isOwner=false;
+    try{ role=(typeof STATE!=='undefined'&&STATE.role)||''; }catch(e){}
+    isOwner=(role==='owner'||role==='admin');
+    try{ site=(typeof ROLES!=='undefined'&&ROLES[role]&&ROLES[role].homeStoreId)||null; }catch(e){}
+    return {role:role, site:site, isOwner:isOwner, isDirector:String(role).indexOf('director')===0};
+  },
+  canManage:function(){ var v=this._viewer(); return v.isOwner || (v.isDirector && !!v.site); },
+  list:function(){
+    var v=this._viewer();
+    if(typeof NET==='undefined' || !Array.isArray(NET.staff2)) return [];
+    return NET.staff2.filter(function(e){ return e.active; }).filter(function(e){
+      if(/владелец/i.test(e.role||'')) return false;
+      if(v.isOwner) return true;                 /* владелец видит всех (вкл. директоров) */
+      if(!v.isDirector || !v.site) return false;
+      if(e.siteId!==v.site) return false;        /* только своя точка */
+      if(/директор/i.test(e.role||'')) return false;  /* директор не трогает директоров */
+      return true;
+    }).map(function(e){ return {id:e.id, alias:e.alias, fio:e.fio, role:e.role, siteId:e.siteId, tempPass:!!e.tempPass}; });
+  },
+  setPass:async function(staffId, newPass){
+    var v=this._viewer();
+    var emp=(typeof NET!=='undefined'&&Array.isArray(NET.staff2))? NET.staff2.find(function(x){ return x.id===staffId && x.active; }) : null;
+    if(!emp) return {ok:false, err:'Сотрудник не найден'};
+    if(/владелец/i.test(emp.role||'')) return {ok:false, err:'Пароль владельца здесь не меняется'};
+    if(!v.isOwner){
+      if(!v.isDirector || !v.site) return {ok:false, err:'Недостаточно прав'};
+      if(emp.siteId!==v.site) return {ok:false, err:'Это сотрудник другой точки'};
+      if(/директор/i.test(emp.role||'')) return {ok:false, err:'Директор не меняет пароль директору'};
+    }
+    return await empSetAccess(staffId, '', newPass);
+  }
+};
 /* ── МОДУЛЬ СОТРУДНИКОВ: приглашение → анкета → модерация → вход ── */
 function empInvite(siteId, email){
   email=String(email||'').trim();
