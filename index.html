@@ -5502,8 +5502,9 @@ function renderClientReviews(box, reviews){
       '</div>'+
       (r.text?'<div style="margin-top:8px;padding:10px 12px;background:var(--glass-1,rgba(255,255,255,.04));border-radius:8px;font-size:13px;line-height:1.6;">💬 '+escHtml(r.text)+'</div>'
         :(bad||mid?'<div class="tsub" style="margin-top:6px;">Комментария нет — стоит перезвонить и спросить самим.</div>':''))+
+      (note.reply?'<div style="margin-top:8px;padding:10px 12px;background:rgba(90,200,120,.10);border:1px solid rgba(90,200,120,.35);border-radius:8px;font-size:13px;line-height:1.6;">↩ Наш ответ ('+escHtml(note.by||'')+'): '+escHtml(note.reply)+'</div>':'')+
       '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">'+
-        (o&&orderEmailOf(o)?'<button class="btn btn-sm btn-primary" data-rv-reply="'+escHtml(no)+'">✉ Ответить клиенту</button>':'')+
+        '<button class="btn btn-sm btn-primary" data-rv-reply="'+escHtml(no)+'">✉ Ответить клиенту</button>'+
         (o&&o.phone?'<a class="btn btn-sm" href="tel:'+escHtml(String(o.phone).replace(/[^+\d]/g,''))+'">📞 Позвонить</a>':'')+
         '<button class="btn btn-sm" data-rv-done="'+escHtml(no)+'">'+(note.handled?'Вернуть в работу':'✓ Отработано')+'</button>'+
       '</div>'+
@@ -5525,7 +5526,26 @@ function openReviewReplyModal(no){
   const o=reviewOrderOf(no);
   if(!o){ toast('Заказ №'+no+' не найден в базе', 'error'); return; }
   const email=orderEmailOf(o);
-  if(!email){ toast('У заказа нет почты клиента — остаётся звонок', 'error'); return; }
+  if(!email){
+    /* 208: нет почты — записываем ответ (для звонка) в карточку отзыва */
+    openModal('↩ Ответ на отзыв · заказ №'+no, escHtml((o&&o.name)||'клиент')+(o&&o.phone?' · '+escHtml(o.phone):''),
+      '<div class="tsub" style="margin-bottom:8px;">У клиента нет e-mail — запишите ответ и перезвоните. Текст сохранится в карточке отзыва.</div>'+
+      '<textarea class="input-mini" id="rvNoteText" rows="5" style="width:100%;font-family:inherit;" placeholder="Например: связались с клиентом, извинились, предложили бесплатную поклейку стекла…"></textarea>',
+      [
+        {label:'Сохранить ответ', cls:'btn-primary', action:()=>{
+          const t=(document.getElementById('rvNoteText').value||'').trim();
+          if(!t){ toast('Введите текст ответа','error'); return; }
+          const notes=reviewNotes();
+          notes[no]=Object.assign({}, notes[no]||{}, {handled:1, at:new Date().toISOString(),
+            by:(typeof currentEmployeeName==='function'?currentEmployeeName():'')||(ROLES[STATE.role]&&ROLES[STATE.role].label)||STATE.role, reply:t});
+          try{ lsSave(); cloudPushNow(); }catch(e){}
+          toast('Ответ записан. Перезвоните клиенту.','success');
+          openClientReviewsModal();
+        }},
+        {label:'← К оценкам', cls:'btn', action:openClientReviewsModal},
+      ]);
+    return;
+  }
   openModal('✉ Письмо клиенту · заказ №'+no, escHtml((o.name||'')+' · '+email),
     '<label class="tsub">Тема письма'+
       '<input class="input-mini" id="rvRepSubject" value="IMAGNATE — приносим извинения за заказ №'+escHtml(no)+'" style="width:100%;display:block;margin-top:3px;margin-bottom:8px;"></label>'+
@@ -6609,7 +6629,7 @@ function openOrderSettingsModal(){
       '<div class="field" style="margin:6px 0;"><label>Токен базы сайта (Strapi API Token) — сейчас: '+(apiToken()?'<b style="color:var(--positive);">задан</b>':'<b style="color:var(--negative);">НЕ задан</b>')+'</label>'+
       '<input class="input-mini" id="setStrapiToken" type="password" style="width:100%;" placeholder="лучше задать STRAPI_API_TOKEN на Render — тогда нигде не вводится"></div>'
     :'')+
-    '<button class="btn btn-sm btn-danger" id="cleanStartBtn" type="button" style="margin:6px 0;">🧹 Чистый старт: удалить демо и загрузить реальные заказы с сайта</button>'+
+
     '<p class="tsub">Сотрёт демо-данные (заказы, заявки, клиенты, кассы, склад) и заполнит систему историей сайта: завершённые заказы лягут в архив, свежие — в работу, клиенты соберутся из заказов. Команда, график и настройки останутся. Отменить нельзя.</p>'+
     (tech?'<div class="toggle-row" style="margin:8px 0;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="setCloudSync" '+(DATA.settings.cloudSyncEnabled===false?'':'checked')+'> Облачная копия базы на сервере (Render) — связывает магазин и дом, побеждает свежий снимок</label></div>':'')+
     '<p class="tsub">Если ERP открыта прямо с сервера-компа (адрес с :8787) — ничего указывать не нужно, найдётся сам. Статус: '+(window._localSync&&window._localSync.status==='ok'?'<b style="color:var(--positive);">подключён</b>':(localSyncUrl()?'<b style="color:var(--warning);">'+escHtml(window._localSync.status||'')+'</b>':'не используется'))+'</p>';
@@ -10038,7 +10058,7 @@ function renderWarehouse(c){
     ((isBossRole()||['senior','seller'].includes(STATE.role))?'<button class="btn btn-sm btn-primary" id="whInventoryBtn">📦 Инвентаризация</button>':'')+
     (isBossRole()?'<button class="btn btn-sm" id="whClearBtn" title="Очистить ТОЛЬКО открытую вкладку — остальные блоки склада не трогаются">🧹 Очистить: '+(WH_TABS[STATE.whFilters.tab]||'вкладку')+'</button>':'')+
     (function(){ try{ const l=JSON.parse(localStorage.getItem('erp_wh_lost')||'[]'); return (isBossRole()&&l.length)?'<button class="btn btn-sm btn-primary" id="whRestoreBtn" style="border-color:var(--warning);">♻ Вернуть пропавшие сканы ('+l.length+')</button>':''; }catch(e){ return ''; } })()+
-    '<button class="btn btn-sm btn-primary" id="whReceiveBtn" style="margin-left:8px;">'+ic('truck')+' Принять поставку</button>'+
+
     '<input class="input-mini" id="whSearch" placeholder="Поиск по модели / IMEI" value="'+STATE.whFilters.q+'" style="width:240px;margin-left:8px;"></div>';
 
   const items=DATA.warehouse[STATE.whFilters.tab].filter(it=>{
@@ -10796,6 +10816,7 @@ function renderPurchase(c){
             (r.lastCheckedAt?' · последняя проверка: '+r.lastCheckedAt:'')+'</div>'+
             '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">'+
               '<button class="btn btn-sm btn-primary" data-pre-found="'+r.id+'">Найден — указать цену</button>'+
+              '<button class="btn btn-sm" data-store-found="'+r.id+'" title="Товар оказался на точке">🏬 Нашли на точке</button>'+
               '<button class="btn btn-sm" data-pre-checked="'+r.id+'">Проверил сегодня, нет</button>'+
             '</div>';
         } else {
@@ -10829,6 +10850,7 @@ function renderPurchase(c){
     if(r){ r.lastCheckedAt=DATA.today; toast('Отмечено: проверено '+DATA.today, 'info'); renderPurchase(c); }
   }));
   c.querySelectorAll('[data-pre-found]').forEach(el=>el.addEventListener('click',()=>openPreorderFoundModal(parseInt(el.dataset.preFound), c)));
+  c.querySelectorAll('[data-store-found]').forEach(el=>el.addEventListener('click',()=>openStoreFoundModal(parseInt(el.dataset.storeFound), c)));
   c.querySelectorAll('[data-set-cost]').forEach(el=>el.addEventListener('click',()=>openSetPurchasePriceModal(parseInt(el.dataset.setCost), c)));
 
   wireSuppliersTab(c);
@@ -10984,9 +11006,11 @@ function openSetPurchasePriceModal(reqId, c){
 
 function purchaseActions(r){
   const role=ROLES[STATE.role];
-  if(r.status==='new') return '<button class="btn btn-sm btn-primary" data-pr-action="send" data-pr-id="'+r.id+'">Отправить в точку сбора</button>';
-  if(r.status==='sent') return role.canPriceCollection? '<button class="btn btn-sm btn-primary" data-pr-action="price" data-pr-id="'+r.id+'">Указать закупочную цену</button>' : '<span class="tsub">'+ic('alert')+' Ожидает цену от сборщика</span>';
-  if(r.status==='priced') return role.canConfirmPurchase? '<button class="btn btn-sm btn-primary" data-pr-action="confirm" data-pr-id="'+r.id+'">Подтвердить закуп</button>' : '<span class="tsub">'+ic('alert')+' Ожидает подтверждения магазина</span>';
+  const storeFound=['new','sent','priced'].includes(r.status)
+    ? ' <button class="btn btn-sm" data-pr-action="storefound" data-pr-id="'+r.id+'" title="Товар оказался на точке — закрыть заявку без сборщика">🏬 Нашли на точке</button>' : '';
+  if(r.status==='new') return '<button class="btn btn-sm btn-primary" data-pr-action="send" data-pr-id="'+r.id+'">Отправить в точку сбора</button>'+storeFound;
+  if(r.status==='sent') return (role.canPriceCollection? '<button class="btn btn-sm btn-primary" data-pr-action="price" data-pr-id="'+r.id+'">Указать закупочную цену</button>' : '<span class="tsub">'+ic('alert')+' Ожидает цену от сборщика</span>')+storeFound;
+  if(r.status==='priced') return (role.canConfirmPurchase? '<button class="btn btn-sm btn-primary" data-pr-action="confirm" data-pr-id="'+r.id+'">Подтвердить закуп</button>' : '<span class="tsub">'+ic('alert')+' Ожидает подтверждения магазина</span>')+storeFound;
   return '<span class="tsub">'+ic('check')+' Закуп подтверждён</span>';
 }
 
@@ -11006,7 +11030,33 @@ function handlePurchaseAction(action, id){
     r.eta=d.toLocaleDateString('ru-RU');
     renderPurchase(document.getElementById('pageContent'));
     toast('Закуп подтверждён. Ожидаемое поступление: '+r.eta, 'success');
+  } else if(action==='storefound'){
+    openStoreFoundModal(id, document.getElementById('pageContent'));
   }
+}
+function openStoreFoundModal(reqId, c){
+  const r=DATA.purchaseRequests.find(x=>x.id===reqId);
+  if(!r) return;
+  const body='<div class="tsub" style="margin-bottom:10px;">Товар оказался на точке — заявка закроется без сборщика. Укажите закупочную цену (0 — если это уже наш товар со склада). Связанный заказ поедет к согласованию цены и выдаче.</div>'+
+    '<div class="field-grid">'+field('Товар', r.item)+field('Количество', String(r.qty))+'</div>'+
+    '<div class="field"><label>Закупочная цена за единицу, ₽ (0 — уже наш)</label><input class="input-mini" id="sfPrice" type="number" min="0" style="width:100%;" value="'+(r.purchasePrice||0)+'"></div>';
+  openModal('🏬 Нашли на точке — заявка №'+r.id,'',body,[{label:'Закрыть заявку', cls:'btn-primary', action:()=>{
+    const price=Math.max(0, parseFloat(document.getElementById('sfPrice').value)||0);
+    r.purchasePrice=price; if(price) r.price=price;
+    r.boughtFrom='Найдено на точке';
+    r.status='confirmed'; r.eta=DATA.today; r.foundAtStore=true;
+    if(r.linkedOrderId){
+      const o=findOrder(r.linkedOrderId);
+      if(o && o.status==='preorder'){
+        setOrderStatus(o,'awaiting_stock');
+        (o.callLog=o.callLog||[]).unshift({date:DATA.today, time:nowTime(), action:'note', comment:'Товар найден на точке. Согласуйте цену с клиентом.'});
+        if(o.priceLock) o.priceLock.status='pending';
+      }
+    }
+    try{ fullSave(); cloudPushNow(); }catch(e){}
+    closeModal(); renderPurchase(c);
+    toast('Заявка №'+r.id+' закрыта: товар найден на точке.','success');
+  }}]);
 }
 
 /* ============================================================
@@ -11426,7 +11476,7 @@ const ARCHIVE_STAGES=[
 ];
 const ALL_STAGES=[...LEAD_STAGES, ...ARCHIVE_STAGES];
 function stageById(id){ return ALL_STAGES.find(s=>s.id===id); }
-function isArchived(l){ return l.stage==='won' || l.stage==='lost'; }
+function isArchived(l){ return l.stage==='won' || l.stage==='lost' || l.archived===true; }
 
 function channelBadge(ch){
   const c=CHANNELS[ch]||CHANNELS.phone;
@@ -12904,7 +12954,10 @@ function renderCrm(c){
   let activeLeads=all.filter(l=>!isArchived(l));
   /* Продавец видит «Новый заказ» (все) + «Общение» и «В ожидании» (только своих клиентов) */
   if(!managerCrm) activeLeads=activeLeads.filter(l=> l.stage==='new' || (['working','waiting'].includes(l.stage) && l.owner===meCrm));
-  const archived=all.filter(isArchived);
+  /* 207: архив руководителя — по ВСЕМ точкам (каналы/сайт/импорт падают в главную) */
+  const archived = managerCrm
+    ? (function(){ const seen=new Set(), out=[]; try{ Object.values(STORE_DATA).forEach(d=>((d&&d.leads)||[]).forEach(l=>{ if(isArchived(l) && !seen.has(l.id)){ seen.add(l.id); out.push(l); } })); }catch(e){ return all.filter(isArchived); } return out; })()
+    : all.filter(isArchived);
 
   if(!STATE.crmView) STATE.crmView='kanban';
   if(!managerCrm && STATE.crmView==='archive') STATE.crmView='kanban';   /* архив — только владельцу/старшему */
@@ -15022,6 +15075,45 @@ function renderCourierAnalytics(c, me){
 /* ══════════ ВЫРАБОТКА / РЕЙТИНГ МЕНЕДЖЕРОВ (07.08) ══════════
    Полную (деньги, прибыль) видят ТОЛЬКО владелец и директора; сотрудники —
    рейтинг «место + очки», без чужих сумм. Данные — из журнала продаж. */
+/* ПРОДАЖИ ИЗ ЗАКАЗОВ (210): все завершённые заказы месяца по точкам —
+   считаем прямо по заказам, не завися от журнала продаж. */
+function orderCloseDate(o){
+  const raw=String(o.closedAt||o.issuedAt||o.date||'');
+  const m=raw.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+  return m?{d:+m[1], mo:+m[2]-1, y:+m[3]}:null;
+}
+function monthlyOrderSales(storeIds){
+  const now=(typeof todayDate==='function'?todayDate():new Date());
+  const mm=now.getMonth(), yy=now.getFullYear();
+  let count=0, revenue=0, margin=0;
+  (storeIds||Object.keys(STORE_DATA)).forEach(sid=>{
+    const d=STORE_DATA[sid]; if(!d) return;
+    (d.orders||[]).forEach(o=>{
+      if(o.status!=='done') return;
+      const cd=orderCloseDate(o); if(!cd || cd.mo!==mm || cd.y!==yy) return;
+      count++;
+      let sum=0; try{ sum=orderPayablePrice(o); if(!isFinite(sum)) sum=0; }catch(e){ sum=0; }
+      revenue+=sum;
+      /* себестоимость: сумма закупок привязанных единиц (если известна) */
+      let cost=0; (o.items||[]).forEach(it=>{ if(it.imei && it.imei!=='—'){ const u=[...(d.warehouse.tech||[]),...(d.warehouse.tradein||[])].find(x=>x.imei===it.imei); if(u&&u.purchase) cost+=u.purchase; } });
+      margin+=Math.max(0, sum-cost);
+    });
+  });
+  return {count, revenue, margin, avg:count?Math.round(revenue/count):0};
+}
+function monthlySalesHTML(storeIds){
+  const now=(typeof todayDate==='function'?todayDate():new Date());
+  const monthName=(MONTH_NAMES[now.getMonth()]||'')+' '+now.getFullYear();
+  const s=monthlyOrderSales(storeIds);
+  return '<div class="section"><div class="section-title" style="margin-bottom:6px;">Продажи · '+monthName+'</div>'+
+    '<div class="tsub" style="margin-bottom:10px;">Завершённые заказы месяца (сайт + магазин), по выбранным точкам.</div>'+
+    '<div class="grid grid-4">'+
+      kpiPlain('Продаж за месяц', String(s.count), 'orders')+
+      kpiPlain('Выручка', rub(s.revenue), 'finance')+
+      kpiPlain('Средний чек', rub(s.avg), 'wallet')+
+      kpiPlain('Прибыль (оценка)', rub(s.margin), 'analytics')+
+    '</div></div>';
+}
 function empSalesStats(){
   const now=(typeof todayDate==='function'?todayDate():new Date());
   const mm=now.getMonth(), yy=now.getFullYear();
@@ -15084,6 +15176,7 @@ function empRatingHTML(){
 function renderAnalytics(c){
   if(STATE.role==='courier'){ const me=currentEmployee(); if(me){ renderCourierAnalytics(c, me); return; } }
   let html='';
+  try{ if(isBossRole()){ const sids=(typeof STORES!=='undefined')?STORES.map(x=>x.id).filter(id=>STORE_DATA[id]):Object.keys(STORE_DATA); html+=monthlySalesHTML((STATE.combinedStores&&STATE.combinedStores.size)?[...STATE.combinedStores]:sids); } }catch(e){}
   try{ html += isBossRole()? empOutputFullHTML() : empRatingHTML(); }catch(e){}
 
   /* Сравнение точек — только для владельца.
@@ -15240,6 +15333,8 @@ function renderCustomers(c){
     if(cust.name.toLowerCase().includes(q)) return true;
     if(cust.email && cust.email.toLowerCase().includes(q)) return true;
     if(qDigits.length>=3 && cust.phones.some(p=>p.replace(/\D/g,'').includes(qDigits))) return true;
+    if((cust.socials||[]).some(sx=>String(sx.handle||'').toLowerCase().includes(q))) return true;
+    if((cust.channels||[]).some(ch=>String(ch).toLowerCase().includes(q))) return true;
     return false;
   });
 
@@ -15250,12 +15345,15 @@ function renderCustomers(c){
     list.forEach(cust=>{
       const st=customerStats(cust);
       const initials=cust.name.split(' ').slice(0,2).map(p=>p[0]).join('');
+      const vip=(cust.purchaseCount>=3)||(cust.totalSpent>=300000);
+      const contact=(cust.phones&&cust.phones.length)?cust.phones.join(', '):((cust.socials&&cust.socials[0])?cust.socials.map(x=>x.handle).join(', '):'без контакта');
+      const chans=(cust.channels&&cust.channels.length)?cust.channels.map(x=>'<span class="badge b-grey" style="font-size:9.5px;padding:1px 6px;">'+escHtml(x)+'</span>').join(' '):'';
       html+='<div class="cust-card" data-cust="'+cust.id+'">'+
         '<div class="cust-avatar">'+initials+'</div>'+
-        '<div class="cust-meta"><div class="nm">'+cust.name+(cust.merged?'<span class="merge-pill">'+ic('mail')+' объединён по e-mail</span>':'')+'</div>'+
-        '<div class="sub"><span>'+ic('phone')+' '+cust.phones.join(', ')+'</span><span>'+(cust.email||'без e-mail')+'</span>'+
-        '<span class="'+(cust.consent?'consent-yes':'consent-no')+'">'+(cust.consent?'✓ согласие на рассылку':'нет согласия')+'</span></div></div>'+
-        '<div class="cust-stat"><b>'+rub(st.total)+'</b><span>'+st.count+' заказ(а) · '+st.last+'</span></div>'+
+        '<div class="cust-meta"><div class="nm">'+escHtml(cust.name)+(vip?' <span class="ld-vip" style="font-size:9.5px;padding:1px 6px;">★ Постоянный</span>':'')+'</div>'+
+        '<div class="sub"><span>'+ic('phone')+' '+escHtml(contact)+'</span>'+(chans?'<span>'+chans+'</span>':'')+
+        (cust.repairsCount?'<span>🔧 ремонтов: '+cust.repairsCount+'</span>':'')+'</div></div>'+
+        '<div class="cust-stat"><b>'+rub(cust.totalSpent||st.total)+'</b><span>'+(cust.purchaseCount!=null?cust.purchaseCount:st.count)+' покупок</span></div>'+
       '</div>';
     });
   }
@@ -16208,7 +16306,7 @@ function controlPanelHTML(){
   people.forEach(e=>{ const b=roleBucket(e.role); if(actual[b]!=null) actual[b]++; });
 
   let html='';
-  if(STATE.role!=='admin'){   /* нормы смен — планирование персонала, админу не показываем */
+  if(false){   /* 205: норма людей на смене убрана */
     html+='<div class="section"><div class="section-head"><div class="section-title">Норма людей на смене</div>'+
       '<input class="input-mini" id="normDateInp" style="width:150px;" value="'+key+'" placeholder="ДД.ММ.ГГГГ"></div>';
     html+='<div class="card"><p class="tsub" style="margin-bottom:10px;">Сколько человек каждой роли должно выйти '+key+'. Система сравнивает с фактически назначенными в календаре.</p>';
@@ -16246,11 +16344,6 @@ function controlPanelHTML(){
 
   /* --- 3. Сотрудники и доступы (справочник + точки доступа) --- */
   if(isBossRole()){
-    html+='<div class="card" style="margin-bottom:14px;border-color:var(--warning);">'+
-      '<div class="kpi-label">🧹 Демо-остатки</div>'+
-      '<div class="tsub" style="margin-top:4px;line-height:1.6;">Одним нажатием убрать всё демо, что могло остаться в рабочей базе: '+
-      'демо-сотрудников Сергея Т. и Марата Б. (мастер Виктор остаётся — он ведёт Сервис), демо-уведомления и демо-идеи. Реальные данные не трогаются.</div>'+
-      '<button class="btn btn-sm btn-danger" id="demoDetoxBtn" style="margin-top:10px;">Убрать демо-остатки</button></div>';
   if(STATE.role==='owner'){
     html+='<div class="card" style="margin-top:12px;"><div class="kpi-label">🏬 Направления точек</div>'+
       '<div class="tsub" style="margin-top:4px;">Соберите направление точки из модулей — любая комбинация. Меню и склад у сотрудников точки подстроятся сами. Всегда остаются: Главная, Склад, Смены, Управление, Финансы и Расходы.</div>'+
@@ -16264,19 +16357,7 @@ function controlPanelHTML(){
         '</div>';
       }).join('')+
     '</div>';
-    html+='<div class="card" style="margin-top:12px;"><div class="kpi-label">☁️ Облачная база</div>'+
-      '<div class="tsub" style="margin-top:4px;line-height:1.7;">Паспорт базы: <span class="mono">'+escHtml((typeof erpBaseIdGet==='function'&&erpBaseIdGet())||'ещё не присвоен')+'</span>'+
-      (window._demoBorn?' · <b style="color:var(--warning);">эта копия рождена из демо</b>':'')+
-      '<br>Если на каком-то компьютере оказались не те данные: «Назначить главной» нажимается на компе с ПРАВИЛЬНЫМИ данными — остальные примут её сами. '+
-      '«Принять заново» нажимается на компе с мусором. «История облака» — откат всей облачной базы к одному из прошлых снимков (сервер хранит до 20, шаг 30 минут).</div>'+
-      '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">'+
-        '<button class="btn btn-sm btn-danger" id="cloudMasterBtn">⚠ Назначить эту базу главной</button>'+
-        '<button class="btn btn-sm" id="cloudRepullBtn">⟳ Принять главную базу заново</button>'+
-        '<button class="btn btn-sm" id="cloudHistBtn">🕘 История облака</button>'+
-        '<button class="btn btn-sm" id="cloudBackupBtn">💾 Скачать бэкап</button>'+
-        '<button class="btn btn-sm" id="cloudRestoreBtn">📥 Восстановить из файла</button>'+
-        '<input type="file" id="cloudRestoreFile" accept=".json,application/json" style="display:none;">'+
-      '</div></div>';
+    /* 205: блок «Облачная база» убран — система устоялась */
     (function(){
       const lastA=((chHomeStore().dailyAudits)||[])[0];
       html+='<div class="card" style="margin-top:12px;"><div class="kpi-label">🧮 Ежедневная сверка: склад · кассы · заказы</div>'+
@@ -16354,19 +16435,7 @@ function controlPanelHTML(){
       '</div></div></div>';
   }
 
-  /* --- Чистый старт данных (08.08): сервер авторитетно чистит базу до нуля --- */
-  if(isBossRole()){
-    html+='<div class="section"><div class="section-head"><div class="section-title">🧹 Чистый старт данных</div></div>'+
-      '<div class="placeholder-card" style="border-style:dashed;border-color:rgba(255,90,90,.4);background:rgba(255,90,90,.05);">'+
-      '<span class="badge b-cancel">Только владелец/директор · необратимо</span>'+
-      '<b>Очистить базу и начать с настоящего</b>'+
-      '<p>Сервер очищает ВСЁ содержимое облачной базы: заказы, заявки, склад, кассы, сервис — и протухшее, и демо. После перезагрузки база наполняется только настоящим: свежий парсинг сайта принесёт заказы с ПРАВИЛЬНЫМИ статусами (закрытые лягут закрытыми), воронка возьмёт живые диалоги за неделю, склад забивается сканером с нуля. Настройки, сотрудники и подключения сохраняются.</p>'+
-      '<p style="color:var(--negative);margin:0;"><b>Отменить нельзя.</b> Перед запуском убедитесь, что сайт подключён (иначе заказам неоткуда будет прийти).</p>'+
-      '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;">'+
-        '<button class="btn btn-sm btn-danger" id="prodStartBtn">🧹 Очистить и начать с настоящего</button>'+
-      '</div></div></div>';
-  }
-
+  /* 205: «Чистый старт данных» убран — система устоялась */
   return html;
 }
 
@@ -16945,9 +17014,13 @@ function renderManage(c){
 function renderTeam(c){
   try{ ensureShiftData(); }catch(e){}
   const isOwner=isBossRole()||STATE.role==='admin';   /* админ управляет командой, ролями и графиком */
+  /* МОСТ (204): собрать команду из учёток и убрать демо */
+  const zvRebuildBtn = (window.ZENVOX_GATE && isOwner && typeof window.zvRebuildTeam==='function')
+    ? '<div class="card" style="margin-bottom:12px;border-color:var(--accent);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><div class="tsub" style="line-height:1.5;">Команда и смены строятся из учёток (логин-паролей). Демо-сотрудники — служебные, для боевой работы их можно убрать.</div><button class="btn btn-sm btn-primary" id="zvRebuildTeamBtn">🔄 Собрать команду из учёток (убрать демо)</button></div>'
+    : '';
   const isManager=isBossRole()||STATE.role==='senior';
   const me=currentEmployee();
-  let html='';
+  let html=zvRebuildBtn;
 
   if(me){
     const st=DATA.shiftStatus[me.id]||{clockedIn:false};
@@ -17048,6 +17121,7 @@ function renderTeam(c){
     (isOwner?'<div class="section-link" style="color:var(--text-3);">'+ic('lock')+' Переключатели доступа ниже — демонстрация интерфейса, пока не привязаны к отдельным учётным записям</div>':'')+
   '</div>';
 
+  setTimeout(()=>{ const rb=document.getElementById('zvRebuildTeamBtn'); if(rb) rb.addEventListener('click', ()=>{ if(confirm('Собрать команду из учёток и убрать демо-сотрудников? Реальные логины появятся в графике, демо-люди и их смены удалятся.')) window.zvRebuildTeam(); }); }, 60);
   DATA.employees.filter(e=>!e.support).forEach(emp=>{
     const status=attendanceStatus(emp);
     const openDebts = emp.courierType==='gig' ? DATA.courierDebts.filter(d=>d.courierId===emp.id && d.status==='open') : [];
@@ -23414,7 +23488,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-202 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-210 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -23731,38 +23805,88 @@ function customerUpsertFromOrder(o){
   }catch(e){ return null; }
 }
 function customersRebuildFromOrders(){
-  /* один проход по заказам (быстро даже на тысячах) — вызывается автоматически */
+  /* ЕДИНАЯ БАЗА (209): собираем клиента из ВСЕХ источников и точек.
+     Ключ склейки — телефон; где телефона нет — ник канала. */
   if(!Array.isArray(DATA.customers)) DATA.customers=[];
-  const groups=new Map();
-  (DATA.orders||[]).forEach(o=>{
-    const p=normPhone(o.phone||'');
-    if(p.length<10) return;
-    let g=groups.get(p);
-    if(!g){ g={orders:[], done:0, total:0, name:'', email:'', raw:String(o.phone).slice(0,30)}; groups.set(p,g); }
-    g.orders.push(o.id);
-    if(o.name && o.name!=='Без имени') g.name=String(o.name).slice(0,80);
-    if(o.email && o.email!=='-' && !g.email) g.email=o.email;
-    if(o.status==='done'){
-      g.done++;
-      try{ const v=orderPayablePrice(o); if(isFinite(v)) g.total+=v; }catch(e){}
-    }
+  const CH=(typeof CHANNELS!=='undefined')?CHANNELS:{};
+  const groups=new Map();   // key -> агрегат
+  const keyByPhone=new Map(), keyByHandle=new Map();
+  const pickKey=(phone, handle)=>{
+    const p=normPhone(phone||'');
+    if(p.length>=10){ if(keyByPhone.has(p)) return keyByPhone.get(p); const k='p:'+p; keyByPhone.set(p,k); if(handle) keyByHandle.set(handle,k); return k; }
+    if(handle){ if(keyByHandle.has(handle)) return keyByHandle.get(handle); const k='h:'+handle; keyByHandle.set(handle,k); return k; }
+    return null;
+  };
+  const G=(key)=>{ let g=groups.get(key); if(!g){ g={orders:[], done:0, total:0, repairs:0, name:'', email:'', phone:'', channels:new Set(), socials:[]}; groups.set(key,g); } return g; };
+  Object.values(STORE_DATA).forEach(d=>{
+    /* заказы */
+    (d.orders||[]).forEach(o=>{
+      const key=pickKey(o.phone,''); if(!key) return;
+      const g=G(key); g.orders.push(o.id);
+      if(!g.phone && normPhone(o.phone).length>=10) g.phone=String(o.phone).slice(0,30);
+      if(o.name && o.name!=='Без имени') g.name=String(o.name).slice(0,80);
+      if(o.email && o.email!=='-' && !g.email) g.email=o.email;
+      g.channels.add(o.source==='site_api'||o.externalId&&String(o.externalId).indexOf('strapi')===0?'Сайт':'Магазин');
+      if(o.status==='done'){ g.done++; try{ const v=orderPayablePrice(o); if(isFinite(v)) g.total+=v; }catch(e){} }
+    });
+    /* оплаченные ремонты */
+    (d.service||[]).forEach(t=>{
+      if(!['done','archive'].includes(t.status)) return;
+      const key=pickKey(t.phone,''); if(!key) return;
+      const g=G(key); g.repairs++;
+      if(!g.phone && normPhone(t.phone).length>=10) g.phone=String(t.phone).slice(0,30);
+      if(t.client && !g.name) g.name=String(t.client).slice(0,80);
+      g.channels.add('Сервис');
+      const pay=(t.paidAmount!=null?t.paidAmount:(t.cost!=null?t.cost:((t.costLabor||0)+(t.costParts||0))))||0;
+      g.total+=pay; if(pay>0) g.done++;
+    });
+    /* б/у, проданный напрямую */
+    ((d.warehouse&&d.warehouse.tradein)||[]).forEach(u=>{
+      if(u.status!=='sold' || u.soldOrderId || !u.soldTo) return;
+      const key=pickKey(u.soldTo.phone,''); if(!key) return;
+      const g=G(key); g.done++; g.total+=(u.soldPrice||u.price||0); g.channels.add('Магазин');
+      if(!g.name && u.soldTo.name) g.name=String(u.soldTo.name).slice(0,80);
+    });
+    /* заявки каналов (Авито/ТГ/…): клиент есть, даже без покупки */
+    (d.leads||[]).forEach(l=>{
+      if(!l || !l.chatKey) return;
+      const handle=(typeof leadHandle==='function')?leadHandle(l):null;
+      const key=pickKey(l.contact, handle); if(!key) return;
+      const g=G(key);
+      if(l.name && !g.name) g.name=String(l.name).slice(0,80);
+      if(!g.phone && normPhone(l.contact).length>=10) g.phone=String(l.contact).slice(0,30);
+      const chLabel=(CH[l.channel]||{}).label||l.channel;
+      if(chLabel) g.channels.add(chLabel);
+      if(handle && !g.socials.some(x=>x.handle===handle)) g.socials.push({channel:l.channel, handle:handle});
+    });
   });
-  const byPhone=new Map();
-  DATA.customers.forEach(c=>(c.phones||[]).forEach(ph=>{ const p=normPhone(ph); if(p.length>=10 && !byPhone.has(p)) byPhone.set(p,c); }));
+  /* индекс существующих карточек по телефону и нику */
+  const byPhone=new Map(), byHandle=new Map();
+  DATA.customers.forEach(c=>{
+    (c.phones||[]).forEach(ph=>{ const p=normPhone(ph); if(p.length>=10 && !byPhone.has(p)) byPhone.set(p,c); });
+    (c.socials||[]).forEach(sx=>{ if(sx&&sx.handle && !byHandle.has(sx.handle)) byHandle.set(sx.handle,c); });
+  });
   let created=0, updated=0;
-  groups.forEach((g,p)=>{
-    let c=byPhone.get(p);
+  groups.forEach((g,key)=>{
+    const p=key.indexOf('p:')===0?key.slice(2):null;
+    const h=key.indexOf('h:')===0?key.slice(2):null;
+    let c=(p&&byPhone.get(p)) || (h&&byHandle.get(h)) || (g.socials[0]&&byHandle.get(g.socials[0].handle));
     if(!c){
       const nid=DATA.customers.reduce((m,x)=>Math.max(m, typeof x.id==='number'?x.id:0),0)+1;
-      c={id:nid, name:g.name||'Без имени', email:g.email||null, phones:[g.raw], consent:true, source:'Интернет-магазин', orders:[]};
-      DATA.customers.push(c); byPhone.set(p,c); created++;
+      c={id:nid, name:g.name||'Без имени', email:g.email||null, phones:[], socials:[], consent:true, source:'Общая база', orders:[]};
+      DATA.customers.push(c); created++;
     } else updated++;
     if(g.name) c.name=g.name;
     if(g.email && !c.email) c.email=g.email;
+    if(g.phone && !(c.phones||[]).some(x=>normPhone(x)===normPhone(g.phone))) (c.phones=c.phones||[]).push(g.phone);
+    g.socials.forEach(sx=>{ if(!(c.socials||[]).some(y=>y.handle===sx.handle)) (c.socials=c.socials||[]).push(sx); });
+    if(p) byPhone.set(p,c); g.socials.forEach(sx=>byHandle.set(sx.handle,c));
     if(!Array.isArray(c.orders)) c.orders=[];
     g.orders.forEach(id=>{ if(!c.orders.includes(id)) c.orders.push(id); });
     c.purchaseCount=g.done;
     c.totalSpent=Math.round(g.total);
+    c.repairsCount=g.repairs;
+    c.channels=[...g.channels];
   });
   return {created, updated};
 }
@@ -28010,7 +28134,114 @@ async function empQuickAdd(siteId, fio, alias, email, role, ownPass){
   const emp={id:'e2_'+Date.now(), siteId:siteId, alias:alias, email:email, fio:fio, birth:'', phone:'', role:role,
     salt:salt, passHash:await zvHashHex(pass, salt, 310000), iters:310000, tempPass:!ownPass, active:true, lastRecover:0};
   NET.staff2.push(emp); saveNet();
+  try{ zvSyncStaffToBase(false); }catch(e){}
   return {ok:true, alias:alias, pass:pass, emp:emp};
+}
+/* МОСТ УЧЁТКИ → БАЗА (204): сотрудники из логин-паролей появляются в
+   «Команде» и «Смены» реальными людьми. График ручной — владелец ставит дни. */
+function zvStaffRoleToBase(role){
+  const r=String(role||'').toLowerCase();
+  if(/директор/.test(r)) return 'Директор';
+  if(/старший/.test(r)) return 'Старший менеджер';
+  if(/мастер/.test(r)) return 'Мастер';
+  if(/курьер/.test(r)) return 'Курьер';
+  if(/сборщик|ответственн/.test(r)) return 'Сборщик';
+  return 'Менеджер';
+}
+function zvStaffBaseId(emp){
+  const num=parseInt(String(emp.id).replace(/\D/g,'').slice(-6)||'0',10)||0;
+  return 90000+num;
+}
+function zvSyncStaffToBase(purge){
+  if(typeof STORE_DATA==='undefined') return {ok:false};
+  let added=0, removed=0;
+  const activeIds=new Set();
+  (NET.staff2||[]).filter(e=>e.active).forEach(emp=>{
+    const sid=(STORE_DATA[emp.siteId]?emp.siteId:Object.keys(STORE_DATA)[0]);
+    const d=STORE_DATA[sid]; if(!d) return;
+    d.employees=d.employees||[];
+    const baseId=zvStaffBaseId(emp);
+    activeIds.add(baseId);
+    const role=zvStaffRoleToBase(emp.role);
+    let be=d.employees.find(x=>x.id===baseId);
+    if(!be){
+      be={id:baseId, _zvStaff:true, name:(emp.fio||emp.alias), role:role, storeId:sid,
+          unit:'shop_c', phone:emp.phone||'', baseSalary:null,
+          responsibilities:'Учётка Zenvox ('+emp.alias+')',
+          schedule:{manual:true, hours:'10:00–21:00'},
+          extraAccess:{expensesReview:false, analytics:false}};
+      d.employees.push(be); added++;
+    } else {
+      be._zvStaff=true; be.name=(emp.fio||emp.alias); be.role=role; be.storeId=sid;
+      if(emp.phone) be.phone=emp.phone;
+    }
+  });
+  if(purge){
+    /* убрать демо: всех, кто не из учёток и не владелец/сам-админ */
+    Object.values(STORE_DATA).forEach(d=>{
+      if(!Array.isArray(d.employees)) return;
+      const keep=[], drop=[];
+      d.employees.forEach(e=>{
+        if(e._zvStaff || /владелец/i.test(e.role||'')) keep.push(e); else drop.push(e);
+      });
+      if(drop.length){
+        removed+=drop.length;
+        d.employees=keep;
+        const dropIds=new Set(drop.map(e=>e.id));
+        try{ Object.values(d.shiftAssignments||{}).forEach(day=>{
+          Object.keys(day||{}).forEach(k=>{ if(Array.isArray(day[k])) day[k]=day[k].filter(x=>!dropIds.has((x&&typeof x==='object')?x.id:x)); });
+        }); }catch(e){}
+      }
+    });
+  }
+  try{ if(typeof lsSave==='function') lsSave(); }catch(e){}
+  try{ if(typeof cloudPushNow==='function') cloudPushNow(); }catch(e){}
+  return {ok:true, added:added, removed:removed};
+}
+/* БОЕВЫЕ УЧЁТКИ (205): посев реальных сотрудников один раз (флаг _realSeed) */
+async function zvSeedRealStaff(){
+  if(NET._realSeed205) return;
+  const site=(typeof STORES!=='undefined' && STORES[0] && STORES[0].id) || 'store_lunnaya';
+  const list=[
+    ['Вячеслав','vyacheslav','nvceB6k2pc','Продавец'],
+    ['Владислав','vladislav','i5KqM3t6PP','Продавец'],
+    ['Дарья','darya','wqKPZrU7FA','Продавец'],
+    ['Алексей','alexey','4DdhUGJceV','Продавец'],
+    ['Иван','ivan','xQir4p2eg7','Продавец'],
+    ['Леонид','leonid','MJk3MnT7CV','Директор'],
+    ['Евгений','evgeniy','bAk4jxiy8Q','Мастер'],
+  ];
+  for(const [fio,alias,pass,role] of list){
+    if((NET.staff2||[]).some(x=>x.alias.toLowerCase()===alias)) continue;
+    try{ await empQuickAdd(site, fio, alias, '', role==='Директор'?'Директор':(role==='Мастер'?'Мастер':'Продавец'), pass); }catch(e){}
+  }
+  NET._realSeed205=1; saveNet();
+}
+window.zvRebuildTeam=function(){
+  const res=zvSyncStaffToBase(true);
+  try{ toast('Команда собрана из учёток: добавлено '+res.added+', убрано демо '+res.removed+'. Расставьте смены на нужные дни.','success'); }catch(e){}
+  try{ if(typeof renderPage==='function') renderPage(); }catch(e){}
+};
+/* РОЛЬ В ЕРП (203): сотрудник входит в свою точку под своей ролью */
+function empApplyErpRole(emp){
+  try{
+    const r=String(emp.role||'').toLowerCase();
+    let key='seller';
+    if(/директор/.test(r)) key=(emp.siteId==='store_kashirka')?'director2':'director';
+    else if(/старший/.test(r)) key='senior';
+    else if(/мастер/.test(r)) key='master';
+    else if(/курьер/.test(r)) key='courier';
+    else if(/сборщик|ответственн/.test(r)) key='collector';
+    if(typeof STORE_DATA!=='undefined' && STORE_DATA[emp.siteId]){ STATE.activeStoreId=emp.siteId; DATA=STORE_DATA[emp.siteId]; }
+    setRole(key);
+    /* имя сотрудника — в журналы базы */
+    try{
+      const base=(DATA.employees||[]).find(x=>x.name===emp.fio || x.name===emp.alias);
+      if(base) STATE.currentEmpId=base.id;
+      window._zvStaffName=emp.fio||emp.alias;
+    }catch(e){}
+    try{ renderSidebar(); renderPage(); updateStoreSelector(); }catch(e){}
+  }catch(e){}
 }
 /* СМЕНА ДОСТУПА (202): владелец меняет псевдоним и выдаёт новый пароль */
 async function empSetAccess(staffId, newAlias, newPass){
@@ -28724,6 +28955,24 @@ async function zvSubmitCreds(){
     if(deviceIsAlive() && NET.deviceSession.storeId===storeMatch.storeId){ empShowLogin(); }
     else { deviceProceedAfterStoreAuth(storeMatch); }
     return;
+  }
+  /* СОТРУДНИК (203): логин персонала — вход с любого устройства в свою точку */
+  const st2=NET.staff2.find(x=>x.active && x.alias.toLowerCase()===String(L).trim().toLowerCase());
+  if(st2){
+    const res=await empLogin(L, P);
+    if(res.ok){
+      NET.tries={n:0, until:0};
+      try{ const bt=(typeof BUILD_TAG!=='undefined')?String(BUILD_TAG):''; if(bt) NET.sessionBuild=bt; }catch(e){}
+      saveNet();
+      zvHideLogin();
+      empApplyErpRole(res.emp);
+      toast('Смена открыта: '+(res.emp.fio||res.emp.alias)+' · '+res.emp.role,'success');
+      if(res.tempPass) setTimeout(()=>empForcePassPrompt(res.emp.id), 500);
+      empStartAutoLogoutWatch();
+      return;
+    }
+    if(/окно рабочего времени/.test(res.err||'')){ err.textContent=res.err; return; }
+    /* неверный пароль сотрудника — падаем в общий счётчик попыток ниже */
   }
   let kind=null, companyId=null, email=null;
   if(await zvVerifyAuth(NET.net, L, P)){ kind='supreme'; email=NET.net.email; }
@@ -30428,6 +30677,8 @@ if(NET.staffSession){ empStartAutoLogoutWatch(); }
 if(NET.ownerSession){ vdmShowCabinet(); }
 if(NET.deviceSession && deviceIsAlive()){ deviceEnsurePinBar(); deviceStartWatch(); }
 if(NET.session && NET.session.deviceId){ zvStartDeviceWatch(); }
+try{ zvSeedRealStaff(); }catch(e){}
+try{ zvSyncStaffToBase(false); }catch(e){}
 if(NET.session){ zvApplySession(); } else { zvShowLogin(); }
 /* МОСТ (190): автолок базы по простою вызывает единый вход Zenvox */
 window.zvIdleLock=function(){
