@@ -2294,7 +2294,7 @@ function updateStoreSelector(){
   const sel=document.getElementById('storeSelectorSelect');
   const wrap=document.getElementById('storeSelector');
   if(!sel||!wrap) return;
-  if(!isBossRole()){
+  if(STATE.role!=='owner'){   /* 211: список точек — только владельцу; директор заперт */
     wrap.style.display='none';
     return;
   }
@@ -2509,7 +2509,12 @@ function renderSidebar(){
             '</div>'+
             '<button class="btn btn-sm" id="pinLockBtn" style="width:100%;margin-top:6px;">🔒 Сменить пользователя</button>'+
           '</div>'
-        : '<div class="role-block">'+
+        : (window.ZENVOX_GATE
+          ? '<div class="role-block"><div class="role-current">'+
+              '<div class="role-avatar">'+role.short+'</div>'+
+              '<div class="role-meta"><b>'+escHtml((window._zvStaffName||currentEmployeeName())||role.label)+'</b><span>'+role.label+'</span></div>'+
+            '</div></div>'
+          : '<div class="role-block">'+
             '<div class="role-current">'+
               '<div class="role-avatar">'+role.short+'</div>'+
               '<div class="role-meta"><b>'+role.label+'</b><span>Демо-режим просмотра роли</span></div>'+
@@ -2518,7 +2523,7 @@ function renderSidebar(){
               Object.keys(ROLES).filter(k=>k!=='admin').map(k=>'<option value="'+k+'" '+(k===STATE.role?'selected':'')+'>'+ROLES[k].label+'</option>').join('')+
             '</select>'+
             '<div class="role-hint">Переключение роли меняет доступные разделы и видимость закупочных цен / прибыли — согласно правам из проектной документации.</div>'+
-          '</div>')+
+          '</div>'))+
     '</div>';
 
   sidebar.querySelectorAll('.nav-item').forEach(el=>{
@@ -10826,7 +10831,7 @@ function renderPurchase(c){
               (noPrice? '<div class="tsub" style="color:var(--warning);">'+ic('alert')+' Закупочная не указана</div>'
                       : (r.purchasePrice? '<div class="tsub">Закупка: '+rub(r.purchasePrice)+'</div>':''))+
             '</div>'+
-            purchaseActions(r)+
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end;">'+purchaseActions(r)+'</div>'+
           '</div>'+
           (r.eta? '<div class="kpi-delta up" style="margin-top:10px;">'+ic('truck')+' Ожидаемое поступление: '+r.eta+'</div>' : '')+
           (r.status==='cancelled'&&r.cancelReason? '<div class="tsub" style="margin-top:8px;">'+escHtml(r.cancelReason)+'</div>' : '');
@@ -23488,7 +23493,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-210 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-211 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -30677,8 +30682,17 @@ if(NET.staffSession){ empStartAutoLogoutWatch(); }
 if(NET.ownerSession){ vdmShowCabinet(); }
 if(NET.deviceSession && deviceIsAlive()){ deviceEnsurePinBar(); deviceStartWatch(); }
 if(NET.session && NET.session.deviceId){ zvStartDeviceWatch(); }
-try{ zvSeedRealStaff(); }catch(e){}
-try{ zvSyncStaffToBase(false); }catch(e){}
+(async()=>{
+  try{ await zvSeedRealStaff(); }catch(e){}
+  /* 211: реальные заведены → демо-люди и старый график уходят сами (один раз) */
+  try{
+    const hasReal=(NET.staff2||[]).some(x=>x.active);
+    const purge=hasReal && !NET._demoPurged211;
+    zvSyncStaffToBase(purge);
+    if(purge){ NET._demoPurged211=1; saveNet(); }
+  }catch(e){}
+  try{ if(typeof renderSidebar==='function') renderSidebar(); }catch(e){}
+})();
 if(NET.session){ zvApplySession(); } else { zvShowLogin(); }
 /* МОСТ (190): автолок базы по простою вызывает единый вход Zenvox */
 window.zvIdleLock=function(){
