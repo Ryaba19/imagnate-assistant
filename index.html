@@ -1960,7 +1960,7 @@ const ROLES = {
   admin:{label:'Админ', short:'АД', menu:['dashboard','connections','orders','manage','team','tasks','docs'], seePurchase:false, seeProfit:false, warehouseTabs:[], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
   senior:{label:'Старший менеджер', short:'СМ', menu:['dashboard','crm','orders','warehouse','purchase','pricing','finance','expenses','analytics','tasks','team','manage','deliveries','docs'], seePurchase:true, seeProfit:true, warehouseTabs:['tech','tradein','accessories'], canApproveExpenses:false, canConfirmPurchase:true, canPriceCollection:true},
   seller:{label:'Менеджер', short:'МН', menu:['dashboard','crm','orders','warehouse','finance','expenses','tasks','team','docs'], seePurchase:false, seeProfit:false, warehouseTabs:['tech','tradein','accessories'], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
-  master:{label:'Мастер', short:'МС', menu:['dashboard','service','warehouse','expenses','tasks','team','docs'], seePurchase:false, seeProfit:false, warehouseTabs:['parts'], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
+  master:{label:'Мастер', short:'МС', menu:['dashboard','crm','service','warehouse','expenses','tasks','team','docs'], seePurchase:false, seeProfit:false, warehouseTabs:['parts'], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
   courier:{label:'Курьер (штатный)', short:'КУ', menu:['dashboard','deliveries','analytics','docs'], seePurchase:false, seeProfit:false, warehouseTabs:[], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:false},
   collector:{label:'Сборщик', short:'СБ', menu:['dashboard','purchase','team','docs'], seePurchase:true, seeProfit:false, warehouseTabs:[], canApproveExpenses:false, canConfirmPurchase:false, canPriceCollection:true},
 };
@@ -12693,6 +12693,13 @@ function importChannelMessages(list){
       }
       target.leads.unshift(l);
       added++;
+      /* 227: тема «Ремонт» → сразу мастеру: уведомление в его колокольчик */
+      if(l.topic==='repair' && !(oldMsg && window._chOldImport)){
+        try{
+          const m0=(target.employees||DATA.employees||[]).find(e=>e && /мастер/i.test(String(e.role||'')));
+          pushNotif(m0?m0.name:'Мастер', '🔧 Ремонтное обращение из '+((CHANNELS[l.channel]||{}).label||l.channel)+': '+(l.name||'клиент')+(l.item?' · '+l.item:'')+' — раздел «Заявки (CRM)»');
+        }catch(e){}
+      }
       channelHistoryMerge(l);   /* подтянуть в диалог всю прошлую переписку этого чата из архива на сервере */
       }
     }
@@ -13341,12 +13348,19 @@ function renderCrm(c){
   if(!STATE.seenLeadIds) STATE.seenLeadIds=new Set();
   all.forEach(l=>{ if(l.stage==='new' && !isArchived(l)) STATE.seenLeadIds.add(l.id); });
   let activeLeads=all.filter(l=>!isArchived(l));
+  /* 227: сервисные обращения — отдельная очередь мастера.
+     Мастер видит ТОЛЬКО тему «Ремонт»; продавцы ремонтные не видят вовсе;
+     владелец/директора/старший видят всё. */
+  const isMasterCrm=(STATE.role==='master');
+  if(isMasterCrm) activeLeads=activeLeads.filter(l=>l.topic==='repair');
+  else if(!managerCrm) activeLeads=activeLeads.filter(l=>l.topic!=='repair');
   /* Продавец видит «Новый заказ» (все) + «Общение» и «В ожидании» (только своих клиентов) */
   if(!managerCrm) activeLeads=activeLeads.filter(l=> l.stage==='new' || (['working','waiting'].includes(l.stage) && l.owner===meCrm));
   /* 207: архив руководителя — по ВСЕМ точкам (каналы/сайт/импорт падают в главную) */
-  const archived = managerCrm
+  let archived = managerCrm
     ? (function(){ const seen=new Set(), out=[]; try{ Object.values(STORE_DATA).forEach(d=>((d&&d.leads)||[]).forEach(l=>{ if(isArchived(l) && !seen.has(l.id)){ seen.add(l.id); out.push(l); } })); }catch(e){ return all.filter(isArchived); } return out; })()
     : all.filter(isArchived);
+  if(isMasterCrm) archived=archived.filter(l=>l.topic==='repair');
 
   if(!STATE.crmView) STATE.crmView='kanban';
   if(!managerCrm && STATE.crmView==='archive') STATE.crmView='kanban';   /* архив — только владельцу/старшему */
@@ -24005,7 +24019,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-226 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-227 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
