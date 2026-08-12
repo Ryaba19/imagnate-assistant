@@ -2808,6 +2808,17 @@ window._pinLastAct=Date.now();
    не вводится. При входе: связи нет → система сама находит сервер и просит
    только PIN (один раз на комп). Дальше всё синхронизируется само. */
 const ERP_CLOUD_BASE='https://imagnate-assistant.onrender.com';
+/* НОВОЕ УСТРОЙСТВО (221): первый раз получили ключ → сообщаем владельцу в ТГ */
+function erpNewDeviceHello(apiBase, tok){
+  try{ if(localStorage.getItem('zv_dev_hello221')) return; localStorage.setItem('zv_dev_hello221','1'); }catch(e){}
+  try{
+    const ua=navigator.userAgent||'';
+    const os=/Mac/i.test(ua)?'macOS':(/Windows/i.test(ua)?'Windows':(/Android/i.test(ua)?'Android':(/iPhone|iPad/i.test(ua)?'iOS':'ПК')));
+    const kind=/Electron/i.test(ua)?'приложение Zenvox':'браузер';
+    fetch(apiBase+'/notify',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+      body:JSON.stringify({stream:'owner', text:'🖥 Подключён новый компьютер\n'+os+' · '+kind+'\n'+new Date().toLocaleString('ru-RU')+'\nЕсли это не ваше устройство — смените STORE_TOKEN на сервере.'})});
+  }catch(e){}
+}
 async function erpAutoConnect(force){
   if(erpServerCreds() && !force) return true;
   const bases=[];
@@ -2832,10 +2843,11 @@ async function erpAutoConnect(force){
       if(b.storeToken){
         saveCreds(b.storeToken);
         try{ fullSave(); }catch(e){}
+        try{ erpNewDeviceHello(base+'/api', b.storeToken); }catch(e){}
         console.log('Автонастройка: сервер выдал ключ сам (AUTO_SETUP)');
         return true;
       }
-      deviceAuthShow(saveCreds, base);
+      deviceAuthShow(function(tok){ saveCreds(tok); try{ erpNewDeviceHello(base+'/api', tok); }catch(e){} }, base);
       return true;
     }catch(e){}
   }
@@ -3734,6 +3746,7 @@ function wireConnSystem(c){
     int.creds.apiToken=(document.getElementById('csSrvTok').value||'').trim();
     int.status=int.creds.apiUrl?'connected':'disconnected';
     try{ fullSave(); }catch(e){}
+    try{ if(int.creds.apiUrl && int.creds.apiToken) erpNewDeviceHello(int.creds.apiUrl, int.creds.apiToken); }catch(e){}
     msg('csSrvMsg','Сохранено');
     toast('Подключение к серверу сохранено','success');
   });
@@ -8529,7 +8542,8 @@ function markOrderSold(o){
     }
     if(it.imei && it.imei!=='—' && it.imei!=='нет в наличии'){
       const wh=[...DATA.warehouse.tech, ...DATA.warehouse.tradein].find(x=>x.imei===it.imei);
-      if(wh){ wh.status='sold'; wh.soldAt=DATA.today; wh.soldOrderId=o.id; wh.reservedForOrder=null; }
+      if(wh){ wh.status='sold'; wh.soldAt=DATA.today; wh.soldOrderId=o.id; wh.reservedForOrder=null;
+        try{ stockOnSold(wh); }catch(e){} }
     }
   });
 }
@@ -10257,7 +10271,31 @@ function renderWarehouse(c){
    МАТРИЦА «ВСЕГДА НА СКЛАДЕ» — владелец задаёт модификацию + мин. кол-во.
    Продажа позиции из матрицы → авто-докупка (закуп-лист сборщика).
 ============================================================ */
-function ensureMatrixData(){ if(!DATA.stockMatrix) DATA.stockMatrix=[]; }
+function ensureMatrixData(){ if(!DATA.stockMatrix) DATA.stockMatrix=[]; if(!DATA.stockSales) DATA.stockSales={}; }
+/* ПРОДАЖА СО СКЛАДА (220): учёт ходовых + авто-докуп сборщику штука-за-штуку. */
+function stockOnSold(wh){
+  if(!wh || !wh.model) return;
+  ensureMatrixData();
+  /* считаем продажи по модели — для подсказок «система заметила ходовое» */
+  DATA.stockSales[wh.model]=(DATA.stockSales[wh.model]||0)+1;
+  /* модель в матрице «всегда на складе» → сразу возобновляем на сборщика */
+  if((DATA.stockMatrix||[]).some(r=>r.model===wh.model)) stockAutoReplenish(wh.model);
+}
+function stockAutoReplenish(model){
+  DATA.purchaseRequests=DATA.purchaseRequests||[];
+  /* одна открытая заявка на модель — просто наращиваем количество (без дублей) */
+  let r=DATA.purchaseRequests.find(p=>p.item===model && p.source==='matrix' && !['received','cancelled'].includes(p.status));
+  if(r){ r.qty=(r.qty||1)+1; }
+  else {
+    const prId=(DATA.purchaseRequests.length?Math.max(...DATA.purchaseRequests.map(p=>p.id)):5000)+1;
+    r={id:prId, reason:'🔄 Докуп склада', item:model, qty:1, status:'sent', source:'matrix',
+       restock:true, createdFrom:'Возобновление склада', createdAt:DATA.today};
+    DATA.purchaseRequests.push(r);
+    try{ notifyEmployee('Сборщик','🔄 Докуп склада: '+model+' — ушла со склада, нужно возобновить'); }catch(e){}
+    try{ tgNotifyOwner('🔄 Склад: '+model+' продан — заявка сборщику на возобновление'); }catch(e){}
+  }
+  try{ if(typeof updateSidebarBadges==='function') updateSidebarBadges(); }catch(e){}
+}
 function matrixShortages(){
   ensureMatrixData();
   return DATA.stockMatrix.map(r=>{
@@ -10269,7 +10307,7 @@ function openStockMatrixModal(c){
   ensureMatrixData();
   const models=[...new Set(DATA.warehouse.tech.map(u=>u.model))].sort();
   const shortages=matrixShortages();
-  let body='<p class="tsub" style="margin-bottom:10px;">Позиции, которые должны числиться на складе постоянно. Недобор → заявка сборщику на докупку. Вышла новая модель — просто замени строку.</p>';
+  let body='<p class="tsub" style="margin-bottom:10px;">Ходовые позиции, которые держим на складе всегда. Как только такая позиция уходит со склада (продажа) — сборщику <b>сама</b> падает заявка «🔄 Докуп склада» на замену (штука за штуку). Ниже — сколько держим и что система заметила как ходовое по продажам.</p>';
   if(DATA.stockMatrix.length){
     body+='<div class="table-wrap" style="margin-bottom:12px;"><table><thead><tr><th>Модификация</th><th>Мин.</th><th>Доступно</th><th>Статус</th><th></th></tr></thead><tbody>'+
       DATA.stockMatrix.map((r,i)=>{
@@ -10281,6 +10319,13 @@ function openStockMatrixModal(c){
       }).join('')+'</tbody></table></div>';
   } else {
     body+='<div class="card" style="margin-bottom:12px;"><div class="empty"><b>Матрица пуста</b><span>Добавьте позиции, которые держим всегда</span></div></div>';
+  }
+  /* 220: подсказки — часто продаётся, но не в матрице */
+  const _inMx=new Set(DATA.stockMatrix.map(r=>r.model));
+  const _sugg=Object.keys(DATA.stockSales||{}).map(m=>[m,DATA.stockSales[m]]).filter(p=>p[1]>=3 && !_inMx.has(p[0])).sort((a,z)=>z[1]-a[1]).slice(0,6);
+  if(_sugg.length){
+    body+='<div class="drill-block-label">Система заметила ходовые (по продажам)</div>'+
+      '<div class="card" style="margin-bottom:12px;">'+_sugg.map(p=>'<div class="hist-row"><div><div class="h-main">'+escHtml(p[0])+'</div><div class="h-sub">продано '+p[1]+' — держать на складе?</div></div><button class="btn btn-sm btn-primary" data-mx-sugg="'+escHtml(p[0])+'">+ в матрицу (2)</button></div>').join('')+'</div>';
   }
   body+='<div class="drill-block-label">Добавить позицию</div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">'+
@@ -10311,6 +10356,12 @@ function openStockMatrixModal(c){
   });
   document.querySelectorAll('[data-mx-del]').forEach(el=>el.addEventListener('click', ()=>{
     DATA.stockMatrix.splice(parseInt(el.dataset.mxDel),1);
+    openStockMatrixModal(c);
+  }));
+  document.querySelectorAll('[data-mx-sugg]').forEach(el=>el.addEventListener('click', ()=>{
+    const m=el.dataset.mxSugg;
+    if(!DATA.stockMatrix.some(r=>r.model===m)) DATA.stockMatrix.push({model:m, minQty:2});
+    toast('«'+m+'» добавлена в ходовые — теперь возобновляется автоматически','success');
     openStockMatrixModal(c);
   }));
 }
@@ -10762,6 +10813,7 @@ const PR_STATUS={
 const PURCHASE_TABS=[
   {id:'requests',  label:'Заявки'},
   {id:'preorders', label:'Предзаказы'},
+  {id:'supplies',  label:'Поставки'},
   {id:'suppliers', label:'Поставщики'},
   {id:'collection', label:'Точка сбора'},
 ];
@@ -10797,7 +10849,9 @@ function renderPurchase(c){
     '</div>';
   }
 
-  if(STATE.purchaseTab==='collection'){
+  if(STATE.purchaseTab==='supplies'){
+    html+='<div id="suppliesHost"></div>';
+  } else if(STATE.purchaseTab==='collection'){
     /* Точка сбора — вкладкой внутри Закупа (решение владельца 26.07) */
     html+='<div id="collectionHost"></div>';
   } else if(STATE.purchaseTab==='suppliers'){
@@ -10855,6 +10909,8 @@ function renderPurchase(c){
   c.innerHTML=html;
 
   c.querySelectorAll('[data-pt]').forEach(el=>el.addEventListener('click',()=>{ STATE.purchaseTab=el.dataset.pt; renderPurchase(c); }));
+  const suppHost=document.getElementById('suppliesHost');
+  if(suppHost) renderSuppliesTab(suppHost);
   const collHost=document.getElementById('collectionHost');
   if(collHost) renderCollection(collHost);
   c.querySelectorAll('[data-pre-checked]').forEach(el=>el.addEventListener('click',()=>{
@@ -11022,7 +11078,10 @@ function purchaseActions(r){
     ? ' <button class="btn btn-sm" data-pr-action="storefound" data-pr-id="'+r.id+'" title="Товар оказался на точке — закрыть заявку без сборщика">🏬 Нашли на точке</button>' : '';
   if(r.status==='new') return '<button class="btn btn-sm btn-primary" data-pr-action="send" data-pr-id="'+r.id+'">Отправить в точку сбора</button>'+storeFound;
   if(r.status==='sent') return (role.canPriceCollection? '<button class="btn btn-sm btn-primary" data-pr-action="price" data-pr-id="'+r.id+'">✅ Выкупил (списать с точки сбора)</button>' : '<span class="tsub">'+ic('alert')+' Ожидает выкупа сборщиком</span>')+storeFound;
-  if(r.status==='priced') return (role.canConfirmPurchase? '<button class="btn btn-sm btn-primary" data-pr-action="confirm" data-pr-id="'+r.id+'">Подтвердить закуп</button>' : '<span class="tsub">'+ic('alert')+' Ожидает подтверждения магазина</span>')+storeFound;
+  if(r.status==='priced'){
+    if(r.supplyId) return '<span class="tsub">'+ic('truck')+' В поставке №'+r.supplyId+'</span>';
+    return '<span class="tsub">'+ic('check')+' Выкуплено · готово к поставке (вкладка «Поставки»)</span>'+storeFound;
+  }
   return '<span class="tsub">'+ic('check')+' Закуп подтверждён</span>';
 }
 
@@ -11161,6 +11220,209 @@ function renderCollection(c){
 function kpiPlain(label, value, icon){
   return '<div class="card"><div class="kpi-label"><span class="kpi-icon" style="background:var(--accent-soft);color:var(--accent-2)">'+ic(icon)+'</span>'+label+'</div><div class="kpi-value">'+value+'</div></div>';
 }
+
+/* ============================================================
+   ПОСТАВКИ (218): точка сбора → курьер → магазин
+   Сборщик формирует поставку из выкупленных позиций, отдаёт курьеру,
+   курьер отмечает забор/доставку, магазин делает пересчёт и принимает.
+============================================================ */
+const SUP_STATUS={
+  ready:    ['Сформирована','b-new'],
+  intransit:['В пути',      'b-progress'],
+  counting: ['На пересчёте','b-ready'],
+  accepted: ['Принята',     'b-done'],
+};
+function ensureSupplyData(){ if(!Array.isArray(DATA.supplies)) DATA.supplies=[]; return DATA.supplies; }
+function supNextId(){ ensureSupplyData(); return (DATA.supplies.reduce((m,s)=>Math.max(m,s.id||0),5000))+1; }
+function supReadyToForm(){ return (DATA.purchaseRequests||[]).filter(r=>r.status==='priced' && !r.supplyId && !r.foundAtStore); }
+function supCouriers(){ return (DATA.employees||[]).filter(e=>/курьер/i.test(String(e.role||''))); }
+function isCollectorRole(){ return STATE.role==='collector'; }
+function canAcceptSupply(){ return isBossRole()||STATE.role==='senior'||STATE.role==='seller'; }
+
+function renderSuppliesTab(host){
+  ensureSupplyData();
+  let html='';
+  /* --- Сборщик: собрать поставку из выкупленного --- */
+  if(isCollectorRole()){
+    const ready=supReadyToForm();
+    html+='<div class="section"><div class="section-head"><div class="section-title">Готово к отправке</div>'+
+      (ready.length?'<button class="btn btn-sm btn-primary" id="supFormBtn">📦 Сформировать поставку</button>':'')+'</div>';
+    if(!ready.length){
+      html+='<div class="card"><div class="empty"><b>Пока нечего отправлять</b><span>Выкупите позиции во вкладке «Заявки» — они появятся здесь.</span></div></div>';
+    } else {
+      html+='<div class="card">'+ready.map(r=>'<div class="hist-row"><div><div class="h-main">'+escHtml(r.item)+' × '+r.qty+'</div>'+
+        '<div class="h-sub">Заявка №'+r.id+(r.price?' · выкуп '+rub(r.price):'')+'</div></div></div>').join('')+'</div>';
+    }
+    html+='</div>';
+  }
+  /* --- Список поставок --- */
+  const sups=(DATA.supplies||[]).slice().sort((a,z)=>(z.id||0)-(a.id||0));
+  html+='<div class="section"><div class="section-head"><div class="section-title">Поставки</div></div>';
+  if(!sups.length){
+    html+='<div class="card"><div class="empty"><b>Поставок нет</b></div></div>';
+  } else {
+    sups.forEach(sp=>{
+      const st=SUP_STATUS[sp.status]||['—','b-grey'];
+      const cnt=(sp.items||[]).reduce((s,i)=>s+(i.qty||0),0);
+      html+='<div class="card" style="margin-bottom:10px;">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">'+
+          '<div><div class="kpi-label">'+ic('truck')+' Поставка №'+sp.id+'</div>'+
+          '<div class="tsub">'+(sp.items||[]).length+' поз. · '+cnt+' шт.'+(sp.courierName?' · курьер: '+escHtml(sp.courierName):'')+
+          ' · создана '+escHtml(sp.createdAt||'')+(sp.createdByName?' · '+escHtml(sp.createdByName):'')+'</div></div>'+
+          '<span class="badge '+st[1]+'">'+st[0]+'</span>'+
+        '</div>'+
+        '<div style="margin-top:8px;">'+(sp.items||[]).map(i=>'<div class="hist-row"><div class="h-main">'+escHtml(i.item)+'</div><div class="h-val mono">× '+i.qty+'</div></div>').join('')+'</div>';
+      /* сборщик отправляет поставку в путь (передал курьеру) */
+      if(sp.status==='ready' && isCollectorRole()){
+        html+='<div style="margin-top:10px;"><button class="btn btn-sm btn-primary" data-sup-transit="'+sp.id+'">🚚 Поставка в пути</button></div>';
+      }
+      /* магазин принимает: доступно с момента «в пути» и во время пересчёта */
+      if((sp.status==='intransit'||sp.status==='counting') && canAcceptSupply()){
+        html+='<div style="margin-top:10px;"><button class="btn btn-sm btn-primary" data-sup-accept="'+sp.id+'">✅ '+(sp.status==='counting'?'Продолжить пересчёт':'Пересчитать и принять')+'</button></div>';
+      }
+      if(sp.status==='accepted' && sp.countLog && sp.countLog.some(x=>x.got!==x.expected)){
+        html+='<div class="tsub" style="margin-top:8px;color:var(--warning);">'+ic('alert')+' При приёмке были расхождения — см. журнал точки сбора / уведомление владельцу.</div>';
+      }
+      html+='</div>';
+    });
+  }
+  html+='</div>';
+  host.innerHTML=html;
+
+  const fb=host.querySelector('#supFormBtn');
+  if(fb) fb.addEventListener('click', ()=>openFormSupplyModal(host));
+  host.querySelectorAll('[data-sup-transit]').forEach(el=>el.addEventListener('click', ()=>{
+    const sp=(DATA.supplies||[]).find(x=>x.id===parseInt(el.dataset.supTransit)); if(!sp) return;
+    sp.status='intransit'; sp.transitAt=DATA.today+' '+nowTime();
+    try{ tgNotifyOwner('🚚 Поставка №'+sp.id+' в пути к магазину'+(sp.courierName?' (курьер: '+sp.courierName+')':'')); }catch(e){}
+    try{ notifyEmployee('Директор','🚚 Поставка №'+sp.id+' в пути — примите с пересчётом, когда привезут (Закуп → Поставки)'); }catch(e){}
+    try{ fullSave(); cloudPushNow(); }catch(e){}
+    renderSuppliesTab(host);
+    toast('Поставка №'+sp.id+' — в пути','success');
+  }));
+  host.querySelectorAll('[data-sup-accept]').forEach(el=>el.addEventListener('click', ()=>openAcceptSupplyModal(parseInt(el.dataset.supAccept), host)));
+}
+
+function openFormSupplyModal(host){
+  const ready=supReadyToForm();
+  if(!ready.length){ toast('Нечего отправлять','info'); return; }
+  const couriers=supCouriers();
+  let body='<div class="tsub" style="margin-bottom:10px;">Отметьте позиции для поставки и выберите курьера, который заберёт груз.</div>'+
+    '<div class="card" style="margin-bottom:12px;">'+ready.map(r=>'<label class="toggle-row" style="justify-content:space-between;margin-bottom:8px;cursor:pointer;">'+
+      '<span><input type="checkbox" class="sup-pick" data-req="'+r.id+'" checked style="margin-right:8px;">'+escHtml(r.item)+' × '+r.qty+' <span class="tsub">· №'+r.id+'</span></span></label>').join('')+'</div>'+
+    '<div class="field"><label>Курьер</label><select class="input-mini" id="supCourier" style="width:100%;">'+
+      (couriers.length? couriers.map(cu=>'<option value="'+cu.id+'">'+escHtml(cu.name)+'</option>').join('') : '<option value="">— нет курьеров —</option>')+
+      '</select></div>';
+  openModal('📦 Сформировать поставку','',body,[{label:'Создать поставку', cls:'btn-primary', action:()=>{
+    const picks=[...document.querySelectorAll('.sup-pick:checked')].map(el=>parseInt(el.dataset.req));
+    if(!picks.length){ toast('Отметьте хотя бы одну позицию','error'); return; }
+    const cid=document.getElementById('supCourier').value;
+    const courier=(DATA.employees||[]).find(e=>String(e.id)===String(cid));
+    ensureSupplyData();
+    const id=supNextId();
+    const items=picks.map(rid=>{ const r=DATA.purchaseRequests.find(x=>x.id===rid); return r?{reqId:r.id, item:r.item, qty:r.qty||1}:null; }).filter(Boolean);
+    const sup={id:id, status:'ready', items:items, courierId:courier?courier.id:null, courierName:courier?courier.name:'',
+      createdAt:DATA.today, createdByName:(typeof currentEmployeeName==='function'?currentEmployeeName():'Сборщик'),
+      pickedUpAt:null, deliveredAt:null, acceptedAt:null, acceptedBy:null, countLog:null};
+    DATA.supplies.push(sup);
+    picks.forEach(rid=>{ const r=DATA.purchaseRequests.find(x=>x.id===rid); if(r) r.supplyId=id; });
+    try{ tgNotifyOwner('📦 Сформирована поставка №'+id+'\n'+items.length+' поз. · курьер: '+(sup.courierName||'—')); }catch(e){}
+    try{ if(courier) notifyEmployee(courier.name,'📦 Вам поставка №'+id+' от точки сбора — заберите у Дениса ('+items.length+' поз.)'); }catch(e){}
+    try{ fullSave(); cloudPushNow(); }catch(e){}
+    closeModal(); renderSuppliesTab(host);
+    toast('Поставка №'+id+' сформирована'+(sup.courierName?' · курьер '+sup.courierName:''),'success');
+  }}]);
+}
+
+function openAcceptSupplyModal(supId, host){
+  ensureSupplyData();
+  const sp=DATA.supplies.find(x=>x.id===supId);
+  if(!sp){ toast('Поставка не найдена','error'); return; }
+  /* магазин НАЧАЛ пересчёт → статус меняется (сигнал сборщику/владельцу) */
+  if(sp.status!=='accepted' && sp.status!=='counting'){
+    sp.status='counting'; sp.countStartAt=DATA.today+' '+nowTime();
+    try{ tgNotifyOwner('🔎 Магазин начал пересчёт поставки №'+sp.id); }catch(e){}
+    try{ fullSave(); cloudPushNow(); }catch(e){}
+    try{ if(host) renderSuppliesTab(host); }catch(e){}
+  }
+  let body='<div class="tsub" style="margin-bottom:10px;">Пересчёт позиций поставки №'+sp.id+'. Проверьте, сколько фактически привезли по каждой позиции.</div>';
+  body+='<div class="card">'+(sp.items||[]).map((i,idx)=>'<div class="hist-row" style="align-items:center;"><div><div class="h-main">'+escHtml(i.item)+'</div>'+
+    '<div class="h-sub">ожидалось: '+i.qty+'</div></div>'+
+    '<input class="input-mini sup-got" data-idx="'+idx+'" type="number" min="0" value="'+i.qty+'" style="width:80px;text-align:center;"></div>').join('')+'</div>';
+  openModal('✅ Приём поставки №'+sp.id,'',body,[{label:'Принять поставку', cls:'btn-primary', action:()=>{
+    const gots=(sp.items||[]).map((i,idx)=>{ const el=document.querySelector('.sup-got[data-idx="'+idx+'"]'); return Math.max(0, parseInt(el&&el.value)||0); });
+    const countLog=(sp.items||[]).map((i,idx)=>({item:i.item, expected:i.qty, got:gots[idx], reqId:i.reqId}));
+    sp.status='accepted'; sp.acceptedAt=DATA.today; sp.acceptedBy=(typeof currentEmployeeName==='function'?currentEmployeeName():''); sp.countLog=countLog;
+    /* заявки → принято; связанные заказы двигаем; товарный остаток точки сбора уменьшаем */
+    try{ ensureCollectionData(); }catch(e){}
+    let goodsOut=0;
+    countLog.forEach(cl=>{
+      const r=(DATA.purchaseRequests||[]).find(x=>x.id===cl.reqId);
+      if(!r) return;
+      r.status='received'; r.receivedAt=DATA.today; r.receivedQty=cl.got;
+      if(r.buyoutCost){ goodsOut+=r.buyoutCost; }
+      if(r.linkedOrderId){
+        const o=findOrder(r.linkedOrderId);
+        if(o && (o.status==='preorder'||o.status==='awaiting_stock')){
+          try{ setOrderStatus(o,'awaiting_stock'); }catch(e){}
+          try{ (o.callLog=o.callLog||[]).unshift({date:DATA.today, time:nowTime(), action:'note', comment:'Поставка №'+sp.id+' принята — товар в магазине.'}); }catch(e){}
+        }
+      }
+    });
+    if(goodsOut){ const k=DATA.collection; k.goods=Math.max(0,(k.goods||0)-goodsOut);
+      (k.history=k.history||[]).unshift({date:DATA.today, text:'Поставка №'+sp.id+' принята магазином', amount:goodsOut, dir:'out'});
+      if(DATA.assets&&DATA.assets.collection) DATA.assets.collection.goods=Math.max(0,(DATA.assets.collection.goods||0)-goodsOut);
+    }
+    const diffs=countLog.filter(x=>x.got!==x.expected);
+    try{ tgNotifyOwner('✅ Поставка №'+sp.id+' принята ('+sp.acceptedBy+')'+(diffs.length? '\n⚠ Расхождения: '+diffs.map(d=>d.item+' ждали '+d.expected+', пришло '+d.got).join('; ') : '\nВсё сошлось')); }catch(e){}
+    try{ fullSave(); cloudPushNow(); }catch(e){}
+    closeModal(); renderSuppliesTab(host);
+    toast(diffs.length? 'Поставка принята с расхождениями — владелец уведомлён' : 'Поставка №'+sp.id+' принята','success');
+  }}]);
+}
+
+/* Карточка поставок для курьера (в разделе «Доставки») */
+function courierSuppliesHTML(me){
+  if(!me) return '';
+  ensureSupplyData();
+  const mine=(DATA.supplies||[]).filter(sp=>String(sp.courierId)===String(me.id) && (sp.status==='ready'||sp.status==='intransit'||sp.status==='counting'));
+  if(!mine.length) return '';
+  let html='<div class="section"><div class="section-head"><div class="section-title">Поставки с точки сбора</div></div>'+
+    '<div class="tsub" style="margin:0 0 8px;">Что вы везёте в магазин. Отметку «в пути» ставит сборщик при передаче, приём — магазин.</div>';
+  mine.forEach(sp=>{
+    const st=SUP_STATUS[sp.status]||['—','b-grey'];
+    const cnt=(sp.items||[]).reduce((s,i)=>s+(i.qty||0),0);
+    html+='<div class="card" style="margin-bottom:10px;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">'+
+        '<div><div class="kpi-label">'+ic('truck')+' Поставка №'+sp.id+'</div>'+
+        '<div class="tsub">'+(sp.items||[]).length+' поз. · '+cnt+' шт.</div></div>'+
+        '<span class="badge '+st[1]+'">'+st[0]+'</span></div>'+
+      '<div style="margin-top:8px;">'+(sp.items||[]).map(i=>'<div class="hist-row"><div class="h-main">'+escHtml(i.item)+'</div><div class="h-val mono">× '+i.qty+'</div></div>').join('')+'</div>'+
+      '</div>';
+  });
+  html+='</div>';
+  return html;
+}
+function wireCourierSupplies(c, me){
+  c.querySelectorAll('[data-sup-pickup]').forEach(el=>el.addEventListener('click', ()=>{
+    const sp=(DATA.supplies||[]).find(x=>x.id===parseInt(el.dataset.supPickup)); if(!sp) return;
+    sp.status='intransit'; sp.pickedUpAt=DATA.today+' '+nowTime();
+    try{ tgNotifyOwner('🚚 Курьер забрал поставку №'+sp.id+' у точки сбора'); }catch(e){}
+    try{ fullSave(); cloudPushNow(); }catch(e){}
+    renderDeliveries(document.getElementById('pageContent'));
+    toast('Поставка №'+sp.id+' — в пути','success');
+  }));
+  c.querySelectorAll('[data-sup-deliver]').forEach(el=>el.addEventListener('click', ()=>{
+    const sp=(DATA.supplies||[]).find(x=>x.id===parseInt(el.dataset.supDeliver)); if(!sp) return;
+    sp.status='delivered'; sp.deliveredAt=DATA.today+' '+nowTime();
+    try{ tgNotifyOwner('🏬 Курьер привёз поставку №'+sp.id+' — ждёт пересчёта в магазине'); }catch(e){}
+    try{ notifyEmployee('Директор','🏬 Поставка №'+sp.id+' привезена — примите с пересчётом (Закуп → Поставки)'); }catch(e){}
+    try{ fullSave(); cloudPushNow(); }catch(e){}
+    renderDeliveries(document.getElementById('pageContent'));
+    toast('Поставка №'+sp.id+' привезена — магазин примет с пересчётом','success');
+  }));
+}
+
 
 /* ============================================================
    ФИНАНСЫ
@@ -17454,6 +17716,16 @@ function renderDeliveries(c){
   const me=currentEmployee();
   if(!me){ c.innerHTML='<div class="empty"><b>Доступно только в роли курьера</b></div>'; return; }
   renderCourierView(c, me);
+  /* 218: поставки с точки сбора — забор/доставка */
+  try{
+    const supHtml=courierSuppliesHTML(me);
+    if(supHtml){
+      const supWrap=document.createElement('div');
+      supWrap.innerHTML=supHtml;
+      c.insertBefore(supWrap, c.firstChild);
+      wireCourierSupplies(c, me);
+    }
+  }catch(e){}
   /* Плашка сканирования поставок — курьер отмечает забор груза */
   const scanCard=document.createElement('div');
   scanCard.className='card';
@@ -23618,7 +23890,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-216 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-221 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -28346,6 +28618,20 @@ async function zvSeedRealStaff(){
     try{ await empQuickAdd(site, fio, alias, '', role==='Директор'?'Директор':(role==='Мастер'?'Мастер':'Продавец'), pass); }catch(e){}
   }
   NET._realSeed205=1; saveNet();
+  /* 217: сборщика Дениса пропустили в первом посеве — досеваем отдельно */
+  if(!NET._realSeedDenis217){
+    if(!(NET.staff2||[]).some(x=>x.alias.toLowerCase()==='denis')){
+      try{ await empQuickAdd(site, 'Денис', 'denis', '', 'Сборщик (точка сбора)', 'EsE4SNqpYq'); }catch(e){}
+    }
+    NET._realSeedDenis217=1; saveNet();
+  }
+  /* 218: учётка курьера — принимает поставки от Дениса, везёт в магазин */
+  if(!NET._realSeedCourier218){
+    if(!(NET.staff2||[]).some(x=>x.alias.toLowerCase()==='courier')){
+      try{ await empQuickAdd(site, 'Курьер', 'courier', '', 'Курьер', 'kEr9Tx4mLp'); }catch(e){}
+    }
+    NET._realSeedCourier218=1; saveNet();
+  }
 }
 window.zvRebuildTeam=function(){
   const res=zvSyncStaffToBase(true);
