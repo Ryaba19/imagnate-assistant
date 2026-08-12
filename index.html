@@ -3129,10 +3129,27 @@ function pageGroupColor(key){
 
 
 /* ===== БОЕВЫЕ УВЕДОМЛЕНИЯ (26.07): Telegram + реальная отправка писем через сервер ===== */
+function erpApiAbs(u){
+  u=String(u||'').trim().replace(/\/+$/,'');
+  if(!u) return u;
+  if(/^\//.test(u)){
+    const base=/^https?:$/.test(location.protocol) ? location.origin : ERP_CLOUD_BASE;
+    u=base+u;
+  }
+  return u;
+}
 function erpServerCreds(){
   try{
     const int=integrationFor('site');
-    if(int && int.creds && int.creds.apiUrl) return {api:int.creds.apiUrl.replace(/\/+$/,''), token:int.creds.apiToken||''};
+    if(int && int.creds && int.creds.apiUrl){
+      const u=erpApiAbs(int.creds.apiUrl);
+      /* 224: сохранённый относительный адрес чиним один раз — уедет во все устройства */
+      if(u!==int.creds.apiUrl && !window._apiUrlHealed224){
+        window._apiUrlHealed224=1;
+        try{ int.creds.apiUrl=u; fullSave(); }catch(e){}
+      }
+      return {api:u, token:int.creds.apiToken||''};
+    }
   }catch(e){}
   return null;
 }
@@ -3770,7 +3787,7 @@ function wireConnSystem(c){
   if(ss) ss.addEventListener('click', ()=>{
     const int=integrationFor('site');
     if(!int.creds) int.creds={};
-    int.creds.apiUrl=(document.getElementById('csSrvUrl').value||'').trim().replace(/\/+$/,'');
+    int.creds.apiUrl=erpApiAbs((document.getElementById('csSrvUrl').value||'').trim());
     int.creds.apiToken=(document.getElementById('csSrvTok').value||'').trim();
     int.status=int.creds.apiUrl?'connected':'disconnected';
     try{ fullSave(); }catch(e){}
@@ -7237,6 +7254,8 @@ function openPriceConfirmModal(id, c){
             return st!=='here' && st!=='here_acc';            /* есть на точке — закуп не нужен */
           }catch(e){ return true; }
         }).forEach((it,i)=>{
+          const dup=(DATA.purchaseRequests||[]).some(p=>p && p.item===it.name && (p.linkedOrderId===o.id || p.createdFrom==='Заказ №'+o.id) && !['received','cancelled'].includes(p.status));
+          if(dup) return;   /* 225: заявка под этот заказ уже есть */
           DATA.purchaseRequests.push({
             id:newId+i, supplierId:sup?sup.id:null,
             reason:'Под заказ клиента', item:it.name, qty:1,
@@ -10850,7 +10869,33 @@ const CLAIM_STATUS={pending:['На проверке','b-new'], approved:['Под
 const SALARY_TYPES=['advance','remainder','bonus'];
 const SALARY_TYPE_LABELS={advance:'Аванс — 20 числа', remainder:'Остаток — 5 числа след. месяца', bonus:'Премия — 5 числа след. месяца'};
 
+/* 225: дубли заявок закупа (один заказ → две одинаковые заявки с разных
+   устройств). Ключ: источник+товар+причина. Оставляем самую «продвинутую»
+   (в поставке > по статусу > меньший №), остальные убираем. Идемпотентно. */
+function dedupePurchaseRequests(){
+  try{
+    if(!Array.isArray(DATA.purchaseRequests)) return 0;
+    const rank={received:5, confirmed:4, priced:3, sent:2, searching:1, new:0, cancelled:-1};
+    const best=new Map(), drop=[];
+    DATA.purchaseRequests.forEach(r=>{
+      if(!r) return;
+      const key=String(r.createdFrom||'')+'|'+String(r.item||'').trim().toLowerCase()+'|'+String(r.reason||'');
+      const prev=best.get(key);
+      if(!prev){ best.set(key,r); return; }
+      const score=x=>((x.supplyId?100:0)+(rank[x.status]!=null?rank[x.status]:0));
+      if(score(r)>score(prev) || (score(r)===score(prev) && r.id<prev.id)){ drop.push(prev); best.set(key,r); }
+      else drop.push(r);
+    });
+    if(drop.length){
+      const dropIds=new Set(drop.map(r=>r.id));
+      DATA.purchaseRequests=DATA.purchaseRequests.filter(r=>r && !dropIds.has(r.id));
+      try{ lsSave(); }catch(e){}
+    }
+    return drop.length;
+  }catch(e){ console.warn('dedupePR', e); return 0; }
+}
 function renderPurchase(c){
+  try{ dedupePurchaseRequests(); }catch(e){}
   if(!STATE.purchaseTab) STATE.purchaseTab='requests';
   /* зашёл в раздел — новые заявки увидены, жёлтая точка в меню гаснет */
   (function(){
@@ -16299,7 +16344,48 @@ function ensureStaffSchedules(){
     });
   }catch(e){ console.warn('ensureStaffSchedules', e); }
 }
+/* ДЕДУПЛИКАЦИЯ КОМАНДЫ (225): убрать задвоенных сотрудников (посев с
+   нескольких устройств). Ключ — имя+роль; предпочитаем запись из учёток
+   (_zvStaff), из графика вычищаем ссылки на удалённых. Идемпотентно. */
+function dedupeEmployees(){
+  try{
+    if(typeof STORE_DATA==='undefined') return 0;
+    let removed=0;
+    Object.values(STORE_DATA).forEach(d=>{
+      if(!d || !Array.isArray(d.employees)) return;
+      const seen=new Map(), keep=[], drop=[];
+      /* мастер из учёток есть → старый демо-мастер Виктор Н. не нужен */
+      const hasZvMaster=d.employees.some(e=>e && e._zvStaff && /мастер/i.test(String(e.role||'')));
+      d.employees.forEach(e=>{
+        if(!e){ return; }
+        if(hasZvMaster && /^виктор/i.test(String(e.name||'').trim()) && /мастер/i.test(String(e.role||''))){ drop.push(e); return; }
+        const key=String(e.name||'').trim().toLowerCase()+'|'+String(e.role||'').trim().toLowerCase();
+        const prev=seen.get(key);
+        if(!prev){ seen.set(key,e); keep.push(e); return; }
+        /* дубль: предпочитаем учётку (_zvStaff); иначе первого */
+        if(e._zvStaff && !prev._zvStaff){
+          drop.push(prev);
+          keep[keep.indexOf(prev)]=e;
+          seen.set(key,e);
+        } else drop.push(e);
+      });
+      if(drop.length){
+        removed+=drop.length;
+        d.employees=keep;
+        const dropIds=new Set(drop.map(e=>e.id));
+        (d._staffRemoved=d._staffRemoved||[]).push(...drop.filter(e=>/^виктор/i.test(String(e.name||''))).map(e=>e.name));
+        try{ Object.values(d.shiftAssignments||{}).forEach(day=>{
+          if(day && typeof day==='object' && !Array.isArray(day))
+            Object.keys(day).forEach(k=>{ if(Array.isArray(day[k])) day[k]=day[k].filter(x=>!dropIds.has((x&&typeof x==='object')?x.id:x)); });
+        }); }catch(e){}
+      }
+    });
+    if(removed){ try{ lsSave(); }catch(e){} }
+    return removed;
+  }catch(e){ console.warn('dedupeEmployees', e); return 0; }
+}
 function ensureShiftData(){
+  try{ dedupeEmployees(); }catch(e){}
   if(!DATA.shiftOverrides) DATA.shiftOverrides={};   // 'ДД.ММ.ГГГГ': {add:[id], remove:[id]}
   if(!DATA.shiftSwaps) DATA.shiftSwaps=[];           // заявки на обмен сменами
   if(!DATA.timeOffRequests) DATA.timeOffRequests=[]; // отпрашивания
@@ -23919,7 +24005,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-223 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-226 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -28595,6 +28681,7 @@ function zvSyncStaffToBase(purge){
     activeIds.add(baseId);
     const role=zvStaffRoleToBase(emp.role);
     let be=d.employees.find(x=>x.id===baseId);
+    if(!be) be=d.employees.find(x=>x && x._zvStaff && String(x.name).trim().toLowerCase()===String(emp.fio||emp.alias).trim().toLowerCase() && x.role===role);
     if(!be){
       be={id:baseId, _zvStaff:true, name:(emp.fio||emp.alias), role:role, storeId:sid,
           unit:'shop_c', phone:emp.phone||'', baseSalary:null,
@@ -28642,21 +28729,23 @@ async function zvSeedRealStaff(){
     ['Леонид','leonid','MJk3MnT7CV','Директор'],
     ['Евгений','evgeniy','bAk4jxiy8Q','Мастер'],
   ];
+  const inBase=(fio)=>{ try{ return typeof STORE_DATA!=='undefined' && Object.values(STORE_DATA).some(d=>d&&Array.isArray(d.employees)&&d.employees.some(e=>e&&e._zvStaff&&String(e.name).trim().toLowerCase()===String(fio).trim().toLowerCase())); }catch(e){ return false; } };
   for(const [fio,alias,pass,role] of list){
     if((NET.staff2||[]).some(x=>x.alias.toLowerCase()===alias)) continue;
+    if(inBase(fio)) continue;   /* 225: уже посеян с другого устройства */
     try{ await empQuickAdd(site, fio, alias, '', role==='Директор'?'Директор':(role==='Мастер'?'Мастер':'Продавец'), pass); }catch(e){}
   }
   NET._realSeed205=1; saveNet();
   /* 217: сборщика Дениса пропустили в первом посеве — досеваем отдельно */
   if(!NET._realSeedDenis217){
-    if(!(NET.staff2||[]).some(x=>x.alias.toLowerCase()==='denis')){
+    if(!(NET.staff2||[]).some(x=>x.alias.toLowerCase()==='denis') && !inBase('Денис')){
       try{ await empQuickAdd(site, 'Денис', 'denis', '', 'Сборщик (точка сбора)', 'EsE4SNqpYq'); }catch(e){}
     }
     NET._realSeedDenis217=1; saveNet();
   }
   /* 218: учётка курьера — принимает поставки от Дениса, везёт в магазин */
   if(!NET._realSeedCourier218){
-    if(!(NET.staff2||[]).some(x=>x.alias.toLowerCase()==='courier')){
+    if(!(NET.staff2||[]).some(x=>x.alias.toLowerCase()==='courier') && !inBase('Курьер')){
       try{ await empQuickAdd(site, 'Курьер', 'courier', '', 'Курьер', 'kEr9Tx4mLp'); }catch(e){}
     }
     NET._realSeedCourier218=1; saveNet();
@@ -29231,7 +29320,8 @@ function sc2EnsureSessionButtons(){
     box.style.cssText='position:fixed;right:16px;bottom:16px;z-index:99980;display:flex;gap:8px;';
     document.body.appendChild(box);
   }
-  const ses=NET&&NET.session;
+  /* 226: «Завершить сеанс» — у ВСЕХ вошедших (сеть, владелец, сотрудник) */
+  const ses=NET&&(NET.session||NET.staffSession||NET.ownerSession);
   const bs='padding:10px 16px;border-radius:12px;border:1px solid #9b6dff;background:#2a2140;color:#d9c9ff;font:inherit;font-weight:600;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.35);';
   let html='';
   if(ses && ses.type==='supreme') html+='<button id="sc2SupBtn" style="'+bs+'">⚙ Управление сетью</button>';
@@ -29247,7 +29337,7 @@ function sc2EnsureSessionButtons(){
     lo.style.cssText='position:fixed;right:16px;top:16px;z-index:99991;display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:10px;border:1px solid rgba(192,57,43,.55);background:rgba(192,57,43,.14);color:#e86a5c;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;transition:all .15s;backdrop-filter:blur(6px);';
     lo.onmouseenter=()=>{ lo.style.background='rgba(192,57,43,.24)'; lo.style.borderColor='rgba(192,57,43,.8)'; };
     lo.onmouseleave=()=>{ lo.style.background='rgba(192,57,43,.14)'; lo.style.borderColor='rgba(192,57,43,.55)'; };
-    lo.onclick=()=>{ NET.session=null; saveNet(); location.reload(); };
+    lo.onclick=()=>{ if(typeof window.zvLogoutFull==='function'){ window.zvLogoutFull(); } else { NET.session=null; NET.staffSession=null; NET.ownerSession=null; saveNet(); location.reload(); } };
   } else if(lo){ lo.remove(); }
   const sb=box.querySelector('#sc2SupBtn'); if(sb) sb.addEventListener('click', sc2OpenSupreme);
 }
