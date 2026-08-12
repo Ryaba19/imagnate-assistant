@@ -45,6 +45,13 @@ const path = require('path');
 /* ===== НАСТРОЙКИ ===== */
 const PORT = process.env.PORT || 3000;
 const STORE_TOKEN = process.env.STORE_TOKEN || 'ПОМЕНЯЙТЕ-МЕНЯ-длинный-случайный-секрет';
+/* 223: PIN устройства — система генерирует САМА (стабильно из STORE_TOKEN,
+   переживает перезапуски). Переопределяется переменной DEVICE_PIN. */
+function devicePin() {
+  if (process.env.DEVICE_PIN) return String(process.env.DEVICE_PIN).trim();
+  const h = require('crypto').createHash('sha256').update('devpin|' + STORE_TOKEN).digest();
+  return String(100000 + (h.readUInt32BE(0) % 900000));
+}
 const DB_FILE = path.join(process.env.DATA_DIR || __dirname, 'leads.json');
 /* ===================== */
 
@@ -592,6 +599,8 @@ chState.strapiToken = !!process.env.STRAPI_API_TOKEN;
 /* --- АВИТО (Messenger API), с комплектом ключей на точку --- */
 const avitoAuth = {};   /* set.key -> {tok, exp, uid} */
 const avitoChatFails = {};   /* chat.id -> число неудач подряд (недоступные чаты) */
+let avitoMsgrBlockedUntil = 0;   /* 402 «нужна подписка API мессенджера» — молчим до этого времени */
+function avitoIsPaywall(e){ return /HTTP 402|подписк/i.test(String((e&&e.message)||e)); }
 async function avitoToken(set) {
   const a = avitoAuth[set.key] = avitoAuth[set.key] || {};
   if (a.tok && Date.now() < a.exp - 60000) return a.tok;
@@ -630,11 +639,23 @@ async function avitoUid(set) {
    необработанные чаты, и они добираются следующим опросом.
    Плюс перекрытие 15 минут назад + дедупликация по key — ничего не теряется. */
 async function avitoPollSet(set, deep) {
+  if (Date.now() < avitoMsgrBlockedUntil) return 0;   /* 402-бэкофф: не долбим платный API чатов */
   const kvKey = 'avito_cursor' + set.key;
   const saved = saneCursor(await kvGet(kvKey));
   const cur = deep ? 0 : saved;
   const uid = await avitoUid(set);
-  const j = await avitoApi(set, '/messenger/v2/accounts/' + uid + '/chats?limit=30');
+  let j;
+  try {
+    j = await avitoApi(set, '/messenger/v2/accounts/' + uid + '/chats?limit=30');
+  } catch (e) {
+    if (avitoIsPaywall(e)) {
+      avitoMsgrBlockedUntil = Date.now() + 6 * 3600 * 1000;
+      chState.avito.note = 'Чаты Авито недоступны: на аккаунте Авито нужна платная подписка «API мессенджера». Объявления/заказы работают; сообщения из чатов не придут, пока не оформлена подписка.';
+      console.warn('[авито' + set.key + '] чаты 402 (нет подписки API мессенджера) — молчу 6 часов');
+      return 0;
+    }
+    throw e;
+  }
   const chats = (j.chats || [])
     .filter(c => toSec(c.updated) > Math.max(0, cur - 900))
     .sort((a, b) => toSec(a.updated) - toSec(b.updated));
@@ -667,6 +688,12 @@ async function avitoPollSet(set, deep) {
          останавливать очередь: остальные чаты обрабатываем дальше.
          Курсор не двигаем, пока чат "свежий" — добираем его следующими
          опросами; после 3 неудач подряд перестаём его ждать. */
+      if (avitoIsPaywall(e)) {
+        avitoMsgrBlockedUntil = Date.now() + 6 * 3600 * 1000;
+        chState.avito.note = 'Чаты Авито недоступны: нужна платная подписка «API мессенджера» на аккаунте Авито.';
+        console.warn('[авито' + set.key + '] чаты 402 (нет подписки) — молчу 6 часов');
+        break;
+      }
       avitoChatFails[chat.id] = (avitoChatFails[chat.id] || 0) + 1;
       chState.avito.note = 'чат ' + chat.id + ': ' + String(e.message || e).slice(0, 140);
       console.error('[авито' + set.key + '] чат ' + chat.id + ' (попытка ' + avitoChatFails[chat.id] + '):', e.message);
@@ -1498,7 +1525,11 @@ const server = http.createServer((req, res) => {
         const crypto = require('crypto');
         const h = s => crypto.createHash('sha256').update(s).digest('hex');
         let who = null;
-        for (const sid of Object.keys(cur.state.stores)) {
+        /* 222: пин-система выведена — привязка по ЕДИНОМУ PIN устройства из
+           Environment (DEVICE_PIN). Дальше как раньше: код владельцу в TG/почту,
+           без кода ключ не выдаётся. */
+        if (pin === devicePin()) who = 'PIN устройства';
+        if (!who) for (const sid of Object.keys(cur.state.stores)) {
           const d = cur.state.stores[sid] || {};
           const st = d.settings || {};
           if (st.ownerPinHash && h('storecontrol|owner|' + pin) === st.ownerPinHash) { who = 'Владелец'; break; }
@@ -1694,6 +1725,10 @@ const server = http.createServer((req, res) => {
   }
 
   /* ---- Уведомление в Telegram (из ERP, по токену) ---- */
+  if (req.method === 'GET' && url.pathname === '/api/device-pin') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return sendJson(res, 200, { ok: true, pin: devicePin() });
+  }
   if (req.method === 'POST' && url.pathname === '/api/notify') {
     if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
     return readBody(req, async b => {
