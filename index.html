@@ -2857,6 +2857,17 @@ async function erpAutoConnect(force){
   }
   return false;
 }
+/* 235: привязка перезагружает страницу — сохраняем действующий сеанс,
+   чтобы после PIN и кода человек попадал СРАЗУ в систему, а не на окно входа.
+   Слой Zenvox подхватит этот запас при старте и вернёт сеанс на место. */
+function zvStashSession(){
+  try{
+    const n=JSON.parse(localStorage.getItem('store_control_erp_net_v1')||'null');
+    if(n && (n.session||n.staffSession||n.ownerSession))
+      localStorage.setItem('zv_keep_ses', JSON.stringify({ts:Date.now(),
+        session:n.session||null, staffSession:n.staffSession||null, ownerSession:n.ownerSession||null}));
+  }catch(e){}
+}
 /* Первый запуск на новом компе: ввёл свой PIN — сервер сверил с базой,
    выдал ключ связи, компьютер запомнен навсегда */
 function deviceAuthShow(saveCreds, base){
@@ -2906,6 +2917,7 @@ function deviceAuthShow(saveCreds, base){
               saveCreds(j2.storeToken);
               try{ fullSave(); }catch(e){}
               msg('Устройство подтверждено! Здравствуйте, '+(j2.who||'')+'. Загружаю данные…');
+              zvStashSession();
               setTimeout(()=>location.reload(), 800);
             } else msg((j2&&j2.error)||'Не получилось', true);
           }catch(e){ msg('Нет связи с сервером: '+e.message, true); }
@@ -2917,6 +2929,7 @@ function deviceAuthShow(saveCreds, base){
         saveCreds(j.storeToken);
         try{ fullSave(); }catch(e){}
         msg('Готово! Здравствуйте, '+(j.who||'')+'. Загружаю данные…');
+        zvStashSession();
         setTimeout(()=>location.reload(), 800);
       } else msg((j&&j.error)||'Не получилось — попробуйте ещё раз', true);
     }catch(e){ msg('Нет связи с сервером: '+e.message, true); }
@@ -24049,7 +24062,7 @@ const SITE_CATALOG_SEED=[
 
 
 /* ==================== ПЕРЕНЕСЕНО ИЗ ВЕТКИ STORE-CONTROL (слияние 26.07) ==================== */
-const BUILD_TAG='29.07-234 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
+const BUILD_TAG='29.07-235 + FUSION (Zenvox)';   /* СЛИЯНИЕ двух веток: их база + наши модули */
 const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
 const CANCEL_REASONS=['Дорого','Нашёл дешевле','Передумал','Нет в наличии','Долго отвечали','Не выходит на связь','Другое'];
 const CASH_PURPOSES=['Сдача клиенту','Инкассация','Хознужды / мелкий закуп','Другое'];
@@ -31279,6 +31292,23 @@ function vdmShowCabinet(){
   w.querySelector('#vcOut').addEventListener('click',()=>{ NET.ownerSession=null; saveNet(); w.style.display='none'; zvShowLogin(); });
 }
 
+/* 235: после привязки устройства (PIN + код) страница перезагружается —
+   возвращаем сеанс, который был до перезагрузки: логин и пароль уже введены,
+   повторно вход не спрашиваем. Запас живёт 10 минут и сгорает после применения. */
+try{
+  const rawKeep=localStorage.getItem('zv_keep_ses');
+  if(rawKeep){
+    localStorage.removeItem('zv_keep_ses');
+    const keep=JSON.parse(rawKeep);
+    if(keep && (Date.now()-(keep.ts||0))<10*60*1000){
+      if(keep.session) NET.session=keep.session;
+      if(keep.staffSession) NET.staffSession=keep.staffSession;
+      if(keep.ownerSession) NET.ownerSession=keep.ownerSession;
+      try{ NET.sessionBuild=(typeof BUILD_TAG!=='undefined')?String(BUILD_TAG):NET.sessionBuild; }catch(e){}
+      saveNet();
+    }
+  }
+}catch(e){}
 /* ВХОД ПОСЛЕ ОБНОВЛЕНИЯ (179): новая сборка — единый вход обязателен.
    Сессии входа гаснут, окно Zenvox показывается всегда; авторизация самого
    устройства (код владельца) при этом НЕ слетает. */
