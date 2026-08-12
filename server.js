@@ -366,6 +366,37 @@ async function tgSend(text, extraChats) {
   return { ok: results.some(x => x.ok), results };
 }
 
+/* 234: самопроверка Telegram при старте. Если токен перевыпущен через BotFather
+   (/revoke выдаёт НОВЫЙ токен — старый умирает), в логах деплоя сразу видно,
+   ПОЧЕМУ не приходят коды и уведомления, без гаданий. */
+const SERVER_BUILD = '29.07-234';
+async function tgSelfCheck() {
+  const check = async (label, token) => {
+    if (!token) { console.log('[связь] ' + label + ': не задан'); return false; }
+    try {
+      const r = await fetch('https://api.telegram.org/bot' + token + '/getMe');
+      const j = await r.json();
+      if (j.ok) { console.log('[связь] ' + label + ': @' + j.result.username + ' — токен рабочий ✓'); return true; }
+      console.log('[связь] ' + label + ': ТОКЕН НЕ РАБОТАЕТ (' + (j.description || r.status) + '). Если перевыпускали через BotFather — вставьте НОВЫЙ токен в Environment и передеплойте.');
+      return false;
+    } catch (e) { console.log('[связь] ' + label + ': проверить не удалось — ' + e.message); return false; }
+  };
+  const mainOk = await check('основной бот (TELEGRAM_BOT_TOKEN)', TG_TOKEN);
+  if (TG_OWNER_TOKEN) await check('владельческий бот (TG_OWNER_BOT_TOKEN)', TG_OWNER_TOKEN);
+  /* sendChatAction ничего не пишет в чат, но честно проверяет пару бот+чат */
+  if (mainOk) for (const chat of TG_CHATS) {
+    try {
+      const r = await fetch('https://api.telegram.org/bot' + TG_TOKEN + '/sendChatAction', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chat, action: 'typing' })
+      });
+      const j = await r.json();
+      console.log('[связь] чат ' + chat + ': ' + (j.ok ? 'доступен ✓' : 'НЕДОСТУПЕН (' + (j.description || '?') + ') — откройте бота в Telegram и нажмите /start'));
+    } catch (e) { console.log('[связь] чат ' + chat + ': проверить не удалось — ' + e.message); }
+  }
+  if (!TG_CHATS.length) console.log('[связь] TELEGRAM_CHAT_IDS пуст — коды и уведомления слать некуда');
+}
+
 /* ---------- Оценки клиентов: звёзды из письма «Как вам покупка?» ----------
    Клиент жмёт звезду в письме → GET /review?o=НОМЕР&s=1..5 → фирменная страница:
    1–2 звезды — «что случилось», 3 — «чего не хватило», 4–5 — кнопка на Яндекс Карты.
@@ -1738,6 +1769,21 @@ const server = http.createServer((req, res) => {
     if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
     return sendJson(res, 200, { ok: true, pin: devicePin() });
   }
+  /* 234: версия сервера — открыто, без секретов. Чтобы всегда можно было понять,
+     какая сборка реально крутится на Render (а не гадать по логам). */
+  if (req.method === 'GET' && url.pathname === '/api/version') {
+    return sendJson(res, 200, { server: SERVER_BUILD,
+      tg: TG_TOKEN ? 'задан' : 'НЕ задан', tgChats: TG_CHATS.length,
+      ownerBot: TG_OWNER_TOKEN ? 'задан' : 'нет' });
+  }
+  /* 234: проверка связи по кнопке — шлёт тестовое сообщение владельцу и возвращает
+     ЧЕСТНЫЙ результат по каждому чату (с причиной, если не доставлено). */
+  if (req.method === 'POST' && url.pathname === '/api/tg-test') {
+    if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
+    return tgSend('🔔 Проверка связи Zenvox — если вы видите это сообщение, коды и уведомления доходят.')
+      .then(r => { console.log('[связь] тест по запросу: ' + JSON.stringify(r)); sendJson(res, 200, r); })
+      .catch(e => sendJson(res, 500, { error: e.message }));
+  }
   if (req.method === 'POST' && url.pathname === '/api/notify') {
     if (!checkToken(req, url)) return sendJson(res, 401, { error: 'Неверный токен' });
     return readBody(req, async b => {
@@ -2543,6 +2589,7 @@ dbInit()
     setInterval(() => { purgeWatchLocks(); }, 24 * 3600 * 1000);
     setTimeout(() => { registerWebhooks().catch(e => console.error('вебхуки:', e.message)); }, 5000);
     setTimeout(() => { tgUserBoot().catch(e => console.error('[тг-аккаунт]', e.message)); }, 3000);
+    setTimeout(() => { tgSelfCheck().catch(e => console.error('[связь]', e.message)); }, 2000);
     setTimeout(() => { serverSideChecks(); }, 20000);
     setInterval(() => { serverSideChecks(); }, 5 * 60 * 1000);
     setInterval(() => { registerWebhooks().catch(e => console.error('вебхуки:', e.message)); }, 24 * 3600 * 1000);
