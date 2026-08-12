@@ -340,17 +340,28 @@ async function tgSend(text, extraChats) {
     ? { ok: true, skipped: 'у смены нет подключённых чатов' }
     : { error: 'TELEGRAM_CHAT_IDS не задан в Environment' };
   const results = [];
+  const sendVia = async (bot, chat) => {
+    const r = await fetch('https://api.telegram.org/bot' + bot + '/sendMessage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chat, text: String(text).slice(0, 4000) })
+    });
+    const j = await r.json();
+    return { ok: !!j.ok, error: j.ok ? null : (j.description || 'ошибка') };
+  };
   for (const job of chats) {
     const chat = job.chat;
-    try {
-      const r = await fetch('https://api.telegram.org/bot' + job.bot + '/sendMessage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chat, text: String(text).slice(0, 4000) })
-      });
-      const j = await r.json();
-      results.push({ chat, ok: !!j.ok, error: j.ok ? null : (j.description || 'ошибка') });
-    } catch (e) { results.push({ chat, ok: false, error: e.message }); }
+    let res;
+    try { res = await sendVia(job.bot, chat); } catch (e) { res = { ok: false, error: e.message }; }
+    /* 233: владельческий бот не доставил (частая причина — владелец не нажал
+       /start у нового бота) → дублируем через ОСНОВНОЙ бот, он точно живой. */
+    if (!res.ok && job.bot !== TG_TOKEN) {
+      console.log('[telegram] владельческий бот не доставил (' + (res.error || '?') + ') — шлю через основной, chat ' + chat);
+      try { const r2 = await sendVia(TG_TOKEN, chat); if (r2.ok) res = r2; else res.error = (res.error || '') + ' | основной: ' + (r2.error || '?'); }
+      catch (e) { res.error = (res.error || '') + ' | основной: ' + e.message; }
+    }
+    if (!res.ok) console.log('[telegram] НЕ доставлено chat ' + chat + ': ' + (res.error || '?'));
+    results.push({ chat, ok: res.ok, error: res.error });
   }
   return { ok: results.some(x => x.ok), results };
 }
@@ -1520,15 +1531,14 @@ const server = http.createServer((req, res) => {
       const pin = String(b.pin || '').trim();
       if (!/^\d{4,6}$/.test(pin)) return sendJson(res, 400, { error: 'PIN — от 4 до 6 цифр' });
       try {
-        const cur = await stateLoad();
-        if (!cur || !cur.state || !cur.state.stores) return sendJson(res, 500, { error: 'База ещё пуста — первый комп настройте вручную (шестерёнка Заказов)' });
+        let who = null;
+        /* 232: PIN устройства проверяется ПЕРВЫМ — работает даже на пустой базе
+           (свежий сервер / переезд). Старые пин-хэши смотрим, только если не совпал. */
+        if (pin === devicePin()) who = 'PIN устройства';
+        const cur = who ? null : await stateLoad();
+        if (!who && (!cur || !cur.state || !cur.state.stores)) return sendJson(res, 500, { error: 'PIN не совпал, а база ещё пуста — проверьте PIN устройства (Подключения)' });
         const crypto = require('crypto');
         const h = s => crypto.createHash('sha256').update(s).digest('hex');
-        let who = null;
-        /* 222: пин-система выведена — привязка по ЕДИНОМУ PIN устройства из
-           Environment (DEVICE_PIN). Дальше как раньше: код владельцу в TG/почту,
-           без кода ключ не выдаётся. */
-        if (pin === devicePin()) who = 'PIN устройства';
         if (!who) for (const sid of Object.keys(cur.state.stores)) {
           const d = cur.state.stores[sid] || {};
           const st = d.settings || {};
@@ -1577,11 +1587,10 @@ const server = http.createServer((req, res) => {
             /* дублируем в TG для скорости */
             tgSend('🖥 Код подтверждения нового устройства: ' + code + '\n' + info);
           }
-          if (!channel) {
-            delete global._devVerify[vid];
-            return sendJson(res, 500, { error: 'Не получилось отправить код владельцу — проверьте SMTP/Telegram на сервере' });
-          }
-          console.log('[авторизация компа] код отправлен (' + channel + '): ' + who + ' (' + ip + ')');
+          /* 233: код ВСЕГДА дублируется в логи сервера — даже если каналы легли,
+             владелец достанет его из Render → Logs и привязка не встанет колом. */
+          console.log('[авторизация компа] КОД ПОДТВЕРЖДЕНИЯ: ' + code + ' · ' + who + ' (' + ip + ')' + (channel ? ' · отправлен: ' + channel : ' · КАНАЛЫ НЕ ДОСТАВИЛИ'));
+          if (!channel) channel = 'логи сервера (Render → Logs; каналы не доставили — нажмите /start владельческому боту)';
           return sendJson(res, 200, { ok: true, verifyRequired: true, vid, channel });
         }
         /* ни почты, ни Telegram — старое поведение */
